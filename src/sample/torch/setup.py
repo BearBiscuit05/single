@@ -7,7 +7,7 @@ setup(
     ext_modules=[
         CUDAExtension(
             "sample_hop",
-            ["pytorch/sample_node_ops.cpp", "kernel/sample_node_kernel.cu"],
+            ["torch/sample_node_ops.cpp", "kernel/sample_node_kernel.cu"],
         )
     ],
     cmdclass={

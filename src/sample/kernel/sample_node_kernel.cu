@@ -33,7 +33,7 @@ __global__ void sample1Hop(
                             ) {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
     int blockSize = sampleNUM1;
-    int seed = nodeNUM * sampleNUM2 * idx;
+    int seed = nodeNUM * sampleNUM1 * idx;
     for(int i = idx ; i < nodeNUM ; i += blockDim.x) {
         int writeIdx = i * blockSize;
         int id = trainNode[i];
@@ -103,7 +103,7 @@ __global__ void sample2Hop(
                 int l2_neirNUM = l2_idEnd - l2_idStart;
                 for (int l = 0 ; l < l2_neirNUM && l < sampleNUM2 ; l++) {
                     curandState state;
-                    curand_init(seed*l2, idx, 0, &state); 
+                    curand_init(seed*l1, idx, 0, &state); 
                     int random_value = 0;
                     random_value = curand(&state) % l2_neirNUM;
                     outputSRC2[l2_writeIdx] = graphEdge[l2_idStart + random_value];
@@ -251,7 +251,7 @@ void launch_sample_1hop(int* outputSRC1,
     dim3 block(1024);
     sample1Hop<<<grid, block>>>(
         outputSRC1,outputDST1,graphEdge,
-        boundList,trainNode,seed,sampleNUM1,
+        boundList,trainNode,sampleNUM1,
         nodeNUM);
 }
 

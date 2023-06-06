@@ -1,5 +1,5 @@
 #include <torch/extension.h>
-#include "sample_full.h"
+#include "sample_node.h"
 #include <vector>
 #include <iostream>
 #include <fstream>
