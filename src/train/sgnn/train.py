@@ -1,42 +1,40 @@
 import numpy as np
 import time
-import struct
-import gc
 import mmap
 
+def mergeFeat(file_hand,sampleNodes,featLen):
+    feats = np.zeros((len(sampleNodes),featLen),dtype=np.int32)
+    start = time.time()   
+    for index,nodeID in enumerate(sampleNodes):
+        int_array_length = featLen
+        int_array = np.frombuffer(file_hand, dtype=np.int32, offset=nodeID*4, count=int_array_length)
+        feats[index] = int_array
+    print("mmap time :", time.time()-start)
+    return feats
+
 if __name__ == "__main__":
-    # file_path = './data/copy_1.bin'
-    # start = time.time()
-    # graphEdge1 = np.fromfile(file_path, dtype=np.int32)
-    # print(time.time()-start)
-    # print(graphEdge1)
+    file_path = "./data/copy_1.bin"
+    file = open(file_path, "r+b")
+    mmapped_file = mmap.mmap(file.fileno(), 0, access=mmap.ACCESS_READ)   
+    featLen = 16
+    feat1 = mergeFeat(mmapped_file,[1,2],featLen)
 
-    # file_path = './data/copy_2.bin'
-    # start = time.time()
-    # graphEdge2 = np.fromfile(file_path, dtype=np.int32)
-    # print(time.time()-start)
-    # print(graphEdge2)
-    # del graphEdge1
-    # file_path = './data/copy_3.bin'
-    # start = time.time()
-    # graphEdge3 = np.fromfile(file_path, dtype=np.int32)
-    # print(time.time()-start)
-    # print(graphEdge3)
+    file_path2 = "./data/copy_2.bin"
+    file2 = open(file_path2, "r+b")
+    mmapped_file2 = mmap.mmap(file2.fileno(), 0, access=mmap.ACCESS_READ)   
+    feat2 = mergeFeat(mmapped_file2,[1,2],featLen)
 
+    file_path3 = "./data/copy_3.bin"
+    file3 = open(file_path3, "r+b")
+    mmapped_file3 = mmap.mmap(file3.fileno(), 0, access=mmap.ACCESS_READ)   
+    feat3 = mergeFeat(mmapped_file3,[1,2],featLen)
+    print(feat1)
+    print(feat2)
+    print(feat3)
 
-    file_path = "./data/copy_2.bin"
-    random_array = np.random.randint(1, 96864000, size=200000)
-    arrys = []
-    with open(file_path, "r+b") as file:
-        start = time.time()
-        mmapped_file = mmap.mmap(file.fileno(), 0, access=mmap.ACCESS_READ)
-        file_content = mmapped_file.read()
-           
-        for i in range(200000):
-            file_size = 32
-            int_array_length = 128  # 假设每个整数占用4字节
-            int_array = np.frombuffer(file_content, dtype=np.int32,offset=random_array[i], count=int_array_length)
-            arrys.append(int_array)
-        mmapped_file.close()
-        print("mmap time :", time.time()-start)
-    print(len(arrys))
+    mmapped_file.close()
+    mmapped_file2.close()
+    mmapped_file3.close()
+    file.close()
+    file2.close()
+    file3.close()
