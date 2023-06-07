@@ -3,37 +3,25 @@ import time
 import mmap
 
 
-
-file_path = "srcList.bin"
-# 使用mmap打开文件
-random_array = np.random.randint(1, 96864000, size=200000)
-#random_array = np.random.randint(1, 1000, size=200000)
-arrys = []
-with open(file_path, "r+b") as file:
-    mmapped_file = mmap.mmap(file.fileno(), 0, access=mmap.ACCESS_READ)
-    file_content = mmapped_file.read()
+def mergeFeat(mmap_file_hand,sampleNodes,featLen):
+    feats = np.zeros((len(sampleNodes),featLen),dtype=np.int32)
+    int32_size = np.dtype(np.int32).itemsize
     start = time.time()   
-    for i in range(200000):
-        file_size = 32
-        int_array_length = 128  # 假设每个整数占用4字节
-        int_array = np.frombuffer(file_content, dtype=np.int32,offset=random_array[i], count=int_array_length)
-        arrys.append(int_array)
-    mmapped_file.close()
+    for index,nodeID in enumerate(sampleNodes):
+        int_array_length = featLen
+        int_array = np.frombuffer(mmap_file_hand, dtype=np.int32, offset=nodeID * int32_size, count=int_array_length)
+        feats[index] = int_array
     print("mmap time :", time.time()-start)
+    return feats
 
-print(len(arrys))
-
-
-
-def mergeFeat(FileName,sampleNodes,featLen):
-    feats = np.zeros((len(sampleNodes),featLen))
-    with open(file_path, "r+b") as file:
-        mmapped_file = mmap.mmap(file.fileno(), 0, access=mmap.ACCESS_READ)
-        file_content = mmapped_file.read()
-        start = time.time()   
-        for index,nodeID in enumerate(sampleNodes):
-            int_array_length = featLen
-            int_array = np.frombuffer(file_content, dtype=np.int32, offset=nodeID, count=int_array_length)
-            feats[index] = int_array
-        mmapped_file.close()
-        print("mmap time :", time.time()-start)
+if __name__ == "__main__":
+    file_path = "./data/srcList.bin"
+    file = open(file_path, "r+b")
+    mmapped_file = mmap.mmap(file.fileno(), 0, access=mmap.ACCESS_READ)
+    int_array = np.frombuffer(mmapped_file, dtype=np.int32, offset=0, count=8)    
+    random_array = np.random.randint(1, 10, size=2)
+    featLen = 16
+    feats = mergeFeat(mmapped_file,random_array,featLen)
+    print(int_array)
+    mmapped_file.close()
+    file.close()
