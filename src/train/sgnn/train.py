@@ -3,6 +3,7 @@ import time
 import mmap
 import sys
 import os
+import argparse
 current_folder = os.path.abspath(os.path.dirname(__file__))
 #sys.path.append(current_folder+"/../"+"utils")
 
@@ -18,17 +19,24 @@ def mergeFeat(file_hand,sampleNodes,featLen):
     return feats
 
 def generate_random_sequence(min_val, max_val):
+    # [0,10] 左取右不取
     sequence = np.arange(min_val, max_val)
     np.random.shuffle(sequence)
     return sequence
 
 
-def env_init():
-    pass
+def env_init(part):
+    randList = generate_random_sequence(0, part.part)
+    print(randList)
 
 def main():
-    pass
+    env_init(args)
 
 if __name__ == "__main__":
-    main()
-    print(current_folder)
+    parser = argparse.ArgumentParser(description='这是一个简单的命令行程序')
+
+    parser.add_argument('--part', type=str,default=8, help='graph part number')
+
+    args = parser.parse_args()
+
+    main(args)
