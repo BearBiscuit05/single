@@ -54,7 +54,6 @@ def read_subG(rank):
     part_config = graph_dir + 'ogb-product.json'
     print('loading partitions')
     subg, node_feat, _, gpb, _, node_type, _ = dgl.distributed.load_partition(part_config, rank)
-    #inner = subg.ndata['inner_node'].tolist()
     in_graph = dgl.node_subgraph(subg, subg.ndata['inner_node'].bool())
     in_nodes = torch.arange(in_graph.num_nodes())
     out_graph = subg.clone()
@@ -133,9 +132,9 @@ def gen_format_file(rank,Wsize):
     for index in range(len(src)):
         srcid,dstid = src[index],dst[index]
         if inner[srcid] == 1 and inner[dstid] == 1:
-            if srcid not in nodeDict:
-                nodeDict[srcid] = []
-            nodeDict[srcid].append(dstid)
+            if dstid not in nodeDict:
+                nodeDict[dstid] = []
+            nodeDict[dstid].append(srcid)
             incount += 1
         elif inner[srcid] != 1:     # 只需要dst在子图内部即可
             srcid = subg.ndata[dgl.NID][srcid]
@@ -155,24 +154,6 @@ def gen_format_file(rank,Wsize):
                 partdict[partid][dstid] = []
             partdict[partid][dstid].append(srcid)
             outcount[partid] += 1         
-        # elif inner[dstid] != 1:
-        #     dstid = subg.ndata[dgl.NID][dstid]
-        #     partid = int((dstid / innernode))
-        #     if partid > Wsize:
-        #         partid = Wsize - 1
-        #     if partid > 0 and partid <= Wsize - 1 and boundRange[partid][0] <= dstid and boundRange[partid][1] > dstid:
-        #         pass
-        #     elif partid > 0 and boundRange[partid-1][0] <= dstid and boundRange[partid-1][1] > dstid:
-        #         partid -= 1
-        #     elif partid < Wsize - 1 and boundRange[partid+1][0] <= dstid and boundRange[partid+1][1] > dstid:
-        #         partid += 1
-        #     else:
-        #         print("dst error id: ",dstid)
-        #         exit(-1)
-        #     if srcid not in partdict[partid]:
-        #         partdict[partid][srcid] = []
-        #     partdict[partid][srcid].append(dstid)
-        #     outcount[partid] += 1
     save_dict_to_txt(nodeDict,'../data/subg_'+str(rank)+'.txt', len(nodeDict), incount)
     for i in range(Wsize):
         save_dict_to_txt(partdict[i],'../data/subg_'+str(rank)+'_bound_'+str(i)+'.txt', len(partdict[i]), outcount[i])
