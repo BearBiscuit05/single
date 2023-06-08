@@ -12,8 +12,6 @@ void writeCSRFile(std::string output_file,std::vector<int>& vec) {
     if (outputFile.is_open()) {
         int len = vec.size();
         for (int i = 0 ; i < len; i++) {
-            // if (i % 4000000 == 0)
-            //     cout << "write :[ " << i <<" ]" <<endl;
             outputFile.write(reinterpret_cast<const char*>(&vec[i]), sizeof(vec[i]));            
         }
         outputFile.close();
@@ -24,7 +22,6 @@ void writeCSRFile(std::string output_file,std::vector<int>& vec) {
 }
 
 void readCSRFile(std::string output_file,std::vector<int>& vec,int len) {
-    // int len = vec.size();
     FILE * fp = fopen64(output_file.c_str(),"r");
     assert(fp!=NULL);
     uint rd = 0;
@@ -74,25 +71,14 @@ void COO2CSR(const std::string& csvFile, std::vector<int>& src, std::vector<int>
         }
     }
     dstRange[numNodes] = numEdges;
-    // std::cout << "src: ";
-    // for (int i = 0; i < numEdges; ++i) {
-    //     std::cout << src[i] << " ";
-    // }
-    // std::cout << std::endl;
-
-    // std::cout << "dstRange: ";
-    // for (int i = 0; i < dstRange.size(); ++i) {
-    //     std::cout << dstRange[i] << " ";
-    // }
-    // std::cout << std::endl;
 }
 
-void convert2CSR(const std::string& inputFilename, std::vector<int>& src, std::vector<int>& dstRange) {
+void edgesConvert2CSR(const std::string& inputFilename, std::vector<int>& src, std::vector<int>& dstRange) {
     std::ifstream inputFile(inputFilename);
     std::string line;
     std::getline(inputFile, line);
     std::stringstream confss(line);
-    std::vector<int> confData; // nodeNUM,edgeNUM
+    std::vector<int> confData; // [nodeNUM,edgeNUM]
     std::string token;
     while (std::getline(confss, token, ',')) { 
         int value = std::stoi(token);
@@ -102,16 +88,13 @@ void convert2CSR(const std::string& inputFilename, std::vector<int>& src, std::v
 
     if (inputFile) {   
         while (std::getline(inputFile, line)) {
-            // 解析每一行数据
             int key;
             std::vector<int> values;
             std::stringstream ss(line);
             
-            // 解析键（key）
             std::getline(ss, token, ',');
             key = std::stoi(token);
 
-            // 解析值（values）
             while (std::getline(ss, token, ',')) {
                 int value = std::stoi(token);
                 values.push_back(value);
@@ -153,7 +136,7 @@ int main() {
     std::string csvFile = "graph.csv";
     std::string txtFile = "../data/subg_0.txt";
     //COO2CSR(csvFile, src, dstRange);
-    convert2CSR(txtFile, src, dstRange);
+    edgesConvert2CSR(txtFile, src, dstRange);
     // std::vector<int> r_src(15,0);
     // std::vector<int> r_dstRange(9,0);
     // readCSRFile("srcList.bin",r_src,15);

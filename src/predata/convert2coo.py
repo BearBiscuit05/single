@@ -76,15 +76,6 @@ def read_subG(rank):
     print("edge   :",subg.edges())  
     # print(len(node_feat['_N/labels']))
 
-def write_format(nodeDict,fileName, nodeNUM, edgeNUM):
-    with open(fileName, 'wb') as file:
-        file.write(struct.pack('i', nodeNUM))
-        file.write(struct.pack('i', edgeNUM))
-        for key, values in nodeDict.items():
-            file.write(struct.pack('i', -key))  # 将负数形式的key写入文件
-            for value in values:
-                file.write(pickle.dumps(value))  # 将value序列化后写入文件
-
 def save_dict_to_txt(nodeDict, filename, nodeNUM, edgeNUM):
     with open(filename, 'w') as file:
         file.write(f"{nodeNUM},{edgeNUM}")
@@ -136,7 +127,7 @@ def gen_format_file(rank,Wsize):
                 nodeDict[dstid] = []
             nodeDict[dstid].append(srcid)
             incount += 1
-        elif inner[srcid] != 1:     # 只需要dst在子图内部即可
+        elif inner[srcid] != 1 and inner[dstid] == 1:     # 只需要dst在子图内部即可
             srcid = subg.ndata[dgl.NID][srcid]
             partid = int((srcid / innernode))
             if partid > Wsize:
