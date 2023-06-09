@@ -12,6 +12,8 @@ import torch
 import json
 import pickle
 import struct
+import sys
+
 def load_partition(rank,nodeID):
     graph_dir = 'data_8/'
     part_config = graph_dir + 'ogb-product.json'
@@ -86,7 +88,7 @@ def save_dict_to_txt(nodeDict, filename, nodeNUM, edgeNUM):
                 file.write(f",{value}")
             file.write("\n")
 
-def gen_format_file(rank,Wsize):
+def gen_format_file(rank,Wsize,dataPath,datasetName,savePath):
     """ 
     非压缩：二进制存储
         subG:只包含本位
@@ -100,8 +102,8 @@ def gen_format_file(rank,Wsize):
             [feat1]
             [feat2]
     """
-    graph_dir = '../algo/data_4/'
-    part_config = graph_dir + 'ogb-product.json'
+    graph_dir = dataPath
+    part_config = graph_dir + "/"+datasetName +'.json'
     print('loading partitions')
     subg, node_feat, _, gpb, _, node_type, _ = dgl.distributed.load_partition(part_config, rank)
 
@@ -132,7 +134,7 @@ def gen_format_file(rank,Wsize):
             partid = int((srcid / innernode))
             if partid > Wsize:
                 partid = Wsize - 1
-            if partid > 0 and partid <= Wsize - 1 and boundRange[partid][0] <= srcid and boundRange[partid][1] > srcid:
+            if partid >= 0 and partid <= Wsize - 1 and boundRange[partid][0] <= srcid and boundRange[partid][1] > srcid:
                 pass
             elif partid > 0 and boundRange[partid-1][0] <= srcid and boundRange[partid-1][1] > srcid:
                 partid -= 1
@@ -140,19 +142,21 @@ def gen_format_file(rank,Wsize):
                 partid += 1
             else:
                 print("src error id: ",srcid)
+                print("partid:{},innernode:{}".format(partid,innernode))
                 exit(-1)
             if dstid not in partdict[partid]:
                 partdict[partid][dstid] = []
             partdict[partid][dstid].append(srcid)
             outcount[partid] += 1         
-    save_dict_to_txt(nodeDict,'../data/subg_'+str(rank)+'.txt', len(nodeDict), incount)
+    save_dict_to_txt(nodeDict,savePath+'/subg_'+str(rank)+'.txt', len(nodeDict), incount)
     for i in range(Wsize):
-        save_dict_to_txt(partdict[i],'../data/subg_'+str(rank)+'_bound_'+str(i)+'.txt', len(partdict[i]), outcount[i])
+        save_dict_to_txt(partdict[i],savePath+'/subg_'+str(rank)+'_bound_'+str(i)+'.txt', len(partdict[i]), outcount[i])
+    print("data-{} processed ! ".format(rank))
 
 
-
-nodeID = 1
-# PART = 16
-# for i in range(PART):
-#     nodeID = load_partition(i,nodeID)
-gen_format_file(0,4)
+if __name__ == '__main__':
+    dataPath = sys.argv[1]
+    dataName = sys.argv[2]
+    savePath = sys.argv[3]
+    for i in range(4):
+        gen_format_file(i,4,dataPath,dataName,savePath)

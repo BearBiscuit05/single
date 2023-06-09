@@ -7,7 +7,7 @@
 #include <sstream>
 #include <cassert>
 
-void writeCSRFile(std::string output_file,std::vector<int>& vec) {
+void writeBinFile(std::string output_file,std::vector<int>& vec) {
     std::ofstream outputFile(output_file, std::ios::binary);
     if (outputFile.is_open()) {
         int len = vec.size();
@@ -73,7 +73,7 @@ void COO2CSR(const std::string& csvFile, std::vector<int>& src, std::vector<int>
     dstRange[numNodes] = numEdges;
 }
 
-void edgesConvert2CSR(const std::string& inputFilename, std::vector<int>& src, std::vector<int>& dstRange) {
+void edgesConvert2CSR(const std::string& inputFilename, const std::string& savePath,std::vector<int>& src, std::vector<int>& dstRange) {
     std::ifstream inputFile(inputFilename);
     std::string line;
     std::getline(inputFile, line);
@@ -122,26 +122,21 @@ void edgesConvert2CSR(const std::string& inputFilename, std::vector<int>& src, s
         }
     }
     dstRange[confData[0]] = saveIndex;
-    writeCSRFile("../data/srcList.bin",src);
-    writeCSRFile("../data/range.bin",dstRange);
+    std::string srcPath = savePath+"/srcList.bin";
+    std::string rangePath = savePath+"/range.bin";
+    writeBinFile(srcPath,src);
+    writeBinFile(rangePath,dstRange);
 
 }
 
 
 
 
-int main() {
+int main(int argc, char* argv[]) {
     std::vector<int> src;
     std::vector<int> dstRange;
-    std::string csvFile = "graph.csv";
-    std::string txtFile = "../data/subg_0.txt";
-    //COO2CSR(csvFile, src, dstRange);
-    edgesConvert2CSR(txtFile, src, dstRange);
-    // std::vector<int> r_src(15,0);
-    // std::vector<int> r_dstRange(9,0);
-    // readCSRFile("srcList.bin",r_src,15);
-    // readCSRFile("range.bin",r_dstRange,9);
-    // printVec(r_src);
-    // printVec(r_dstRange);
+    std::string txtFile = argv[1];
+    std::string savePath = argv[2];
+    edgesConvert2CSR(txtFile,savePath,src, dstRange);
     return 0;
 }
