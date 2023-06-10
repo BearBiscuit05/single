@@ -107,18 +107,22 @@ void edgesConvert2CSR(const std::string& inputFilename, const std::string& saveP
         std::cerr << "Failed to open input or output file." << std::endl;
     }
 
-    src.resize(confData[1]);
-    dstRange.resize(confData[0]+1);
+    src.reserve(int(confData[1]*1.5));
+    dstRange.resize(confData[0]*2);
     int saveIndex = 0;
     for(int idx = 0 ; idx < confData[0] ; idx++) {
         if (graph.find(idx) != graph.end()){
             sort(graph[idx].begin(),graph[idx].end());
-            dstRange[idx] = saveIndex;
-            for(int index = 0 ; index < graph[idx].size() ; index++){
-                src[saveIndex++] = graph[idx][index];
-            }
+            int originalSize = graph[idx].size();
+            int blockLen = std::max(static_cast<int>(originalSize * 1.2), 30);
+            graph[idx].resize(blockLen);
+            src.insert(src.end(), graph[idx].begin(), graph[idx].end());
+            dstRange[idx*2] = saveIndex;
+            dstRange[idx*2+1] = saveIndex+originalSize;
+            saveIndex += blockLen;
         } else {
-            dstRange[idx] = saveIndex;
+            dstRange[idx*2] = saveIndex;
+            dstRange[idx*2+1] = saveIndex;
         }
     }
     dstRange[confData[0]] = saveIndex;
