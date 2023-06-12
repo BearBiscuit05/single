@@ -148,7 +148,7 @@ def gen_format_file(rank,Wsize,dataPath,datasetName,savePath):
                 partdict[partid][dstid] = []
             partdict[partid][dstid].append(srcid)
             outcount[partid] += 1         
-    save_dict_to_txt(nodeDict,savePath+'/subg_'+str(rank)+'.txt', len(nodeDict), incount)
+    save_dict_to_txt(nodeDict,savePath+'/subg_'+str(rank)+'.txt', boundRange[rank][1] - boundRange[rank][0], incount)
     for i in range(Wsize):
         save_dict_to_txt(partdict[i],savePath+'/subg_'+str(rank)+'_bound_'+str(i)+'.txt', len(partdict[i]), outcount[i])
     print("data-{} processed ! ".format(rank))
@@ -158,5 +158,6 @@ if __name__ == '__main__':
     dataPath = sys.argv[1]
     dataName = sys.argv[2]
     savePath = sys.argv[3]
+    #gen_format_file(0,4,dataPath,dataName,savePath)
     for i in range(4):
         gen_format_file(i,4,dataPath,dataName,savePath)

@@ -40,38 +40,6 @@ void printVec(std::vector<int>& vec) {
     std::cout << std::endl;
 }
 
-void COO2CSR(const std::string& csvFile, std::vector<int>& src, std::vector<int>& dstRange) {
-    std::ifstream file(csvFile);
-    std::map<int,std::vector<int>> data;
-    int startNode, endNode;
-    char dot;
-    int numEdges = 0;
-    while (file >> startNode >> dot >> endNode) {
-        data[endNode].push_back(startNode);
-        numEdges++;
-    }
-    file.close();
-
-    int numNodes = 9;
-    src.resize(numEdges);
-    dstRange.resize(numNodes + 1);
-
-    int idx = 0;
-    std::vector<int> tmp;
-    for (int i = 0; i < numNodes; ++i) {
-        if (data.find(i) != data.end()){
-            tmp = data[i];
-            sort(tmp.begin(),tmp.end());
-            dstRange[i] = idx;
-            for(int index = 0 ; index < tmp.size() ; index++){
-                src[idx++] = tmp[index];
-            }
-        } else {
-            dstRange[i] = idx;
-        }
-    }
-    dstRange[numNodes] = numEdges;
-}
 
 void edgesConvert2CSR(const std::string& inputFilename, const std::string& savePath,std::vector<int>& src, std::vector<int>& dstRange) {
     std::ifstream inputFile(inputFilename);
