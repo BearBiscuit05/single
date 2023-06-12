@@ -1,0 +1,9 @@
+{
+    "train_name" : "node_classification",
+    "dataset" : "processed",
+    "datasetpath": ".",
+    "partNUM":4,
+    "cacheNUM":0,
+    "batchsize":4,
+    "epoch":10
+}

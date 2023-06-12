@@ -1,20 +1,22 @@
 import concurrent.futures
 from torch.utils.data import Dataset, DataLoader
 from queue import Queue
-
+import numpy as np
+import json
 class CustomDataset(Dataset):
-    def __init__(self,data,cacheNUM,batchsize,trainIDs):
-        self.data = data
-        self.trainIDs = trainIDs
-        self.src = [i for i in range(10000)]
-        self.bound = [i*100 for i in range(100)]
+    def __init__(self,confPath):
+        with open(confPath, 'r') as f:
+            config = json.load(f)
+        self.dataPath = config['datasetpath']+"/"+config['dataset']
+        self.batchsize = config['batchsize']
+        self.cacheNUM = config['cacheNUM']
+        self.partNUM = config['partNUM']
+
+        self.src,self.bound,self.trainIDs = self.loadingGraph(self.dataPath+"/part0")
         self.executor = concurrent.futures.ThreadPoolExecutor(1)
         self.sample_flag = None
-        self.batchsize = batchsize
-        self.cacheNUM = cacheNUM
-
-        self.cacheData = []
         
+        self.cacheData = []
         self.pipe = Queue()
         self.trained = 0
         self.read = 0
@@ -45,27 +47,26 @@ class CustomDataset(Dataset):
                 self.cacheData = self.pipe.get()
         return self.cacheData[index % self.batchsize]
 
+    def loadingGraph(self,filePath):
+        # 读取int数组的二进制存储
+        srcdata = np.fromfile(filePath+"/srcList.bin", dtype=np.int32)
+        rangedata = np.fromfile(filePath+"/range.bin", dtype=np.int32)
+        #trainIds = np.fromfile(filePath+"/trainIds.bin", dtype=np.int32)
+        trainIds = [i for i in range(10)]
+        # 转换为tensor : tensor_data = torch.from_numpy(data)
+        print(srcdata,rangedata)
+        return srcdata,rangedata,trainIds
 
-        if index % self.batchsize == 0 and index+self.batchsize < len(self.data):        
-            # 表明一个batch开始预取，则需要重新获得新数据
-            self.place += 1
-            datalen = min(index+self.batchsize*2,len(self.data))
-            preindex = [index+self.batchsize,datalen]
-            if self.sample_flag is None:
-                future = self.executor.submit(self.read_sample, preindex,self.place%2)
-                self.sample_flag = future
-            else:
-                data = self.sample_flag.result()
-                #if self.sample_flag.done():
-                self.sample_flag = self.executor.submit(self.read_sample, preindex,self.place%2)     
-        elif index % self.batchsize == 0 and index+self.batchsize >= len(self.data):  # last
-            data = self.sample_flag.result()
-            self.place += 1
-        return self.loadingData[(self.place-1)%2][index % self.batchsize]
-    
-    def prefeat():
+    def readNeig(self,nodeID):
+        return self.src[self.bound[nodeID*2]:self.bound[nodeID*2+1]]
+
+    def prefeat(self):
         pass
-
+    
+    def randomGraphList(self):
+        random_array = np.random.choice(np.arange(0, self.partNUM), size=self.partNUM, replace=False)
+        return random_array
+    
     def preGraphBatch(self):
         if self.read_called > self.loop:
             return 0
@@ -86,7 +87,8 @@ def collate_fn(data):
 
 if __name__ == "__main__":
     data = [i for i in range(20)]
-    dataset = CustomDataset(data,4,4,data)
-    train_loader = DataLoader(dataset=dataset, batch_size=4, collate_fn=collate_fn,pin_memory=True)
-    for i in train_loader:
-        print(i)
+    dataset = CustomDataset("./processed/part0",4,4,data)
+
+    # train_loader = DataLoader(dataset=dataset, batch_size=4, collate_fn=collate_fn,pin_memory=True)
+    # for i in train_loader:
+    #     print(i)
