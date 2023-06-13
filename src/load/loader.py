@@ -3,34 +3,41 @@ from torch.utils.data import Dataset, DataLoader
 from queue import Queue
 import numpy as np
 import json
+
+
+"""
+数据加载的逻辑:
+    1.生成训练随机序列
+    2.预加载训练节点(所有的训练节点都被加载进入)
+    2.预加载图集合(从初始开始就存入2个)
+    3.不断生成采样子图
+    4.当图采样完成后释放当前子图,加载下一个图
+"""
 class CustomDataset(Dataset):
     def __init__(self,confPath):
-        with open(confPath, 'r') as f:
-            config = json.load(f)
-        self.dataPath = config['datasetpath']+"/"+config['dataset']
-        self.batchsize = config['batchsize']
-        self.cacheNUM = config['cacheNUM']
-        self.partNUM = config['partNUM']
-        self.epoch = config['epoch']
+        # 获得训练基本信息
+        self.readConfig(confPath)
+        self.graphTrack = self.randomTrainList() # 训练轨迹
+        self.trainList = self.loadingTrainID() # 训练节点
+        self.executor = concurrent.futures.ThreadPoolExecutor(1) # 线程池
+        self.trainTrack = self.randomTrainList() # 获得随机序列
 
-        self.trainTrack = self.randomTrainList()
-        self.src,self.bound,self.trainIDs = self.loadingGraph(self.dataPath+"/part0")
-        self.executor = concurrent.futures.ThreadPoolExecutor(1)
         self.sample_flag = None
         
         self.cacheData = []
         self.pipe = Queue()
         self.trained = 0
         self.read = 0
-        self.loop = ((len(self.trainIDs)-1) // self.batchsize) + 1
+        # self.loop = ((len(self.trainIDs)-1) // self.batchsize) + 1
         self.read_called = 0
-        for i in range(2):
-            self.preGraphBatch()
 
-    def __len__(self):
+        #self.initGraphData()
+
+    def __len__(self):  
         return len(self.data)
     
     def __getitem__(self, index):
+        # 数据流驱动函数
         if index % self.batchsize == 0:
             # 调用预取函数
             if self.read_called < self.loop:
@@ -49,15 +56,41 @@ class CustomDataset(Dataset):
                 self.cacheData = self.pipe.get()
         return self.cacheData[index % self.batchsize]
 
-    def loadingGraph(self,filePath):
+    def initGraphData(self):
+        self.loadingGraph(self.trainList[0][0])
+        self.loadingGraph(self.trainList[0][1])
+
+    def readConfig(self,confPath):
+        with open(confPath, 'r') as f:
+            config = json.load(f)
+        self.dataPath = config['datasetpath']+"/"+config['dataset']
+        self.batchsize = config['batchsize']
+        self.cacheNUM = config['cacheNUM']
+        self.partNUM = config['partNUM']
+        self.epoch = config['epoch']
+        formatted_data = json.dumps(config, indent=4)
+        print(formatted_data)
+
+    def loadingTrainID(self):
+        # 加载子图所有训练集
+        idDict = {}
+        for index in range(self.partNUM):
+            idDict[index] = [i for i in range(10)]
+        return idDict
+
+    def loadingGraph(self,subGID):
         # 读取int数组的二进制存储
+        # 需要将边界填充到前面的预存图中
+        filePath = self.dataPath + "/part" + str(subGID)
         srcdata = np.fromfile(filePath+"/srcList.bin", dtype=np.int32)
         rangedata = np.fromfile(filePath+"/range.bin", dtype=np.int32)
-        #trainIds = np.fromfile(filePath+"/trainIds.bin", dtype=np.int32)
-        trainIds = [i for i in range(10)]
         # 转换为tensor : tensor_data = torch.from_numpy(data)
-        print(srcdata,rangedata)
-        return srcdata,rangedata,trainIds
+        self.cacheData.append(srcdata)
+        self.cacheData.append(rangedata)
+
+    def moveGraph(self):
+        # 释放图内存
+        pass
 
     def readNeig(self,nodeID):
         return self.src[self.bound[nodeID*2]:self.bound[nodeID*2+1]]
@@ -69,7 +102,15 @@ class CustomDataset(Dataset):
         epochList = []
         for i in range(self.epoch):
             random_array = np.random.choice(np.arange(0, self.partNUM), size=self.partNUM, replace=False)
-            epochList.append(random_array)
+            if len(epochList) == 0:
+                epochList.append(random_array)
+            else:
+                # 已经存在列
+                lastid = epochList[-1][-1]
+                while(lastid == random_array[0]):
+                    random_array = np.random.choice(np.arange(0, self.partNUM), size=self.partNUM, replace=False)
+                epochList.append(random_array)
+            
         return epochList
     
     def preGraphBatch(self):
@@ -92,7 +133,7 @@ def collate_fn(data):
 
 if __name__ == "__main__":
     data = [i for i in range(20)]
-    dataset = CustomDataset("./processed/part0",4,4,data)
+    dataset = CustomDataset("./config.json")
 
     # train_loader = DataLoader(dataset=dataset, batch_size=4, collate_fn=collate_fn,pin_memory=True)
     # for i in train_loader:
