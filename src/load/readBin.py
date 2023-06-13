@@ -1,12 +1,42 @@
 import numpy as np
 import torch
+from torch.utils.data import Dataset, DataLoader
+
+class CustomDataset(Dataset):
+    def __init__(self):
+        self.tensor1 = torch.zeros(50)
+        self.tensor2 = torch.zeros(100)
+        self.tensor3 = torch.zeros(50)
+        self.tensor4 = torch.zeros(100)
+        self.l = []
 
 
-# 使用NumPy读取二进制文件
-data = np.fromfile('file.bin', dtype=np.int32)
+    def change(self):
+        self.l[0] += 1
 
-# 将NumPy数组转换为PyTorch张量
-tensor_data = torch.from_numpy(data)
+    def add(self):
+        t1,t2 = self.newdata()
+        self.l.append(t1)
+        self.l.append(t2)
+        
 
-# 打印张量
-print(tensor_data)
+    def remove(self):
+        self.tensor3 = None
+        self.tensor4 = None 
+
+    def print(self):
+        print(self.l)
+
+    def newdata(self):
+        tmp1 = torch.zeros(50)
+        tmp2 = torch.zeros(100)
+        return tmp1,tmp2
+
+if __name__ == "__main__":
+    dataset = CustomDataset()
+    dataset.add()
+    dataset.print()
+    dataset.add()
+    dataset.print()
+    dataset.change()
+    dataset.print()
