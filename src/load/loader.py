@@ -21,23 +21,22 @@ class CustomDataset(Dataset):
         self.trainList = self.loadingTrainID() # 训练节点
         self.executor = concurrent.futures.ThreadPoolExecutor(1) # 线程池
         self.trainTrack = self.randomTrainList() # 获得随机序列
-
+        
         self.sample_flag = None
         
         self.cacheData = []
         self.pipe = Queue()
         self.trained = 0
         self.read = 0
-        # self.loop = ((len(self.trainIDs)-1) // self.batchsize) + 1
+        self.loop = ((len(self.trainIDs)-1) // self.batchsize) + 1
         self.read_called = 0
 
         #self.initGraphData()
 
-    def __len__(self):  
+    def __len__(self):
         return len(self.data)
     
     def __getitem__(self, index):
-        # 数据流驱动函数
         if index % self.batchsize == 0:
             # 调用预取函数
             if self.read_called < self.loop:
@@ -46,7 +45,6 @@ class CustomDataset(Dataset):
                     self.sample_flag = future
                 else:
                     data = self.sample_flag.result()
-                    #if self.sample_flag.done():
                     self.sample_flag = self.executor.submit(self.preGraphBatch) 
             # 调用实际数据
             if self.pipe.qsize() > 0:
@@ -59,7 +57,7 @@ class CustomDataset(Dataset):
     def initGraphData(self):
         self.loadingGraph(self.trainList[0][0])
         self.loadingGraph(self.trainList[0][1])
-
+        
     def readConfig(self,confPath):
         with open(confPath, 'r') as f:
             config = json.load(f)
@@ -72,7 +70,6 @@ class CustomDataset(Dataset):
         print(formatted_data)
 
     def loadingTrainID(self):
-        # 加载子图所有训练集
         idDict = {}
         for index in range(self.partNUM):
             idDict[index] = [i for i in range(10)]
@@ -87,8 +84,15 @@ class CustomDataset(Dataset):
         # 转换为tensor : tensor_data = torch.from_numpy(data)
         self.cacheData.append(srcdata)
         self.cacheData.append(rangedata)
+    
+    def loadingHalo(self,mainG,nextG):
+        # 加载数据并直接插入到cache的对应位置中
+        pass
+    
+    def mergeGraph(self):
+        pass
 
-    def moveGraph(self):
+    def removeGraph(self):
         # 释放图内存
         pass
 
@@ -114,6 +118,7 @@ class CustomDataset(Dataset):
         return epochList
     
     def preGraphBatch(self):
+        # 预取一个batch的采样图，如果当前子图的采样节点(训练节点)已经采样完成，则触发释放和重取图数据机制
         if self.read_called > self.loop:
             return 0
         self.read_called += 1
@@ -133,7 +138,8 @@ def collate_fn(data):
 
 if __name__ == "__main__":
     data = [i for i in range(20)]
-    dataset = CustomDataset("./config.json")
+    dataset = CustomDataset("./processed/part0")
+
 
     # train_loader = DataLoader(dataset=dataset, batch_size=4, collate_fn=collate_fn,pin_memory=True)
     # for i in train_loader:
