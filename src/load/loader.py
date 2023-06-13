@@ -11,7 +11,9 @@ class CustomDataset(Dataset):
         self.batchsize = config['batchsize']
         self.cacheNUM = config['cacheNUM']
         self.partNUM = config['partNUM']
+        self.epoch = config['epoch']
 
+        self.trainTrack = self.randomTrainList()
         self.src,self.bound,self.trainIDs = self.loadingGraph(self.dataPath+"/part0")
         self.executor = concurrent.futures.ThreadPoolExecutor(1)
         self.sample_flag = None
@@ -63,9 +65,12 @@ class CustomDataset(Dataset):
     def prefeat(self):
         pass
     
-    def randomGraphList(self):
-        random_array = np.random.choice(np.arange(0, self.partNUM), size=self.partNUM, replace=False)
-        return random_array
+    def randomTrainList(self):
+        epochList = []
+        for i in range(self.epoch):
+            random_array = np.random.choice(np.arange(0, self.partNUM), size=self.partNUM, replace=False)
+            epochList.append(random_array)
+        return epochList
     
     def preGraphBatch(self):
         if self.read_called > self.loop:

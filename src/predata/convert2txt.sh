@@ -1,6 +1,7 @@
 #!/bin/bash
 set -e
 # 运行命令 ./convert2txt.sh .
+
 # npy2txt
 if [ $# -lt 1 ]; then
     echo "请输入路径参数"
