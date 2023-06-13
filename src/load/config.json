@@ -1,7 +1,7 @@
 {
     "train_name" : "node_classification",
     "dataset" : "products",
-    "datasetpath": ".",
+    "datasetpath": "/home/bear/workspace/singleGNN/data",
     "partNUM":4,
     "cacheNUM":1,
     "batchsize":4,

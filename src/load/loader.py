@@ -17,24 +17,24 @@ class CustomDataset(Dataset):
     def __init__(self,confPath):
         # 获得训练基本信息
         self.readConfig(confPath)
+        self.cacheData = []     # 子图存储部分
+        self.pipe = Queue()     # 采样存储部分
+        self.trainNUM = 0       # 训练集数目
         self.graphTrack = self.randomTrainList() # 训练轨迹
-        self.trainList = self.loadingTrainID() # 训练节点
+        self.trainNodeDict = self.loadingTrainID() # 训练节点
         self.executor = concurrent.futures.ThreadPoolExecutor(1) # 线程池
         self.trainTrack = self.randomTrainList() # 获得随机序列
-
         self.sample_flag = None
         
-        self.cacheData = []
-        self.pipe = Queue()
         self.trained = 0
         self.read = 0
-        # self.loop = ((len(self.trainIDs)-1) // self.batchsize) + 1
+        self.loop = ((self.trainNUM-1) // self.batchsize) + 1
         self.read_called = 0
 
-        #self.initGraphData()
-
+        self.initGraphData()
+        print(self.cacheData)
     def __len__(self):  
-        return len(self.data)
+        return self.trainNUM
     
     def __getitem__(self, index):
         # 数据流驱动函数
@@ -57,8 +57,9 @@ class CustomDataset(Dataset):
         return self.cacheData[index % self.batchsize]
 
     def initGraphData(self):
-        self.loadingGraph(self.trainList[0][0])
-        self.loadingGraph(self.trainList[0][1])
+        print()
+        self.loadingGraph(self.trainTrack[0][0])
+        self.loadingGraph(self.trainTrack[0][1])
 
     def readConfig(self,confPath):
         with open(confPath, 'r') as f:
@@ -74,8 +75,10 @@ class CustomDataset(Dataset):
     def loadingTrainID(self):
         # 加载子图所有训练集
         idDict = {}
+        
         for index in range(self.partNUM):
             idDict[index] = [i for i in range(10)]
+            self.trainNUM += len(idDict[index])
         return idDict
 
     def loadingGraph(self,subGID):
@@ -85,13 +88,17 @@ class CustomDataset(Dataset):
         srcdata = np.fromfile(filePath+"/srcList.bin", dtype=np.int32)
         rangedata = np.fromfile(filePath+"/range.bin", dtype=np.int32)
         # 转换为tensor : tensor_data = torch.from_numpy(data)
+        print("subG {} read success".format(subGID))
         self.cacheData.append(srcdata)
         self.cacheData.append(rangedata)
 
     def moveGraph(self):
-        # 释放图内存
-        pass
-
+        self.cacheData[0] = self.cacheData[2]
+        self.cacheData[1] = self.cacheData[3]
+        # del self.cacheData[3]
+        # del self.cacheData[2]
+        self.cacheData = self.cacheData[0:2]
+       
     def readNeig(self,nodeID):
         return self.src[self.bound[nodeID*2]:self.bound[nodeID*2+1]]
 
