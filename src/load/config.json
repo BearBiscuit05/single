@@ -5,5 +5,5 @@
     "partNUM":4,
     "cacheNUM":1,
     "batchsize":4,
-    "epoch":10
+    "epoch":1
 }

@@ -33,10 +33,14 @@ class CustomDataset(Dataset):
         return tmp1,tmp2
 
 if __name__ == "__main__":
-    dataset = CustomDataset()
-    dataset.add()
-    dataset.print()
-    dataset.add()
-    dataset.print()
-    dataset.change()
-    dataset.print()
+    my_list = [1, 2, 3, 4, 5]
+
+    # 获取索引为 1 的元素的引用
+    tmp = my_list[1]
+
+    # 修改 tmp
+    tmp = 10
+
+    print(my_list)  # 输出: [1, 10, 3, 4, 5]
+    print(tmp)  # 输出: 10
+

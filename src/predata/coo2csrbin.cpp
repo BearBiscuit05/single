@@ -93,7 +93,7 @@ void edgesConvert2CSR(const std::string& inputFilename, const std::string& saveP
             dstRange[idx*2+1] = saveIndex;
         }
     }
-    dstRange[confData[0]] = saveIndex;
+    //dstRange[confData[0]] = saveIndex;
     std::string srcPath = savePath+"/srcList.bin";
     std::string rangePath = savePath+"/range.bin";
     writeBinFile(srcPath,src);

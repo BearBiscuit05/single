@@ -19,7 +19,7 @@ class CustomDataset(Dataset):
         self.cacheData = []     # 子图存储部分
         self.pipe = Queue()     # 采样存储管道
         self.sampledSubG = []   # 采样子图存储位置
-        self.trainNUM = 0       # 训练集数目
+        self.trainNUM = 0       # 训练集总数目
         
         # config json 部分
         self.dataPath = ''
@@ -36,18 +36,20 @@ class CustomDataset(Dataset):
         self.batch_called = 0   # 批预取函数调用次数
         self.trainingGID = 0 # 当前训练子图的ID
         self.nextGID = 0     # 下一个训练子图
-        self.trainNodes = []            # 训练节点
-        self.graphNodeNUM = 0 # 当前训练子图
-
+        self.trainNodes = []            # 子图训练节点记录
+        self.graphNodeNUM = 0 # 当前训练子图节点数目
+        self.graphEdgeNUM = 0 # 当前训练子图边数目
+        self.subGtrainNodesNUM = 0 # 当前训练子图训练节点
         self.readConfig(confPath)
         self.trainNodeDict = self.loadingTrainID() # 训练节点
         self.executor = concurrent.futures.ThreadPoolExecutor(1) # 线程池
         self.trainSubGTrack = self.randomTrainList() # 训练轨迹
         
-        #self.sample_flag = self.executor.submit(self.preGraphBatch) #发送采样命令
+        # 数据预取
         self.loadingGraph()
         self.initNextGraphData()
-        print(self.cacheData)
+        self.sample_flag = self.executor.submit(self.preGraphBatch) #发送采样命令
+        
 
     def __len__(self):  
         return self.trainNUM
@@ -77,12 +79,18 @@ class CustomDataset(Dataset):
         # 对于将要计算的子图(已经加载)，修改相关信息
         self.trainingGID = self.trainSubGTrack[self.subGptr//self.partNUM][self.subGptr%self.partNUM]
         self.trainNodes = self.trainNodeDict[self.trainingGID]
-        self.loop = ((len(self.trainNodes) - 1) // self.batchsize) + 1
-        self.graphNodeNUM = len(self.cacheData[1]) / 2 # 获取当前节点数目
+        self.subGtrainNodesNUM = len(self.trainNodes)
+        self.loop = ((self.subGtrainNodesNUM - 1) // self.batchsize) + 1
+        self.graphNodeNUM = int(len(self.cacheData[1]) / 2 )# 获取当前节点数目
+        self.graphEdgeNUM = len(self.cacheData[0])
+        
         # 对于辅助计算的子图，进行加载，以及加载融合边
         self.loadingGraph()
         self.nextGID = self.trainSubGTrack[self.subGptr//self.partNUM][self.subGptr%self.partNUM]
         self.loadingHalo()
+        print("当前加载图为:{},下一个图:{},图训练集规模:{},图节点数目:{},图边数目:{},循环计算次数{}"\
+                        .format(self.trainingGID,self.nextGID,self.subGtrainNodesNUM,\
+                        self.graphNodeNUM,self.graphEdgeNUM,self.loop))
         
 
     def readConfig(self,confPath):
@@ -100,7 +108,7 @@ class CustomDataset(Dataset):
         # 加载子图所有训练集
         idDict = {}     
         for index in range(self.partNUM):
-            idDict[index] = [i for i in range(10)]
+            idDict[index] = [i for i in range(12)]
             self.trainNUM += len(idDict[index])
         return idDict
 
@@ -113,7 +121,6 @@ class CustomDataset(Dataset):
         srcdata = np.fromfile(filePath+"/srcList.bin", dtype=np.int32)
         rangedata = np.fromfile(filePath+"/range.bin", dtype=np.int32)
         # 转换为tensor : tensor_data = torch.from_numpy(data)
-        print("subG {} read success".format(subGID))
         self.cacheData.append(srcdata)
         self.cacheData.append(rangedata)
 
@@ -123,6 +130,7 @@ class CustomDataset(Dataset):
         # del self.cacheData[3]
         # del self.cacheData[2]
         self.cacheData = self.cacheData[0:2]
+        
        
     def readNeig(self,nodeID):
         return self.src[self.bound[nodeID*2]:self.bound[nodeID*2+1]]
@@ -136,9 +144,31 @@ class CustomDataset(Dataset):
         filePath = self.dataPath + "/part" + str(self.trainingGID)
         # edges 
         edges = np.fromfile(filePath+"/halo"+str(self.nextGID)+".bin", dtype=np.int32)
-        print(edges)
-        
-
+        lastid = -1
+        startidx = -1
+        endidx = -1
+        nextidx = -1
+        srcList = self.cacheData[0]
+        bound = self.cacheData[1]
+        for index in range(int(len(edges) / 2)):
+            src = edges[index*2]
+            dst = edges[index*2 + 1]
+            if dst != lastid:
+                startidx = bound[dst*2]
+                endidx = bound[dst*2+1]
+                try:
+                    next = bound[dst*2+2]
+                except:
+                    next = self.graphEdgeNUM
+                lastid = dst
+                if endidx < next:
+                    srcList[endidx] = src
+                    endidx += 1
+            else:
+                if endidx < next:
+                    srcList[endidx] = src
+                    endidx += 1
+          
     def randomTrainList(self):
         epochList = []
         for i in range(self.epoch + 1): # 额外多增加一行
@@ -162,7 +192,7 @@ class CustomDataset(Dataset):
             
         # 常规采样
         self.batch_called += 1
-        bound = max(self.trainptr+self.batchsize,self.trainNUM)
+        bound = min(self.trainptr+self.batchsize,self.trainNUM)
         print("预取数据部分:{}:{}...".format(self.trainptr,bound))
         cacheData = []
         for i in range(bound-self.trainptr):
@@ -180,6 +210,15 @@ def collate_fn(data):
 if __name__ == "__main__":
     data = [i for i in range(20)]
     dataset = CustomDataset("./config.json")
+    print(dataset.cacheData)
+    dataset.initNextGraphData()
+    print(dataset.cacheData)
+    dataset.initNextGraphData()
+    print(dataset.cacheData)
+    dataset.initNextGraphData()
+    print(dataset.cacheData)
+    dataset.initNextGraphData()
+    print(dataset.cacheData)
     # train_loader = DataLoader(dataset=dataset, batch_size=4, collate_fn=collate_fn,pin_memory=True)
     # for i in train_loader:
     #     print(i)
