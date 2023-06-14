@@ -130,8 +130,7 @@ class CustomDataset(Dataset):
         # del self.cacheData[3]
         # del self.cacheData[2]
         self.cacheData = self.cacheData[0:2]
-        
-       
+              
     def readNeig(self,nodeID):
         return self.src[self.bound[nodeID*2]:self.bound[nodeID*2+1]]
 
@@ -185,23 +184,43 @@ class CustomDataset(Dataset):
         return epochList
     
     def preGraphBatch(self):
-        if self.batch_called > self.loop:
+        # 在当前cache中进行采样，如果当前cache已经失效，则需要reload新图
+        # 常规预取
+        self.batch_called += 1
+        if self.batch_called == self.loop:
+            cacheData = []
+            print("预取最后一轮...")
+            # 当前采样图的最后一个批            
+            # 先采样剩余部分
+            for index in range(0,self.subGtrainNodesNUM-self.trainptr):
+                sampleID = self.trainNodes[self.trainptr+index]
+                sampleG = self.cacheData[0][self.cacheData[1][sampleID*2]:self.cacheData[1][sampleID*2+1]]
+                cacheData.append(sampleG)
+            # 重加载
             self.batch_called = 0 #重置
             self.trainptr = 0
             self.initNextGraphData() # 当前epoch采样已经完成，则要预取下轮子图数据
+            # 补充采样
+            left = self.batchsize - len(cacheData)
+            for index in range(left):
+                sampleID = self.trainNodes[self.trainptr+index]
+                sampleG = self.cacheData[0][self.cacheData[1][sampleID*2]:self.cacheData[1][sampleID*2+1]]
+                cacheData.append(sampleG)
+            self.pipe.put(cacheData)
+            self.trainptr = left # 循环读取
+            return 0
+        else:
             
-        # 常规采样
-        self.batch_called += 1
-        bound = min(self.trainptr+self.batchsize,self.trainNUM)
-        print("预取数据部分:{}:{}...".format(self.trainptr,bound))
-        cacheData = []
-        for i in range(bound-self.trainptr):
-            sampleID = self.trainIDs[self.trainptr+i]
-            sampleG = self.cacheData[0][self.cacheData[1][sampleID*2]:self.cacheData[1][sampleID*2+1]]
-            cacheData.append(sampleG)
-        self.pipe.put(cacheData)
-        self.trainptr = bound%self.trainNUM # 循环读取
-        return 0
+            #bound = min(self.trainptr+self.batchsize,self.trainNUM)
+            print("预取数据部分:{}:{}...".format(self.trainptr,self.trainptr+self.batchsize))
+            cacheData = []
+            for i in range(self.batchsize):
+                sampleID = self.trainNodes[self.trainptr+i]
+                sampleG = self.cacheData[0][self.cacheData[1][sampleID*2]:self.cacheData[1][sampleID*2+1]]
+                cacheData.append(sampleG)
+            self.pipe.put(cacheData)
+            self.trainptr = self.trainptr + self.batchsize # 循环读取
+            return 0
     
 def collate_fn(data):
     return data
@@ -210,15 +229,6 @@ def collate_fn(data):
 if __name__ == "__main__":
     data = [i for i in range(20)]
     dataset = CustomDataset("./config.json")
-    print(dataset.cacheData)
-    dataset.initNextGraphData()
-    print(dataset.cacheData)
-    dataset.initNextGraphData()
-    print(dataset.cacheData)
-    dataset.initNextGraphData()
-    print(dataset.cacheData)
-    dataset.initNextGraphData()
-    print(dataset.cacheData)
-    # train_loader = DataLoader(dataset=dataset, batch_size=4, collate_fn=collate_fn,pin_memory=True)
-    # for i in train_loader:
-    #     print(i)
+    train_loader = DataLoader(dataset=dataset, batch_size=4, collate_fn=collate_fn,pin_memory=True)
+    for i in train_loader:
+        print(i)
