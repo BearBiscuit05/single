@@ -27,6 +27,7 @@ class CustomDataset(Dataset):
         self.cacheNUM = 0
         self.partNUM = 0
         self.epoch = 0
+        self.preRating = 0
         # ================
         
         self.trained = 0
@@ -56,9 +57,9 @@ class CustomDataset(Dataset):
     
     def __getitem__(self, index):
         # 批数据预取 缓存1个
-        if index % self.batchsize == 0:
+        if index % self.preRating == 0:
             # 调用预取函数
-            data = self.sample_flag.result()
+            # data = self.sample_flag.result()
             self.sample_flag = self.executor.submit(self.preGraphBatch) 
         
         # 获取采样数据
@@ -67,7 +68,7 @@ class CustomDataset(Dataset):
             if self.pipe.qsize() > 0:
                 self.sampledSubG = self.pipe.get()
             else: #需要等待
-                data = self.read_data.result()
+                data = self.sample_flag.result()
                 self.sampledSubG = self.pipe.get()
         
         return self.sampledSubG[index % self.batchsize]
@@ -101,6 +102,7 @@ class CustomDataset(Dataset):
         self.cacheNUM = config['cacheNUM']
         self.partNUM = config['partNUM']
         self.epoch = config['epoch']
+        self.preRating = config['preRating']
         formatted_data = json.dumps(config, indent=4)
         print(formatted_data)
 
@@ -184,6 +186,9 @@ class CustomDataset(Dataset):
         return epochList
     
     def preGraphBatch(self):
+        # 如果当前管道已经被充满，则不采样，该函数直接返回
+        if self.pipe.qsize() >= self.cacheNUM:
+            return 0
         # 在当前cache中进行采样，如果当前cache已经失效，则需要reload新图
         # 常规预取
         self.batch_called += 1
@@ -232,7 +237,7 @@ if __name__ == "__main__":
     train_loader = DataLoader(dataset=dataset, batch_size=4, collate_fn=collate_fn,pin_memory=True)
     time.sleep(2)
     for index in range(3):
-        print("="*15,index,"="*15)
+        #print("="*15,index,"="*15)
         for i in train_loader:
-            print(len(i))
-        print("="*15,index,"="*15)
+            pass
+        #print("="*15,index,"="*15)
