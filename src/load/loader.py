@@ -3,7 +3,7 @@ from torch.utils.data import Dataset, DataLoader
 from queue import Queue
 import numpy as np
 import json
-
+import time
 #变量控制原则 : 谁用谁负责
 """
 数据加载的逻辑:
@@ -36,7 +36,7 @@ class CustomDataset(Dataset):
         self.batch_called = 0   # 批预取函数调用次数
         self.trainingGID = 0 # 当前训练子图的ID
         self.nextGID = 0     # 下一个训练子图
-        self.trainNodes = []            # 子图训练节点记录
+        self.trainNodes = []            # 子图训练节点记录   
         self.graphNodeNUM = 0 # 当前训练子图节点数目
         self.graphEdgeNUM = 0 # 当前训练子图边数目
         self.subGtrainNodesNUM = 0 # 当前训练子图训练节点
@@ -108,7 +108,7 @@ class CustomDataset(Dataset):
         # 加载子图所有训练集
         idDict = {}     
         for index in range(self.partNUM):
-            idDict[index] = [i for i in range(12)]
+            idDict[index] = [i for i in range(10)]
             self.trainNUM += len(idDict[index])
         return idDict
 
@@ -187,9 +187,9 @@ class CustomDataset(Dataset):
         # 在当前cache中进行采样，如果当前cache已经失效，则需要reload新图
         # 常规预取
         self.batch_called += 1
-        if self.batch_called == self.loop:
+        if self.trainptr + self.batchsize >= self.subGtrainNodesNUM:
             cacheData = []
-            print("预取最后一轮...")
+            print("[more]从图{}预取数据部分:{}:{}...".format(self.trainingGID,self.trainptr,self.subGtrainNodesNUM))
             # 当前采样图的最后一个批            
             # 先采样剩余部分
             for index in range(0,self.subGtrainNodesNUM-self.trainptr):
@@ -202,6 +202,7 @@ class CustomDataset(Dataset):
             self.initNextGraphData() # 当前epoch采样已经完成，则要预取下轮子图数据
             # 补充采样
             left = self.batchsize - len(cacheData)
+            print("[more]从图{}预取数据部分:{}:{}...".format(self.trainingGID,0,left))
             for index in range(left):
                 sampleID = self.trainNodes[self.trainptr+index]
                 sampleG = self.cacheData[0][self.cacheData[1][sampleID*2]:self.cacheData[1][sampleID*2+1]]
@@ -210,9 +211,8 @@ class CustomDataset(Dataset):
             self.trainptr = left # 循环读取
             return 0
         else:
-            
             #bound = min(self.trainptr+self.batchsize,self.trainNUM)
-            print("预取数据部分:{}:{}...".format(self.trainptr,self.trainptr+self.batchsize))
+            print("从图{}预取数据部分:{}:{}...".format(self.trainingGID,self.trainptr,self.trainptr+self.batchsize))
             cacheData = []
             for i in range(self.batchsize):
                 sampleID = self.trainNodes[self.trainptr+i]
@@ -230,5 +230,6 @@ if __name__ == "__main__":
     data = [i for i in range(20)]
     dataset = CustomDataset("./config.json")
     train_loader = DataLoader(dataset=dataset, batch_size=4, collate_fn=collate_fn,pin_memory=True)
+    time.sleep(2)
     for i in train_loader:
-        print(i)
+        print(len(i))
