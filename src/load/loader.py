@@ -4,6 +4,7 @@ from queue import Queue
 import numpy as np
 import json
 import time
+import mmap
 #变量控制原则 : 谁用谁负责
 """
 数据加载的逻辑:
@@ -17,8 +18,10 @@ class CustomDataset(Dataset):
     def __init__(self,confPath):
         # 获得训练基本信息
         self.cacheData = []     # 子图存储部分
-        self.pipe = Queue()     # 采样存储管道
+        self.graphPipe = Queue()    # 采样存储管道
+        self.blockPipe = Queue()    # 采样图+特征
         self.sampledSubG = []   # 采样子图存储位置
+        self.sampledfeat = []   # 采样子图特征存储
         self.trainNUM = 0       # 训练集总数目
         
         # config json 部分
@@ -28,6 +31,7 @@ class CustomDataset(Dataset):
         self.partNUM = 0
         self.epoch = 0
         self.preRating = 0
+        self.featlen = 0
         # ================
         
         self.trained = 0
@@ -46,6 +50,11 @@ class CustomDataset(Dataset):
         self.executor = concurrent.futures.ThreadPoolExecutor(1) # 线程池
         self.trainSubGTrack = self.randomTrainList() # 训练轨迹
         
+        # 特征部分
+        self.readfile = []  # 包含两个句柄/可能有三个句柄
+        self.mmapfile = []  
+        self.loadingFeatFileHead()      # 读取特征文件
+
         # 数据预取
         self.loadingGraph()
         self.initNextGraphData()
@@ -65,13 +74,16 @@ class CustomDataset(Dataset):
         # 获取采样数据
         if index % self.batchsize == 0:
             # 调用实际数据
-            if self.pipe.qsize() > 0:
-                self.sampledSubG = self.pipe.get()
+            if self.graphPipe.qsize() > 0:
+                cacheData = self.graphPipe.get()
+                self.sampledSubG = cacheData[0]
+                self.sampledfeat = cacheData[1]
             else: #需要等待
                 data = self.sample_flag.result()
-                self.sampledSubG = self.pipe.get()
-        
-        return self.sampledSubG[index % self.batchsize]
+                cacheData = self.graphPipe.get()
+                self.sampledSubG = cacheData[0]
+                self.sampledfeat = cacheData[1]
+        return self.sampledSubG[index % self.batchsize],self.sampledfeat[index % self.batchsize]
 
     def initNextGraphData(self):
         # 查看是否需要释放
@@ -93,7 +105,6 @@ class CustomDataset(Dataset):
                         .format(self.trainingGID,self.nextGID,self.subGtrainNodesNUM,\
                         self.graphNodeNUM,self.graphEdgeNUM,self.loop))
         
-
     def readConfig(self,confPath):
         with open(confPath, 'r') as f:
             config = json.load(f)
@@ -103,6 +114,7 @@ class CustomDataset(Dataset):
         self.partNUM = config['partNUM']
         self.epoch = config['epoch']
         self.preRating = config['preRating']
+        self.featlen = config['featlen']
         formatted_data = json.dumps(config, indent=4)
         print(formatted_data)
 
@@ -116,22 +128,36 @@ class CustomDataset(Dataset):
 
     def loadingGraph(self):
         # 读取int数组的二进制存储， 需要将边界填充到前面的预存图中
-        # 由self.subGptr变量驱动
+        # 由self.subGptr变量驱动,读取时是结构+特征
         self.subGptr += 1
         subGID = self.trainSubGTrack[self.subGptr//self.partNUM][self.subGptr%self.partNUM]
         filePath = self.dataPath + "/part" + str(subGID)
         srcdata = np.fromfile(filePath+"/srcList.bin", dtype=np.int32)
         rangedata = np.fromfile(filePath+"/range.bin", dtype=np.int32)
+        
         # 转换为tensor : tensor_data = torch.from_numpy(data)
         self.cacheData.append(srcdata)
         self.cacheData.append(rangedata)
 
+    def loadingFeatFileHead(self):
+        for index in range(self.partNUM):
+            filePath = self.dataPath + "/part" + str(index)
+            file = open(filePath+"/feat.bin", "r+b")
+            self.readfile.append(file)
+            self.mmapfile.append(mmap.mmap(self.readfile[-1].fileno(), 0, access=mmap.ACCESS_READ))
+        print("mmap file success...")
+
+    def closeMMapFileHead(self):
+        for file in self.readfile:
+            file.close()
+        for file in self.mmapfile:
+            file.close()
+
     def moveGraph(self):
         self.cacheData[0] = self.cacheData[2]
         self.cacheData[1] = self.cacheData[3]
-        # del self.cacheData[3]
-        # del self.cacheData[2]
         self.cacheData = self.cacheData[0:2]
+
               
     def readNeig(self,nodeID):
         return self.src[self.bound[nodeID*2]:self.bound[nodeID*2+1]]
@@ -155,19 +181,19 @@ class CustomDataset(Dataset):
             src = edges[index*2]
             dst = edges[index*2 + 1]
             if dst != lastid:
-                startidx = bound[dst*2]
-                endidx = bound[dst*2+1]
+                startidx = self.cacheData[1][dst*2]
+                endidx = self.cacheData[1][dst*2+1]
                 try:
-                    next = bound[dst*2+2]
+                    next = self.cacheData[1][dst*2+2]
                 except:
                     next = self.graphEdgeNUM
                 lastid = dst
                 if endidx < next:
-                    srcList[endidx] = src
+                    self.cacheData[0][endidx] = src
                     endidx += 1
             else:
                 if endidx < next:
-                    srcList[endidx] = src
+                    self.cacheData[0][endidx] = src
                     endidx += 1
           
     def randomTrainList(self):
@@ -187,7 +213,7 @@ class CustomDataset(Dataset):
     
     def preGraphBatch(self):
         # 如果当前管道已经被充满，则不采样，该函数直接返回
-        if self.pipe.qsize() >= self.cacheNUM:
+        if self.graphPipe.qsize() >= self.cacheNUM:
             return 0
         # 在当前cache中进行采样，如果当前cache已经失效，则需要reload新图
         # 常规预取
@@ -212,7 +238,8 @@ class CustomDataset(Dataset):
                 sampleID = self.trainNodes[self.trainptr+index]
                 sampleG = self.cacheData[0][self.cacheData[1][sampleID*2]:self.cacheData[1][sampleID*2+1]]
                 cacheData.append(sampleG)
-            self.pipe.put(cacheData)
+            cacheData = self.featMerge(SubG)
+            self.graphPipe.put(cacheData)
             self.trainptr = left # 循环读取
             return 0
         else:
@@ -223,10 +250,29 @@ class CustomDataset(Dataset):
                 sampleID = self.trainNodes[self.trainptr+i]
                 sampleG = self.cacheData[0][self.cacheData[1][sampleID*2]:self.cacheData[1][sampleID*2+1]]
                 cacheData.append(sampleG)
-            self.pipe.put(cacheData)
+            cacheData = self.featMerge(cacheData)
+            self.graphPipe.put(cacheData)
             self.trainptr = self.trainptr + self.batchsize # 循环读取
             return 0
     
+    def featMerge(self,SubG):
+        # 获取采样子图(SubG) 转换为训练子图(block)
+        # mmap返回特征
+        feats = []
+        
+        # float_size = np.dtype(float).itemsize
+        # for nodeID in SubG:
+        #     feat = np.frombuffer(self.mmapfile[self.trainingGID], dtype=float, offset=nodeID*self.featlen* float_size, count=self.featlen)
+        #     feats.append(feat)
+        # self.nextGID = 0     # 下一个训练子图
+        # 存储到下一个管道
+        block = [SubG,feats]
+        return block
+        
+    def __del__(self):
+
+        self.closeMMapFileHead()
+
 def collate_fn(data):
     return data
 
@@ -234,10 +280,14 @@ def collate_fn(data):
 if __name__ == "__main__":
     data = [i for i in range(20)]
     dataset = CustomDataset("./config.json")
+    with open("./config.json", 'r') as f:
+        config = json.load(f)
+        batchsize = config['batchsize']
+        epoch = config['epoch']
     train_loader = DataLoader(dataset=dataset, batch_size=4, collate_fn=collate_fn,pin_memory=True)
     time.sleep(2)
-    for index in range(3):
-        #print("="*15,index,"="*15)
+    for index in range(epoch):
+        print("="*15,index,"="*15)
         for i in train_loader:
-            pass
-        #print("="*15,index,"="*15)
+            print(i)
+        print("="*15,index,"="*15)

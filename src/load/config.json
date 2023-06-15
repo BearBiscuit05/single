@@ -3,7 +3,9 @@
     "dataset" : "products",
     "datasetpath": "/home/bear/workspace/singleGNN/data",
     "partNUM":4,
-    "cacheNUM":1,
+    "cacheNUM":2,
     "batchsize":4,
-    "epoch":1
+    "epoch":1,
+    "preRating":2,
+    "featlen":10
 }

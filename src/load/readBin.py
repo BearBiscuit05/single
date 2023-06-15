@@ -1,46 +1,26 @@
 import numpy as np
-import torch
-from torch.utils.data import Dataset, DataLoader
+import time
+import mmap
 
-class CustomDataset(Dataset):
-    def __init__(self):
-        self.tensor1 = torch.zeros(50)
-        self.tensor2 = torch.zeros(100)
-        self.tensor3 = torch.zeros(50)
-        self.tensor4 = torch.zeros(100)
-        self.l = []
-
-
-    def change(self):
-        self.l[0] += 1
-
-    def add(self):
-        t1,t2 = self.newdata()
-        self.l.append(t1)
-        self.l.append(t2)
-        
-
-    def remove(self):
-        self.tensor3 = None
-        self.tensor4 = None 
-
-    def print(self):
-        print(self.l)
-
-    def newdata(self):
-        tmp1 = torch.zeros(50)
-        tmp2 = torch.zeros(100)
-        return tmp1,tmp2
+def mergeFeat(mmap_file_hand,sampleNodes,featLen):
+    feats = np.zeros((len(sampleNodes),featLen),dtype=float)
+    int32_size = np.dtype(float).itemsize
+    start = time.time()   
+    for index,nodeID in enumerate(sampleNodes):
+        int_array_length = featLen
+        offset = nodeID *featLen* int32_size
+        int_array = np.frombuffer(mmap_file_hand, dtype=float, offset=offset, count=int_array_length)
+        feats[index] = int_array
+    print("mmap time :", time.time()-start)
+    return feats
 
 if __name__ == "__main__":
-    my_list = [1, 2, 3, 4, 5]
-
-    # 获取索引为 1 的元素的引用
-    tmp = my_list[1]
-
-    # 修改 tmp
-    tmp = 10
-
-    print(my_list)  # 输出: [1, 10, 3, 4, 5]
-    print(tmp)  # 输出: 10
-
+    sampleNodes = [i for i in range(10)]
+    featLen = 20
+    file_path = "../../data/products/part0/feat.bin"
+    file = open(file_path, "r+b")
+    mmapped_file = mmap.mmap(file.fileno(), 0, access=mmap.ACCESS_READ)
+    feat = mergeFeat(mmapped_file,sampleNodes,featLen)
+    print(feat)
+    mmapped_file.close()
+    file.close()
