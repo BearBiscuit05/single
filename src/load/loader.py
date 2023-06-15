@@ -231,5 +231,8 @@ if __name__ == "__main__":
     dataset = CustomDataset("./config.json")
     train_loader = DataLoader(dataset=dataset, batch_size=4, collate_fn=collate_fn,pin_memory=True)
     time.sleep(2)
-    for i in train_loader:
-        print(len(i))
+    for index in range(3):
+        print("="*15,index,"="*15)
+        for i in train_loader:
+            print(len(i))
+        print("="*15,index,"="*15)
