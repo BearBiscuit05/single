@@ -278,8 +278,6 @@ class CustomDataset(Dataset):
                         feat = np.frombuffer(self.mmapfile[self.nextGID], dtype=float, offset=nodeID*self.featlen* float_size, count=self.featlen)
                 feats.append(feat)
             batchFeats.append(feats)
-        # self.nextGID = 0     # 下一个训练子图
-        # 存储到下一个管道
         block = [SubG,batchFeats]
         return block
         
@@ -304,11 +302,11 @@ if __name__ == "__main__":
         config = json.load(f)
         batchsize = config['batchsize']
         epoch = config['epoch']
-    
-    train_loader = DataLoader(dataset=dataset, batch_size=4, collate_fn=collate_fn,pin_memory=True)
-    time.sleep(2)
-    for index in range(epoch):
-        print("="*15,index,"="*15)
-        for i in train_loader:
-            print(i)
-        print("="*15,index,"="*15)
+
+    # train_loader = DataLoader(dataset=dataset, batch_size=4, collate_fn=collate_fn,pin_memory=True)
+    # time.sleep(2)
+    # for index in range(epoch):
+    #     print("="*15,index,"="*15)
+    #     for i in train_loader:
+    #         print(i)
+    #     print("="*15,index,"="*15)
