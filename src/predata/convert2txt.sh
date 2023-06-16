@@ -19,9 +19,9 @@ else
 fi
 savefile=processed
 savepath="$1/${savefile}"
-# rm -rf ${savepath}
-# mkdir -p ${savepath}
-#python convert2coo.py ${datasetName} ogb-product ${savepath}
+rm -rf ${savepath}
+mkdir -p ${savepath}
+python convert2coo.py ${datasetName} ogb-product ${savepath}
 
 
 # txt2bin

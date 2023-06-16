@@ -32,6 +32,7 @@ class CustomDataset(Dataset):
         self.epoch = 0
         self.preRating = 0
         self.featlen = 0
+        self.idbound = []
         # ================
         
         self.trained = 0
@@ -115,6 +116,7 @@ class CustomDataset(Dataset):
         self.epoch = config['epoch']
         self.preRating = config['preRating']
         self.featlen = config['featlen']
+        self.idbound = config['idbound']
         formatted_data = json.dumps(config, indent=4)
         print(formatted_data)
 
@@ -142,7 +144,7 @@ class CustomDataset(Dataset):
     def loadingFeatFileHead(self):
         for index in range(self.partNUM):
             filePath = self.dataPath + "/part" + str(index)
-            file = open(filePath+"/feat.bin", "r+b")
+            file = open(filePath+"/feat_"+str(index)+".bin", "r+b")
             self.readfile.append(file)
             self.mmapfile.append(mmap.mmap(self.readfile[-1].fileno(), 0, access=mmap.ACCESS_READ))
         print("mmap file success...")
@@ -157,8 +159,7 @@ class CustomDataset(Dataset):
         self.cacheData[0] = self.cacheData[2]
         self.cacheData[1] = self.cacheData[3]
         self.cacheData = self.cacheData[0:2]
-
-              
+            
     def readNeig(self,nodeID):
         return self.src[self.bound[nodeID*2]:self.bound[nodeID*2+1]]
 
@@ -180,6 +181,8 @@ class CustomDataset(Dataset):
         for index in range(int(len(edges) / 2)):
             src = edges[index*2]
             dst = edges[index*2 + 1]
+            if self.nextGID == 0: # 对于下一子图为0，会需要进行修改
+                src += self.graphNodeNUM
             if dst != lastid:
                 startidx = self.cacheData[1][dst*2]
                 endidx = self.cacheData[1][dst*2+1]
@@ -261,8 +264,9 @@ class CustomDataset(Dataset):
         feats = []
         
         # float_size = np.dtype(float).itemsize
-        # for nodeID in SubG:
+        for nodeID in SubG:
         #     feat = np.frombuffer(self.mmapfile[self.trainingGID], dtype=float, offset=nodeID*self.featlen* float_size, count=self.featlen)
+            feats.append([])
         #     feats.append(feat)
         # self.nextGID = 0     # 下一个训练子图
         # 存储到下一个管道
@@ -284,6 +288,7 @@ if __name__ == "__main__":
         config = json.load(f)
         batchsize = config['batchsize']
         epoch = config['epoch']
+    
     train_loader = DataLoader(dataset=dataset, batch_size=4, collate_fn=collate_fn,pin_memory=True)
     time.sleep(2)
     for index in range(epoch):

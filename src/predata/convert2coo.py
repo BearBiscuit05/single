@@ -159,5 +159,7 @@ if __name__ == '__main__':
     dataName = sys.argv[2]
     savePath = sys.argv[3]
     #gen_format_file(0,4,dataPath,dataName,savePath)
+    
+    #python convert2coo.py data ogb-product ${savepath}
     for i in range(4):
         gen_format_file(i,4,dataPath,dataName,savePath)
