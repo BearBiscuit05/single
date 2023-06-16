@@ -150,11 +150,11 @@ class CustomDataset(Dataset):
         print("mmap file success...")
 
     def closeMMapFileHead(self):
-        for file in self.readfile:
-            file.close()
         for file in self.mmapfile:
             file.close()
-
+        for file in self.readfile:
+            file.close()
+        
     def moveGraph(self):
         self.cacheData[0] = self.cacheData[2]
         self.cacheData[1] = self.cacheData[3]
@@ -241,7 +241,7 @@ class CustomDataset(Dataset):
                 sampleID = self.trainNodes[self.trainptr+index]
                 sampleG = self.cacheData[0][self.cacheData[1][sampleID*2]:self.cacheData[1][sampleID*2+1]]
                 cacheData.append(sampleG)
-            cacheData = self.featMerge(SubG)
+            cacheData = self.featMerge(cacheData)
             self.graphPipe.put(cacheData)
             self.trainptr = left # 循环读取
             return 0
@@ -261,21 +261,37 @@ class CustomDataset(Dataset):
     def featMerge(self,SubG):
         # 获取采样子图(SubG) 转换为训练子图(block)
         # mmap返回特征
-        feats = []
-        
-        # float_size = np.dtype(float).itemsize
-        for nodeID in SubG:
-        #     feat = np.frombuffer(self.mmapfile[self.trainingGID], dtype=float, offset=nodeID*self.featlen* float_size, count=self.featlen)
-            feats.append([])
-        #     feats.append(feat)
+        batchFeats = []
+        float_size = np.dtype(float).itemsize
+        for sampledG in SubG:
+            feats = []
+            for nodeID in sampledG:
+                if nodeID < self.graphNodeNUM: # 本地抽取
+                    feat = np.frombuffer(self.mmapfile[self.trainingGID], dtype=float, offset=nodeID*self.featlen* float_size, count=self.featlen)
+                else:
+                    if self.nextGID == 0:
+                        # graph_0
+                        nodeID -= self.graphNodeNUM
+                        feat = np.frombuffer(self.mmapfile[self.nextGID], dtype=float, offset=nodeID*self.featlen* float_size, count=self.featlen)
+                    else:
+                        nodeID -= self.idbound[self.nextGID][0]
+                        feat = np.frombuffer(self.mmapfile[self.nextGID], dtype=float, offset=nodeID*self.featlen* float_size, count=self.featlen)
+                feats.append(feat)
+            batchFeats.append(feats)
         # self.nextGID = 0     # 下一个训练子图
         # 存储到下一个管道
-        block = [SubG,feats]
+        block = [SubG,batchFeats]
         return block
         
-    def __del__(self):
-
-        self.closeMMapFileHead()
+    # def __del__(self):
+    #     self.cacheData = []     
+    #     while self.graphPipe.qsize() > 0:
+    #         self.graphPipe.get()
+    #     while self.blockPipe.qsize() > 0:
+    #         self.blockPipe.get()   
+    #     self.sampledSubG = []   
+    #     self.sampledfeat = []   
+    #     self.closeMMapFileHead()
 
 def collate_fn(data):
     return data
