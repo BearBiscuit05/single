@@ -5,6 +5,8 @@ import numpy as np
 import json
 import time
 import mmap
+import dgl
+import torch
 from dgl.heterograph import DGLBlock
 #变量控制原则 : 谁用谁负责
 """
@@ -241,6 +243,7 @@ class CustomDataset(Dataset):
                 sampleID = [sampleID for i in range(len(sampleG))]
                 cacheData.append([sampleG,sampleID])
             cacheData = self.featMerge(cacheData)
+            cacheData = self.create_dgl_block(cacheData)
             self.graphPipe.put(cacheData)
             self.trainptr = left # 循环读取
             return 0
@@ -254,6 +257,7 @@ class CustomDataset(Dataset):
                 sampleID = [sampleID for i in range(len(sampleG))]
                 cacheData.append([sampleG,sampleID])
             cacheData = self.featMerge(cacheData)
+            cacheData = self.create_dgl_block(cacheData)
             self.graphPipe.put(cacheData)
             self.trainptr = self.trainptr + self.batchsize # 循环读取
             return 0
@@ -278,11 +282,25 @@ class CustomDataset(Dataset):
                         feat = np.frombuffer(self.mmapfile[self.nextGID], dtype=float, offset=nodeID*self.featlen* float_size, count=self.featlen)
                 feats.append(feat)
             batchFeats.append(feats)
-        # self.nextGID = 0     # 下一个训练子图
-        # 存储到下一个管道
         block = [SubG,batchFeats]
         return block
         
+    def create_dgl_block(self,cacheData):
+        # cacheData 由边与特征组成
+        coo = cacheData[0]
+        for index, edges in enumerate(coo):
+            row, col = edges[0],edges[1]
+            row = torch.tensor(row)
+            col = torch.tensor(col,dtype=torch.int32)
+            # print("row:",row)
+            # print("col:",col)
+            gidx = dgl.heterograph_index.create_unitgraph_from_coo(2, len(row), 1, row, col, 'coo')
+            g = DGLBlock(gidx, (['_N'], ['_N']), ['_E'])
+            coo[index] = g
+            #print(cacheData[i])    
+        # print(cacheData)
+        return cacheData
+
 def collate_fn(data):
     return data
 
@@ -300,5 +318,6 @@ if __name__ == "__main__":
     for index in range(epoch):
         print("="*15,index,"="*15)
         for i in train_loader:
+            #pass
             print(i)
         print("="*15,index,"="*15)
