@@ -5,6 +5,7 @@ import numpy as np
 import json
 import time
 import mmap
+from dgl.heterograph import DGLBlock
 #变量控制原则 : 谁用谁负责
 """
 数据加载的逻辑:
@@ -61,7 +62,6 @@ class CustomDataset(Dataset):
         self.initNextGraphData()
         self.sample_flag = self.executor.submit(self.preGraphBatch) #发送采样命令
         
-
     def __len__(self):  
         return self.trainNUM
     
@@ -163,9 +163,6 @@ class CustomDataset(Dataset):
     def readNeig(self,nodeID):
         return self.src[self.bound[nodeID*2]:self.bound[nodeID*2+1]]
 
-    def prefeat(self):
-        pass
-    
     def loadingHalo(self):
         # 要先加载下一个子图，然后再加载halo( 当前<->下一个 )
         # TODO 读取halo
@@ -229,7 +226,8 @@ class CustomDataset(Dataset):
             for index in range(0,self.subGtrainNodesNUM-self.trainptr):
                 sampleID = self.trainNodes[self.trainptr+index]
                 sampleG = self.cacheData[0][self.cacheData[1][sampleID*2]:self.cacheData[1][sampleID*2+1]]
-                cacheData.append(sampleG)
+                sampleID = [sampleID for i in range(len(sampleG))]
+                cacheData.append([sampleG,sampleID])
             # 重加载
             self.batch_called = 0 #重置
             self.trainptr = 0
@@ -240,7 +238,8 @@ class CustomDataset(Dataset):
             for index in range(left):
                 sampleID = self.trainNodes[self.trainptr+index]
                 sampleG = self.cacheData[0][self.cacheData[1][sampleID*2]:self.cacheData[1][sampleID*2+1]]
-                cacheData.append(sampleG)
+                sampleID = [sampleID for i in range(len(sampleG))]
+                cacheData.append([sampleG,sampleID])
             cacheData = self.featMerge(cacheData)
             self.graphPipe.put(cacheData)
             self.trainptr = left # 循环读取
@@ -252,7 +251,8 @@ class CustomDataset(Dataset):
             for i in range(self.batchsize):
                 sampleID = self.trainNodes[self.trainptr+i]
                 sampleG = self.cacheData[0][self.cacheData[1][sampleID*2]:self.cacheData[1][sampleID*2+1]]
-                cacheData.append(sampleG)
+                sampleID = [sampleID for i in range(len(sampleG))]
+                cacheData.append([sampleG,sampleID])
             cacheData = self.featMerge(cacheData)
             self.graphPipe.put(cacheData)
             self.trainptr = self.trainptr + self.batchsize # 循环读取
@@ -265,7 +265,7 @@ class CustomDataset(Dataset):
         float_size = np.dtype(float).itemsize
         for sampledG in SubG:
             feats = []
-            for nodeID in sampledG:
+            for nodeID in sampledG[0]:
                 if nodeID < self.graphNodeNUM: # 本地抽取
                     feat = np.frombuffer(self.mmapfile[self.trainingGID], dtype=float, offset=nodeID*self.featlen* float_size, count=self.featlen)
                 else:
@@ -278,19 +278,11 @@ class CustomDataset(Dataset):
                         feat = np.frombuffer(self.mmapfile[self.nextGID], dtype=float, offset=nodeID*self.featlen* float_size, count=self.featlen)
                 feats.append(feat)
             batchFeats.append(feats)
+        # self.nextGID = 0     # 下一个训练子图
+        # 存储到下一个管道
         block = [SubG,batchFeats]
         return block
         
-    # def __del__(self):
-    #     self.cacheData = []     
-    #     while self.graphPipe.qsize() > 0:
-    #         self.graphPipe.get()
-    #     while self.blockPipe.qsize() > 0:
-    #         self.blockPipe.get()   
-    #     self.sampledSubG = []   
-    #     self.sampledfeat = []   
-    #     self.closeMMapFileHead()
-
 def collate_fn(data):
     return data
 
@@ -302,11 +294,11 @@ if __name__ == "__main__":
         config = json.load(f)
         batchsize = config['batchsize']
         epoch = config['epoch']
-
-    # train_loader = DataLoader(dataset=dataset, batch_size=4, collate_fn=collate_fn,pin_memory=True)
-    # time.sleep(2)
-    # for index in range(epoch):
-    #     print("="*15,index,"="*15)
-    #     for i in train_loader:
-    #         print(i)
-    #     print("="*15,index,"="*15)
+    
+    train_loader = DataLoader(dataset=dataset, batch_size=4, collate_fn=collate_fn,pin_memory=True)
+    time.sleep(2)
+    for index in range(epoch):
+        print("="*15,index,"="*15)
+        for i in train_loader:
+            print(i)
+        print("="*15,index,"="*15)
