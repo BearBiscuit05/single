@@ -3,3 +3,10 @@
 **/*bin
 .vscode/
 **/**.csv
+**/*.zip
+**/dataset
+**/**.txt
+**/**.so
+**/**.o
+**/*-INFO
+**/**.egg

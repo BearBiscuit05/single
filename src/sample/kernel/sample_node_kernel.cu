@@ -53,7 +53,6 @@ __global__ void sample1Hop(
             outputDST1[writeIdx++] = id;
         }
     }
-
 }
 
 

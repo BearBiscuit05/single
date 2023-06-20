@@ -1,0 +1,29 @@
+{
+    "train_name" : "node_classification",
+    "dataset" : "products",
+    "datasetpath": "/home/bear/workspace/singleGNN/data",
+    "partNUM":4,
+    "cacheNUM":2,
+    "batchsize":4,
+    "epoch":1,
+    "preRating":2,
+    "featlen":10,
+    "idbound":[
+        [
+            0,
+            602287
+        ],
+        [
+            602287,
+            1225638
+        ],
+        [
+            1225638,
+            1830644
+        ],
+        [
+            1830644,
+            2449029
+        ]
+    ]
+}

@@ -7,13 +7,11 @@
 #include <sstream>
 #include <cassert>
 
-void writeCSRFile(std::string output_file,std::vector<int>& vec) {
+void writeBinFile(std::string output_file,std::vector<int>& vec) {
     std::ofstream outputFile(output_file, std::ios::binary);
     if (outputFile.is_open()) {
         int len = vec.size();
         for (int i = 0 ; i < len; i++) {
-            // if (i % 4000000 == 0)
-            //     cout << "write :[ " << i <<" ]" <<endl;
             outputFile.write(reinterpret_cast<const char*>(&vec[i]), sizeof(vec[i]));            
         }
         outputFile.close();
@@ -24,7 +22,6 @@ void writeCSRFile(std::string output_file,std::vector<int>& vec) {
 }
 
 void readCSRFile(std::string output_file,std::vector<int>& vec,int len) {
-    // int len = vec.size();
     FILE * fp = fopen64(output_file.c_str(),"r");
     assert(fp!=NULL);
     uint rd = 0;
@@ -43,56 +40,13 @@ void printVec(std::vector<int>& vec) {
     std::cout << std::endl;
 }
 
-void COO2CSR(const std::string& csvFile, std::vector<int>& src, std::vector<int>& dstRange) {
-    std::ifstream file(csvFile);
-    std::map<int,std::vector<int>> data;
-    int startNode, endNode;
-    char dot;
-    int numEdges = 0;
-    while (file >> startNode >> dot >> endNode) {
-        data[endNode].push_back(startNode);
-        numEdges++;
-    }
-    file.close();
 
-    int numNodes = 9;
-    src.resize(numEdges);
-    dstRange.resize(numNodes + 1);
-
-    int idx = 0;
-    std::vector<int> tmp;
-    for (int i = 0; i < numNodes; ++i) {
-        if (data.find(i) != data.end()){
-            tmp = data[i];
-            sort(tmp.begin(),tmp.end());
-            dstRange[i] = idx;
-            for(int index = 0 ; index < tmp.size() ; index++){
-                src[idx++] = tmp[index];
-            }
-        } else {
-            dstRange[i] = idx;
-        }
-    }
-    dstRange[numNodes] = numEdges;
-    // std::cout << "src: ";
-    // for (int i = 0; i < numEdges; ++i) {
-    //     std::cout << src[i] << " ";
-    // }
-    // std::cout << std::endl;
-
-    // std::cout << "dstRange: ";
-    // for (int i = 0; i < dstRange.size(); ++i) {
-    //     std::cout << dstRange[i] << " ";
-    // }
-    // std::cout << std::endl;
-}
-
-void convert2CSR(const std::string& inputFilename, std::vector<int>& src, std::vector<int>& dstRange) {
+void edgesConvert2CSR(const std::string& inputFilename, const std::string& savePath,std::vector<int>& src, std::vector<int>& dstRange) {
     std::ifstream inputFile(inputFilename);
     std::string line;
     std::getline(inputFile, line);
     std::stringstream confss(line);
-    std::vector<int> confData; // nodeNUM,edgeNUM
+    std::vector<int> confData; // [nodeNUM,edgeNUM]
     std::string token;
     while (std::getline(confss, token, ',')) { 
         int value = std::stoi(token);
@@ -102,16 +56,13 @@ void convert2CSR(const std::string& inputFilename, std::vector<int>& src, std::v
 
     if (inputFile) {   
         while (std::getline(inputFile, line)) {
-            // 解析每一行数据
             int key;
             std::vector<int> values;
             std::stringstream ss(line);
             
-            // 解析键（key）
             std::getline(ss, token, ',');
             key = std::stoi(token);
 
-            // 解析值（values）
             while (std::getline(ss, token, ',')) {
                 int value = std::stoi(token);
                 values.push_back(value);
@@ -124,41 +75,40 @@ void convert2CSR(const std::string& inputFilename, std::vector<int>& src, std::v
         std::cerr << "Failed to open input or output file." << std::endl;
     }
 
-    src.resize(confData[1]);
-    dstRange.resize(confData[0]+1);
+    src.reserve(int(confData[1]*1.5));
+    dstRange.resize(confData[0]*2);
     int saveIndex = 0;
     for(int idx = 0 ; idx < confData[0] ; idx++) {
         if (graph.find(idx) != graph.end()){
             sort(graph[idx].begin(),graph[idx].end());
-            dstRange[idx] = saveIndex;
-            for(int index = 0 ; index < graph[idx].size() ; index++){
-                src[saveIndex++] = graph[idx][index];
-            }
+            int originalSize = graph[idx].size();
+            int blockLen = std::max(static_cast<int>(originalSize * 1.2), 30);
+            graph[idx].resize(blockLen);
+            src.insert(src.end(), graph[idx].begin(), graph[idx].end());
+            dstRange[idx*2] = saveIndex;
+            dstRange[idx*2+1] = saveIndex+originalSize;
+            saveIndex += blockLen;
         } else {
-            dstRange[idx] = saveIndex;
+            dstRange[idx*2] = saveIndex;
+            dstRange[idx*2+1] = saveIndex;
         }
     }
-    dstRange[confData[0]] = saveIndex;
-    writeCSRFile("../data/srcList.bin",src);
-    writeCSRFile("../data/range.bin",dstRange);
+    //dstRange[confData[0]] = saveIndex;
+    std::string srcPath = savePath+"/srcList.bin";
+    std::string rangePath = savePath+"/range.bin";
+    writeBinFile(srcPath,src);
+    writeBinFile(rangePath,dstRange);
 
 }
 
 
 
 
-int main() {
+int main(int argc, char* argv[]) {
     std::vector<int> src;
     std::vector<int> dstRange;
-    std::string csvFile = "graph.csv";
-    std::string txtFile = "../data/subg_0.txt";
-    //COO2CSR(csvFile, src, dstRange);
-    convert2CSR(txtFile, src, dstRange);
-    // std::vector<int> r_src(15,0);
-    // std::vector<int> r_dstRange(9,0);
-    // readCSRFile("srcList.bin",r_src,15);
-    // readCSRFile("range.bin",r_dstRange,9);
-    // printVec(r_src);
-    // printVec(r_dstRange);
+    std::string txtFile = argv[1];
+    std::string savePath = argv[2];
+    edgesConvert2CSR(txtFile,savePath,src, dstRange);
     return 0;
 }

@@ -12,6 +12,8 @@ import torch
 import json
 import pickle
 import struct
+import sys
+
 def load_partition(rank,nodeID):
     graph_dir = 'data_8/'
     part_config = graph_dir + 'ogb-product.json'
@@ -54,7 +56,6 @@ def read_subG(rank):
     part_config = graph_dir + 'ogb-product.json'
     print('loading partitions')
     subg, node_feat, _, gpb, _, node_type, _ = dgl.distributed.load_partition(part_config, rank)
-    #inner = subg.ndata['inner_node'].tolist()
     in_graph = dgl.node_subgraph(subg, subg.ndata['inner_node'].bool())
     in_nodes = torch.arange(in_graph.num_nodes())
     out_graph = subg.clone()
@@ -77,15 +78,6 @@ def read_subG(rank):
     print("edge   :",subg.edges())  
     # print(len(node_feat['_N/labels']))
 
-def write_format(nodeDict,fileName, nodeNUM, edgeNUM):
-    with open(fileName, 'wb') as file:
-        file.write(struct.pack('i', nodeNUM))
-        file.write(struct.pack('i', edgeNUM))
-        for key, values in nodeDict.items():
-            file.write(struct.pack('i', -key))  # 将负数形式的key写入文件
-            for value in values:
-                file.write(pickle.dumps(value))  # 将value序列化后写入文件
-
 def save_dict_to_txt(nodeDict, filename, nodeNUM, edgeNUM):
     with open(filename, 'w') as file:
         file.write(f"{nodeNUM},{edgeNUM}")
@@ -96,7 +88,7 @@ def save_dict_to_txt(nodeDict, filename, nodeNUM, edgeNUM):
                 file.write(f",{value}")
             file.write("\n")
 
-def gen_format_file(rank,Wsize):
+def gen_format_file(rank,Wsize,dataPath,datasetName,savePath):
     """ 
     非压缩：二进制存储
         subG:只包含本位
@@ -110,8 +102,8 @@ def gen_format_file(rank,Wsize):
             [feat1]
             [feat2]
     """
-    graph_dir = '../algo/data_4/'
-    part_config = graph_dir + 'ogb-product.json'
+    graph_dir = dataPath
+    part_config = graph_dir + "/"+datasetName +'.json'
     print('loading partitions')
     subg, node_feat, _, gpb, _, node_type, _ = dgl.distributed.load_partition(part_config, rank)
 
@@ -133,16 +125,16 @@ def gen_format_file(rank,Wsize):
     for index in range(len(src)):
         srcid,dstid = src[index],dst[index]
         if inner[srcid] == 1 and inner[dstid] == 1:
-            if srcid not in nodeDict:
-                nodeDict[srcid] = []
-            nodeDict[srcid].append(dstid)
+            if dstid not in nodeDict:
+                nodeDict[dstid] = []
+            nodeDict[dstid].append(srcid)
             incount += 1
-        elif inner[srcid] != 1:     # 只需要dst在子图内部即可
+        elif inner[srcid] != 1 and inner[dstid] == 1:     # 只需要dst在子图内部即可
             srcid = subg.ndata[dgl.NID][srcid]
             partid = int((srcid / innernode))
             if partid > Wsize:
                 partid = Wsize - 1
-            if partid > 0 and partid <= Wsize - 1 and boundRange[partid][0] <= srcid and boundRange[partid][1] > srcid:
+            if partid >= 0 and partid <= Wsize - 1 and boundRange[partid][0] <= srcid and boundRange[partid][1] > srcid:
                 pass
             elif partid > 0 and boundRange[partid-1][0] <= srcid and boundRange[partid-1][1] > srcid:
                 partid -= 1
@@ -150,37 +142,24 @@ def gen_format_file(rank,Wsize):
                 partid += 1
             else:
                 print("src error id: ",srcid)
+                print("partid:{},innernode:{}".format(partid,innernode))
                 exit(-1)
             if dstid not in partdict[partid]:
                 partdict[partid][dstid] = []
             partdict[partid][dstid].append(srcid)
             outcount[partid] += 1         
-        # elif inner[dstid] != 1:
-        #     dstid = subg.ndata[dgl.NID][dstid]
-        #     partid = int((dstid / innernode))
-        #     if partid > Wsize:
-        #         partid = Wsize - 1
-        #     if partid > 0 and partid <= Wsize - 1 and boundRange[partid][0] <= dstid and boundRange[partid][1] > dstid:
-        #         pass
-        #     elif partid > 0 and boundRange[partid-1][0] <= dstid and boundRange[partid-1][1] > dstid:
-        #         partid -= 1
-        #     elif partid < Wsize - 1 and boundRange[partid+1][0] <= dstid and boundRange[partid+1][1] > dstid:
-        #         partid += 1
-        #     else:
-        #         print("dst error id: ",dstid)
-        #         exit(-1)
-        #     if srcid not in partdict[partid]:
-        #         partdict[partid][srcid] = []
-        #     partdict[partid][srcid].append(dstid)
-        #     outcount[partid] += 1
-    save_dict_to_txt(nodeDict,'../data/subg_'+str(rank)+'.txt', len(nodeDict), incount)
+    save_dict_to_txt(nodeDict,savePath+'/subg_'+str(rank)+'.txt', boundRange[rank][1] - boundRange[rank][0], incount)
     for i in range(Wsize):
-        save_dict_to_txt(partdict[i],'../data/subg_'+str(rank)+'_bound_'+str(i)+'.txt', len(partdict[i]), outcount[i])
+        save_dict_to_txt(partdict[i],savePath+'/subg_'+str(rank)+'_bound_'+str(i)+'.txt', len(partdict[i]), outcount[i])
+    print("data-{} processed ! ".format(rank))
 
 
-
-nodeID = 1
-# PART = 16
-# for i in range(PART):
-#     nodeID = load_partition(i,nodeID)
-gen_format_file(0,4)
+if __name__ == '__main__':
+    dataPath = sys.argv[1]
+    dataName = sys.argv[2]
+    savePath = sys.argv[3]
+    #gen_format_file(0,4,dataPath,dataName,savePath)
+    
+    #python convert2coo.py data ogb-product ${savepath}
+    for i in range(4):
+        gen_format_file(i,4,dataPath,dataName,savePath)
