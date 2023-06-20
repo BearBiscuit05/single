@@ -7,6 +7,7 @@ import time
 import mmap
 import dgl
 import torch
+import torch
 from dgl.heterograph import DGLBlock
 #变量控制原则 : 谁用谁负责
 """
@@ -65,6 +66,7 @@ class CustomDataset(Dataset):
         self.sample_flag = self.executor.submit(self.preGraphBatch) #发送采样命令
         
     def __len__(self):  
+        #return 10
         return self.trainNUM
     
     def __getitem__(self, index):
@@ -124,9 +126,13 @@ class CustomDataset(Dataset):
 
     def loadingTrainID(self):
         # 加载子图所有训练集
-        idDict = {}     
+        idDict = {}  
         for index in range(self.partNUM):
-            idDict[index] = [i for i in range(10)]
+            filePath = self.dataPath + "/part" + str(index)   
+            trainIDs = torch.load(filePath+"/trainID.bin")
+            trainIDs = trainIDs.to(torch.uint8).nonzero().squeeze()
+            _,idDict[index] = torch.sort(trainIDs)
+            idDict[index] = idDict[index][:10]
             self.trainNUM += len(idDict[index])
         return idDict
 
@@ -146,9 +152,9 @@ class CustomDataset(Dataset):
     def loadingFeatFileHead(self):
         for index in range(self.partNUM):
             filePath = self.dataPath + "/part" + str(index)
-            file = open(filePath+"/feat_"+str(index)+".bin", "r+b")
+            file = open(filePath+"/feat.bin", "r+b")
             self.readfile.append(file)
-            self.mmapfile.append(mmap.mmap(self.readfile[-1].fileno(), 0, access=mmap.ACCESS_READ))
+            self.mmapfile.append(mmap.mmap(self.readfile[-1].fileno(), 0, access=mmap.ACCESS_DEFAULT))
         print("mmap file success...")
 
     def closeMMapFileHead(self):
@@ -271,15 +277,15 @@ class CustomDataset(Dataset):
             feats = []
             for nodeID in sampledG[0]:
                 if nodeID < self.graphNodeNUM: # 本地抽取
-                    feat = np.frombuffer(self.mmapfile[self.trainingGID], dtype=float, offset=nodeID*self.featlen* float_size, count=self.featlen)
+                    feat = torch.frombuffer(self.mmapfile[self.trainingGID], dtype=torch.float32, offset=nodeID*self.featlen* float_size, count=self.featlen)
                 else:
                     if self.nextGID == 0:
                         # graph_0
                         nodeID -= self.graphNodeNUM
-                        feat = np.frombuffer(self.mmapfile[self.nextGID], dtype=float, offset=nodeID*self.featlen* float_size, count=self.featlen)
+                        feat = torch.frombuffer(self.mmapfile[self.trainingGID], dtype=torch.float32, offset=nodeID*self.featlen* float_size, count=self.featlen)
                     else:
                         nodeID -= self.idbound[self.nextGID][0]
-                        feat = np.frombuffer(self.mmapfile[self.nextGID], dtype=float, offset=nodeID*self.featlen* float_size, count=self.featlen)
+                        feat = torch.frombuffer(self.mmapfile[self.trainingGID], dtype=torch.float32, offset=nodeID*self.featlen* float_size, count=self.featlen)
                 feats.append(feat)
             batchFeats.append(feats)
         block = [SubG,batchFeats]
@@ -312,12 +318,11 @@ if __name__ == "__main__":
         config = json.load(f)
         batchsize = config['batchsize']
         epoch = config['epoch']
-    
     train_loader = DataLoader(dataset=dataset, batch_size=4, collate_fn=collate_fn,pin_memory=True)
     time.sleep(2)
     for index in range(epoch):
         print("="*15,index,"="*15)
         for i in train_loader:
-            #pass
-            print(i)
+            pass
+            #print(i)
         print("="*15,index,"="*15)

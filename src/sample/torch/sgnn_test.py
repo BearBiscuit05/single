@@ -16,22 +16,13 @@ if __name__ == "__main__":
     graphEdge = []
     boundList = []
 
-    file_path = './../../srcList.bin'
+    file_path = './../../data/products/part0/srcList.bin'
     graphEdge = np.fromfile(file_path, dtype=np.int32)
     graphEdge = torch.tensor(graphEdge).to('cuda:0')
-    file_path = "./../../range.bin"
+    file_path = "./../../data/products/part0/range.bin"
     boundList = np.fromfile(file_path, dtype=np.int32)
     boundList = torch.tensor(boundList).to('cuda:0')
 
-
-    # file_path = "./../../range.bin"
-    # with open(file_path, 'rb') as file:
-    #     while True:
-    #         data = file.read(4)
-    #         if not data:
-    #             break
-    #         integer = struct.unpack('i', data)[0]
-    #         boundList.append(integer)
 
     batch = 2
 #    fanout = n + n * 10 + n * 10 * 10

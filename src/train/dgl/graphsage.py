@@ -108,11 +108,13 @@ def train(args, device, g, dataset, model,data=None):
 
     opt = torch.optim.Adam(model.parameters(), lr=1e-3, weight_decay=5e-4)
     
-    for epoch in range(50):
+    for epoch in range(5):
         start = time.time()
         model.train()
         total_loss = 0
         for it, (input_nodes, output_nodes, blocks) in enumerate(train_dataloader):
+            if it == 0:
+                print(blocks)
             x = blocks[0].srcdata['feat']
             y = blocks[-1].dstdata['label']
             y_hat = model(blocks, x)
@@ -160,14 +162,14 @@ if __name__ == '__main__':
     # load and preprocess dataset
     print('Loading data')
     
-    #dataset = AsNodePredDataset(DglNodePropPredDataset('ogbn-products'))
-    #g = dataset[0]
+    dataset = AsNodePredDataset(DglNodePropPredDataset('ogbn-products'))
+    g = dataset[0]
     
-    g, dataset,train_idx,val_idx,test_idx= load_reddit()
-    data = (train_idx,val_idx,test_idx)
+    # g, dataset,train_idx,val_idx,test_idx= load_reddit()
+    # data = (train_idx,val_idx,test_idx)
     g = g.to('cuda' if args.mode == 'puregpu' else 'cpu')
     device = torch.device('cpu' if args.mode == 'cpu' else 'cuda')
-
+    data = None
     # create GraphSAGE model
     in_size = g.ndata['feat'].shape[1]
     out_size = dataset.num_classes
