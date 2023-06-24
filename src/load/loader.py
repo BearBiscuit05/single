@@ -23,7 +23,6 @@ class CustomDataset(Dataset):
         # 获得训练基本信息
         self.cacheData = []     # 子图存储部分
         self.graphPipe = Queue()    # 采样存储管道
-        self.blockPipe = Queue()    # 采样图+特征
         self.sampledSubG = []   # 采样子图存储位置
         self.sampledfeat = []   # 采样子图特征存储
         self.trainNUM = 0       # 训练集总数目
@@ -218,7 +217,7 @@ class CustomDataset(Dataset):
                 epochList.append(random_array)
             
         return epochList
-    
+
     def preGraphBatch(self):
         # 如果当前管道已经被充满，则不采样，该函数直接返回
         if self.graphPipe.qsize() >= self.cacheNUM:
@@ -268,11 +267,21 @@ class CustomDataset(Dataset):
             self.trainptr = self.trainptr + self.batchsize # 循环读取
             return 0
     
+    def preGPUBatch(self):
+        # 迁移到GPU中
+        # 1-hop 采样
+        
+        # 2-hop 采样
+
+        # 3-hop 采样
+        
+        pass
+
     def featMerge(self,SubG):
         # 获取采样子图(SubG) 转换为训练子图(block)
         # mmap返回特征
         batchFeats = []
-        float_size = np.dtype(float).itemsize
+        float_size = np.dtype(np.float32).itemsize
         for sampledG in SubG:
             feats = []
             for nodeID in sampledG[0]:
@@ -323,6 +332,6 @@ if __name__ == "__main__":
     for index in range(epoch):
         print("="*15,index,"="*15)
         for i in train_loader:
-            pass
-            #print(i)
+            #pass
+            print(i)
         print("="*15,index,"="*15)
