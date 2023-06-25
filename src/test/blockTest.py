@@ -1,3 +1,6 @@
+"""
+测试构建block模块满足训练要求
+"""
 import dgl
 import numpy as np
 import torch as th

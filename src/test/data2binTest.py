@@ -1,3 +1,6 @@
+"""
+测试图数据转换为二进制文件时不产生错误
+"""
 import numpy as np
 
 file1_data = np.fromfile("./../../data/products/part0/halo1.bin", dtype=np.int32)

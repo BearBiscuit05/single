@@ -84,14 +84,8 @@ def save_coo_bin(nodeDict, filepath, nodeNUM, edgeNUM, basicSpace):
     # 存储
     srcList = np.array(srcList,dtype=np.int32)
     range_list = np.array(range_list,dtype=np.int32)
-    # print(srcList)
-    # print(range_list)
     srcList.tofile(filepath+"/tmp_srcList.bin")
     range_list.tofile(filepath+"/tmp_range.bin")
-    # file_data = np.fromfile(filepath+"/tmp_srcList.bin", dtype=np.int32)
-    # range_data = np.fromfile(filepath+"/tmp_range.bin", dtype=np.int32)
-    # print(file_data)
-    # print(range_data)
 
 def save_edges_bin(nodeDict, filepath, haloID, nodeNUM, edgeNUM):
     edges = []
