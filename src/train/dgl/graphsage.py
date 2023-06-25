@@ -115,6 +115,7 @@ def train(args, device, g, dataset, model,data=None):
         for it, (input_nodes, output_nodes, blocks) in enumerate(train_dataloader):
             if it == 0:
                 print(blocks)
+                print(blocks[0].nodes('_N'))
             x = blocks[0].srcdata['feat']
             y = blocks[-1].dstdata['label']
             y_hat = model(blocks, x)
@@ -180,7 +181,7 @@ if __name__ == '__main__':
     train(args, device, g, dataset, model,data=data)
 
     # test the model
-    print('Testing...')
+    # print('Testing...')
     #acc = layerwise_infer(device, g, dataset.test_idx, model, batch_size=4096)
-    acc = layerwise_infer(device, g, test_idx, model, batch_size=4096)
-    print("Test Accuracy {:.4f}".format(acc.item()))
+    # acc = layerwise_infer(device, g, test_idx, model, batch_size=4096)
+    # print("Test Accuracy {:.4f}".format(acc.item()))

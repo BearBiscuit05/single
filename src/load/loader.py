@@ -301,21 +301,18 @@ class CustomDataset(Dataset):
         return block
         
     def create_dgl_block(self,cacheData):
-        # cacheData 由边与特征组成
-        coo = cacheData[0]
-        for index, edges in enumerate(coo):
-            row, col = edges[0],edges[1]
-            row = torch.tensor(row)
-            col = torch.tensor(col,dtype=torch.int32)
-            # print("row:",row)
-            # print("col:",col)
-            gidx = dgl.heterograph_index.create_unitgraph_from_coo(2, len(row), 1, row, col, 'coo')
-            g = DGLBlock(gidx, (['_N'], ['_N']), ['_E'])
-            coo[index] = g
-            #print(cacheData[i])    
-        # print(cacheData)
-        return cacheData
-
+        blcoks = []
+        # 传入数据结构:二维list数组，分别为每一个hop的COO图数据
+        # 输出时，最边缘图在前面
+        for info in cacheData:
+            # info 是每一层的图数据信息
+            src = info[0]
+            dst = info[1]
+            block = dgl.graph((src, dst))
+            block = dgl.to_block(block)
+            blcoks.insert(0,block)  
+        return blocks
+        
 def collate_fn(data):
     return data
 

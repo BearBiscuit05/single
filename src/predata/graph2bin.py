@@ -1,5 +1,4 @@
 import os
-
 import scipy
 import dgl
 from dgl.data import RedditDataset, YelpDataset
@@ -13,6 +12,7 @@ import json
 import pickle
 import struct
 import sys
+import math
 
 def load_partition(rank,nodeID):
     graph_dir = 'data_8/'
@@ -25,31 +25,6 @@ def load_partition(rank,nodeID):
     inner = subg.ndata['inner_node'].tolist()
     print(subg.nodes())
     print(subg.edges())
-
-def gen_subG_csv(rank):
-    graph_dir = 'data_4/'
-    part_config = graph_dir + 'reddit.json'
-    print('loading partitions')
-    subg, node_feat, _, gpb, _, node_type, _ = dgl.distributed.load_partition(part_config, rank)
-    inner = subg.ndata['inner_node'].tolist()
-    src = subg.edges()[0].tolist()
-    dst = subg.edges()[1].tolist()
-    nodeID =0
-    edgeNUM = 0
-    with open("./edge.csv", 'a+') as f:
-        csv_writer = csv.writer(f)
-        for i in range(len(src)):
-            if inner[src[i]] == 1 and inner[dst[i]] == 1 : 
-                if src[i] > nodeID:
-                    nodeID = src[i]
-                if dst[i] > nodeID:
-                    nodeID = dst[i]
-                edgeNUM += 1
-                csv_writer.writerow([src[i],dst[i]])
-                
-    with open("./conf.csv", 'a+') as f:
-        csv_writer = csv.writer(f)
-        csv_writer.writerow([nodeID,edgeNUM])
 
 def read_subG(rank):
     graph_dir = 'data_4/'
@@ -88,20 +63,48 @@ def save_dict_to_txt(nodeDict, filename, nodeNUM, edgeNUM):
                 file.write(f",{value}")
             file.write("\n")
 
+def save_coo_bin(nodeDict, filepath, nodeNUM, edgeNUM, basicSpace):
+    srcList = []
+    range_list = []
+    place = 0
+    print(nodeNUM)
+    for key in range(nodeNUM):
+        if key in nodeDict:
+            srcs = nodeDict[key]
+            srcs.sort()  
+            nodeLen = len(srcs)
+            space = max(math.ceil(nodeLen * 1.2),basicSpace)
+            extended_srcs = srcs + [0] * (space - nodeLen)
+            srcList.extend(extended_srcs)
+            range_list.extend([place,place+nodeLen])
+            place += space
+        else:
+            range_list.extend([place,place])
+
+    # 存储
+    srcList = np.array(srcList,dtype=np.int32)
+    range_list = np.array(range_list,dtype=np.int32)
+    # print(srcList)
+    # print(range_list)
+    srcList.tofile(filepath+"/tmp_srcList.bin")
+    range_list.tofile(filepath+"/tmp_range.bin")
+    # file_data = np.fromfile(filepath+"/tmp_srcList.bin", dtype=np.int32)
+    # range_data = np.fromfile(filepath+"/tmp_range.bin", dtype=np.int32)
+    # print(file_data)
+    # print(range_data)
+
+def save_edges_bin(nodeDict, filepath, haloID, nodeNUM, edgeNUM):
+    edges = []
+    for key in range(nodeNUM):
+        if key in nodeDict:
+            srcs = nodeDict[key]
+            for srcid in srcs:
+                edges.extend([srcid,key])
+    edges = np.array(edges,dtype=np.int32)
+    edges.tofile(filepath+"/tmp_halo"+str(haloID)+".bin")
+
+
 def gen_format_file(rank,Wsize,dataPath,datasetName,savePath):
-    """ 
-    非压缩：二进制存储
-        subG:只包含本位
-            -src,id1,id2,id3
-        bound:包含边界
-            PART1
-                -src,id1,id2,id3
-            PART2
-                -src,id1,id2,id3
-        feat:
-            [feat1]
-            [feat2]
-    """
     graph_dir = dataPath
     part_config = graph_dir + "/"+datasetName +'.json'
     print('loading partitions')
@@ -123,14 +126,14 @@ def gen_format_file(rank,Wsize,dataPath,datasetName,savePath):
     incount = 0
     outcount = [0 for i in range(Wsize)]
     for index in range(len(src)):
-        srcid,dstid = src[index],dst[index]
+        srcid,dstid = src[index],dst[index] # 
         if inner[srcid] == 1 and inner[dstid] == 1:
             if dstid not in nodeDict:
                 nodeDict[dstid] = []
             nodeDict[dstid].append(srcid)
             incount += 1
         elif inner[srcid] != 1 and inner[dstid] == 1:     # 只需要dst在子图内部即可
-            srcid = subg.ndata[dgl.NID][srcid]
+            srcid = subg.ndata[dgl.NID][srcid] # srcid ：local 查询全局ID
             partid = int((srcid / innernode))
             if partid > Wsize:
                 partid = Wsize - 1
@@ -147,19 +150,22 @@ def gen_format_file(rank,Wsize,dataPath,datasetName,savePath):
             if dstid not in partdict[partid]:
                 partdict[partid][dstid] = []
             partdict[partid][dstid].append(srcid)
-            outcount[partid] += 1         
-    save_dict_to_txt(nodeDict,savePath+'/subg_'+str(rank)+'.txt', boundRange[rank][1] - boundRange[rank][0], incount)
+            outcount[partid] += 1        
+    save_coo_bin(nodeDict,savePath+"/part"+str(rank),boundRange[rank][1] - boundRange[rank][0], incount,20)
     for i in range(Wsize):
-        save_dict_to_txt(partdict[i],savePath+'/subg_'+str(rank)+'_bound_'+str(i)+'.txt', len(partdict[i]), outcount[i])
+        save_edges_bin(partdict[i], savePath+"/part"+str(rank), i, boundRange[rank][1] - boundRange[rank][0], outcount[i])
+
     print("data-{} processed ! ".format(rank))
 
 
 if __name__ == '__main__':
-    dataPath = sys.argv[1]
-    dataName = sys.argv[2]
-    savePath = sys.argv[3]
+    # dataPath = sys.argv[1]
+    # dataName = sys.argv[2]
+    # savePath = sys.argv[3]
+
+    dataPath = "./../../data/raw-products"
+    dataName = "ogb-product"
+    savePath = "./../../data/products"
     #gen_format_file(0,4,dataPath,dataName,savePath)
-    
-    #python convert2coo.py data ogb-product ${savepath}
     for i in range(4):
         gen_format_file(i,4,dataPath,dataName,savePath)
