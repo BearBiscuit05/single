@@ -9,6 +9,7 @@ import dgl
 import torch
 import torch
 from dgl.heterograph import DGLBlock
+import random
 #变量控制原则 : 谁用谁负责
 """
 数据加载的逻辑:
@@ -36,6 +37,7 @@ class CustomDataset(Dataset):
         self.preRating = 0
         self.featlen = 0
         self.idbound = []
+        self.fanout = []
         # ================
         
         self.trained = 0
@@ -53,7 +55,7 @@ class CustomDataset(Dataset):
         self.trainNodeDict = self.loadingTrainID() # 训练节点
         self.executor = concurrent.futures.ThreadPoolExecutor(1) # 线程池
         self.trainSubGTrack = self.randomTrainList() # 训练轨迹
-        
+        print("train track:{}".format(self.trainSubGTrack))
         # 特征部分
         self.readfile = []  # 包含两个句柄/可能有三个句柄
         self.mmapfile = []  
@@ -87,7 +89,8 @@ class CustomDataset(Dataset):
                 cacheData = self.graphPipe.get()
                 self.sampledSubG = cacheData[0]
                 self.sampledfeat = cacheData[1]
-        return self.sampledSubG[index % self.batchsize],self.sampledfeat[index % self.batchsize]
+            return self.sampledSubG,self.sampledfeat
+        return 0,0
 
     def initNextGraphData(self):
         # 查看是否需要释放
@@ -119,6 +122,7 @@ class CustomDataset(Dataset):
         self.epoch = config['epoch']
         self.preRating = config['preRating']
         self.featlen = config['featlen']
+        self.fanout = config['fanout']
         self.idbound = config['idbound']
         formatted_data = json.dumps(config, indent=4)
         print(formatted_data)
@@ -131,7 +135,7 @@ class CustomDataset(Dataset):
             trainIDs = torch.load(filePath+"/trainID.bin")
             trainIDs = trainIDs.to(torch.uint8).nonzero().squeeze()
             _,idDict[index] = torch.sort(trainIDs)
-            idDict[index] = idDict[index][:10]
+            idDict[index] = idDict[index][:4]
             self.trainNUM += len(idDict[index])
         return idDict
 
@@ -167,8 +171,31 @@ class CustomDataset(Dataset):
         self.cacheData[1] = self.cacheData[3]
         self.cacheData = self.cacheData[0:2]
             
-    def readNeig(self,nodeID):
-        return self.src[self.bound[nodeID*2]:self.bound[nodeID*2+1]]
+    def sampleNeig(self,sampleIDs,cacheGraph,sampleBound):
+        # 需要返回一个多维list，与fanout的长度一致
+        sampleList = sampleIDs[sampleBound[0]:sampleBound[1]]
+        #print("采样数据:{}".format(sampleList))
+        layer = len(self.fanout)
+        bound = [sampleBound[0],sampleBound[1]]
+        for l, number in enumerate(self.fanout):
+            for index, ids in enumerate(sampleList):
+                if ids == -1:
+                    continue
+                NeigList = self.cacheData[0][self.cacheData[1][ids*2]+1:self.cacheData[1][ids*2+1]]
+                if len(NeigList) < number:
+                    sampled_values = NeigList
+                    sampled_values = np.insert(sampled_values,0,ids)
+                else:
+                    sampled_values = np.random.choice(NeigList,number-1)
+                    sampled_values = np.insert(sampled_values,0,ids)
+                # 插入对应位置
+                offset = (bound[0] + index) * number 
+                cacheGraph[layer-l-1][0][offset:offset+len(sampled_values)] = sampled_values # src
+                cacheGraph[layer-l-1][1][offset:offset+number] = [ids] * number # dst
+            sampleList = cacheGraph[layer-l-1][0][bound[0]*number:bound[1]*number]
+        bound = [bound[0]*number,bound[1]*number]
+            
+            
 
     def loadingHalo(self):
         # 要先加载下一个子图，然后再加载halo( 当前<->下一个 )
@@ -224,47 +251,61 @@ class CustomDataset(Dataset):
             return 0
         # 在当前cache中进行采样，如果当前cache已经失效，则需要reload新图
         # 常规预取
+        # batchsize + batchsize * fan1 + batchsize * fan1 * fan2
+        number = self.batchsize
+        tmp = self.batchsize
+        cacheGraph = []
+        for layer, fan in enumerate(self.fanout):
+            dst = [-1] * tmp * fan
+            src = [-1] * tmp * fan
+            cacheGraph.insert(0,[src,dst])
+            tmp = tmp * fan
+            number += tmp
+
+        #cacheFeat = torch.zeros(number, self.featlen)
+        cacheFeat = None
+        sampleIDs = [0] * self.batchsize
         self.batch_called += 1
         if self.trainptr + self.batchsize >= self.subGtrainNodesNUM:
-            cacheData = []
+            print("="*15)
             print("[more]从图{}预取数据部分:{}:{}...".format(self.trainingGID,self.trainptr,self.subGtrainNodesNUM))
-            # 当前采样图的最后一个批            
-            # 先采样剩余部分
-            for index in range(0,self.subGtrainNodesNUM-self.trainptr):
-                sampleID = self.trainNodes[self.trainptr+index]
-                sampleG = self.cacheData[0][self.cacheData[1][sampleID*2]:self.cacheData[1][sampleID*2+1]]
-                sampleID = [sampleID for i in range(len(sampleG))]
-                cacheData.append([sampleG,sampleID])
+            # 当前采样图的最后一个批   先采样剩余部分        
+            sampleIDs[0:self.subGtrainNodesNUM-self.trainptr] = self.trainNodes[self.trainptr:self.subGtrainNodesNUM].tolist()
+            sampleBound = [0,self.subGtrainNodesNUM-self.trainptr]
+            self.sampleNeig(sampleIDs,cacheGraph,sampleBound)
+            # self.featMerge(cacheFeat,sampleBound)
+            
             # 重加载
             self.batch_called = 0 #重置
             self.trainptr = 0
             self.initNextGraphData() # 当前epoch采样已经完成，则要预取下轮子图数据
             # 补充采样
-            left = self.batchsize - len(cacheData)
+            left = self.batchsize - (sampleBound[1]-sampleBound[0])
             print("[more]从图{}预取数据部分:{}:{}...".format(self.trainingGID,0,left))
-            for index in range(left):
-                sampleID = self.trainNodes[self.trainptr+index]
-                sampleG = self.cacheData[0][self.cacheData[1][sampleID*2]:self.cacheData[1][sampleID*2+1]]
-                sampleID = [sampleID for i in range(len(sampleG))]
-                cacheData.append([sampleG,sampleID])
-            cacheData = self.featMerge(cacheData)
-            cacheData = self.create_dgl_block(cacheData)
+            
+            sampleIDs[self.batchsize-left:self.batchsize] = self.trainNodes[0:left].tolist()
+            sampleBound = [self.batchsize-left,self.batchsize]
+            self.sampleNeig(sampleIDs,cacheGraph,sampleBound)
+            #self.featMerge(cacheFeat,sampleBound)
+            cacheData = [cacheGraph,cacheFeat]
+            #cacheData = self.create_dgl_block(cacheData)
             self.graphPipe.put(cacheData)
             self.trainptr = left # 循环读取
+            print("="*15)
             return 0
         else:
-            #bound = min(self.trainptr+self.batchsize,self.trainNUM)
+            print("="*15)
             print("从图{}预取数据部分:{}:{}...".format(self.trainingGID,self.trainptr,self.trainptr+self.batchsize))
-            cacheData = []
-            for i in range(self.batchsize):
-                sampleID = self.trainNodes[self.trainptr+i]
-                sampleG = self.cacheData[0][self.cacheData[1][sampleID*2]:self.cacheData[1][sampleID*2+1]]
-                sampleID = [sampleID for i in range(len(sampleG))]
-                cacheData.append([sampleG,sampleID])
-            cacheData = self.featMerge(cacheData)
-            cacheData = self.create_dgl_block(cacheData)
+            
+            sampleIDs[0:self.batchsize] = self.trainNodes[self.trainptr:self.trainptr+self.batchsize].tolist()
+            sampleBound = [0,self.batchsize]
+            self.sampleNeig(sampleIDs,cacheGraph,sampleBound)
+            #self.featMerge(cacheFeat,sampleBound)
+            #cacheData = self.create_dgl_block(cacheData)
+            cacheData = [cacheGraph,cacheFeat]
             self.graphPipe.put(cacheData)
             self.trainptr = self.trainptr + self.batchsize # 循环读取
+            print("="*15)
             return 0
     
     def preGPUBatch(self):
@@ -327,21 +368,25 @@ class CustomDataset(Dataset):
         return blocks
         
 def collate_fn(data):
-    return data
+    """
+    data 输入结构介绍：
+        [graph,feat]
+    """
+    return data[0]
 
 
 if __name__ == "__main__":
-    data = [i for i in range(20)]
     dataset = CustomDataset("./config.json")
     with open("./config.json", 'r') as f:
         config = json.load(f)
         batchsize = config['batchsize']
         epoch = config['epoch']
-    train_loader = DataLoader(dataset=dataset, batch_size=4, collate_fn=collate_fn,pin_memory=True)
+    train_loader = DataLoader(dataset=dataset, batch_size=batchsize, collate_fn=collate_fn,pin_memory=True)
     time.sleep(2)
+    
     for index in range(epoch):
-        print("="*15,index,"="*15)
-        for i in train_loader:
+        count = 0
+        for i,feat in train_loader:
             #pass
             print(i)
-        print("="*15,index,"="*15)
+            exit()
