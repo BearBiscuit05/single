@@ -1,3 +1,6 @@
+"""
+测试特征转换不产生错误
+"""
 import os
 import scipy
 import dgl

@@ -79,19 +79,15 @@ def save_coo_bin(nodeDict, filepath, nodeNUM, edgeNUM, basicSpace):
             range_list.extend([place,place+nodeLen])
             place += space
         else:
-            range_list.extend([place,place])
+            srcList.append(key)
+            range_list.extend([place,place+1])
+            place += 1
 
     # 存储
     srcList = np.array(srcList,dtype=np.int32)
     range_list = np.array(range_list,dtype=np.int32)
-    # print(srcList)
-    # print(range_list)
     srcList.tofile(filepath+"/tmp_srcList.bin")
     range_list.tofile(filepath+"/tmp_range.bin")
-    # file_data = np.fromfile(filepath+"/tmp_srcList.bin", dtype=np.int32)
-    # range_data = np.fromfile(filepath+"/tmp_range.bin", dtype=np.int32)
-    # print(file_data)
-    # print(range_data)
 
 def save_edges_bin(nodeDict, filepath, haloID, nodeNUM, edgeNUM):
     edges = []
@@ -129,7 +125,7 @@ def gen_format_file(rank,Wsize,dataPath,datasetName,savePath):
         srcid,dstid = src[index],dst[index] # 
         if inner[srcid] == 1 and inner[dstid] == 1:
             if dstid not in nodeDict:
-                nodeDict[dstid] = []
+                nodeDict[dstid] = [dstid]
             nodeDict[dstid].append(srcid)
             incount += 1
         elif inner[srcid] != 1 and inner[dstid] == 1:     # 只需要dst在子图内部即可
@@ -165,7 +161,7 @@ if __name__ == '__main__':
 
     dataPath = "./../../data/raw-products"
     dataName = "ogb-product"
-    savePath = "./../../data/products"
+    savePath = "./../../data/g- products"
     #gen_format_file(0,4,dataPath,dataName,savePath)
     for i in range(4):
         gen_format_file(i,4,dataPath,dataName,savePath)

@@ -4,6 +4,13 @@ from pympler import asizeof
 import dgl
 import sys
 import copy
+"""
+测试常规采样结果转换为dgl.block训练集
+采样结果数据结构
+[[src2,dst2],[[src1,dst1]]]
+其中src2 = src1 + sampled
+"""
+
 fanout = [4,4]
 
 dst1 = [10, 11, 12, 10, 10, -1, 11, -1, -1, 12, 12, 12]
@@ -26,12 +33,12 @@ for info in src1:
 graph = [] 
 graph.append([th.tensor(src2),th.tensor(dst2)])
 graph.append([th.tensor(src1),th.tensor(dst1)])
+# print(graph)
 masks = []
 for src, dst in graph:
-    layer_mask = th.lt(src, 0)
-    layer_mask = th.nonzero(layer_mask).squeeze()
+    layer_mask = th.ge(src, 0)
     masks.append(layer_mask)
-print(masks)
+# print(masks)
 """ 
 index 为1的节点:
 1 
@@ -43,8 +50,6 @@ fan1*fan2*1-2*fan2*fan1 :ID序列
 # 给出fanout，batchsize的情况下，填图block
 # graphNodes = batchsize
 
-
-
 def template_graph_gen():
     fanout = [4,4]
     template = []
@@ -52,14 +57,14 @@ def template_graph_gen():
     batchsize = 4
 
     ptr = 0
-    seeds = [i for i in range(3)]
-    dst = [i for i in range(3)]
-    src = [i for i in range(3)]
+    seeds = [i for i in range(1,4)]
+    dst = [i for i in range(1,4)]
+    src = [i for i in range(1,4)]
 
     for number in fanout:
         dst = copy.deepcopy(seeds)
         src = copy.deepcopy(seeds)
-        ptr = len(src)   
+        ptr = len(src) + 1    
         for ids in seeds:
             for i in range(number-1):
                 dst.append(ids)
@@ -71,11 +76,10 @@ def template_graph_gen():
     return template
 
 template = template_graph_gen()
-print(template)
 for index,mask in enumerate(masks):
     src,dst = template[index]
-    dst[mask] = src[mask]
-print("="*50)
+    src *= mask
+    dst *= mask
 print(template)
 
 blocks = []
@@ -83,4 +87,5 @@ for src,dst in template:
     block = dgl.graph((src, dst))
     block = dgl.to_block(block)
     blocks.append(block)
+print(blocks[0].srcdata[dgl.NID])
 print(blocks)
