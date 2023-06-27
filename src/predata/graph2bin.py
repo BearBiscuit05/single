@@ -79,7 +79,9 @@ def save_coo_bin(nodeDict, filepath, nodeNUM, edgeNUM, basicSpace):
             range_list.extend([place,place+nodeLen])
             place += space
         else:
-            range_list.extend([place,place])
+            srcList.append(key)
+            range_list.extend([place,place+1])
+            place += 1
 
     # 存储
     srcList = np.array(srcList,dtype=np.int32)
@@ -123,7 +125,7 @@ def gen_format_file(rank,Wsize,dataPath,datasetName,savePath):
         srcid,dstid = src[index],dst[index] # 
         if inner[srcid] == 1 and inner[dstid] == 1:
             if dstid not in nodeDict:
-                nodeDict[dstid] = []
+                nodeDict[dstid] = [dstid]
             nodeDict[dstid].append(srcid)
             incount += 1
         elif inner[srcid] != 1 and inner[dstid] == 1:     # 只需要dst在子图内部即可
@@ -159,7 +161,7 @@ if __name__ == '__main__':
 
     dataPath = "./../../data/raw-products"
     dataName = "ogb-product"
-    savePath = "./../../data/products"
+    savePath = "./../../data/g- products"
     #gen_format_file(0,4,dataPath,dataName,savePath)
     for i in range(4):
         gen_format_file(i,4,dataPath,dataName,savePath)

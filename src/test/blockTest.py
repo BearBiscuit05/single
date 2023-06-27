@@ -39,8 +39,9 @@ class SAGE(nn.Module):
                 h = self.dropout(h)
         return h
 
+
 if __name__ == '__main__':
-    filePath = "../../../data/products/part0"
+    filePath = "../../data/products/part0"
     file = open(filePath+"/feat.bin", "r+b")
     head = mmap.mmap(file.fileno(), 0, access=mmap.ACCESS_DEFAULT)
     float_size = np.dtype(float).itemsize
@@ -69,4 +70,4 @@ if __name__ == '__main__':
     # print(blocks)
     model.train()
     y_hat = model(blocks, feats.to('cuda:0'))
-
+    print(y_hat)

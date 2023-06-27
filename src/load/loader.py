@@ -135,7 +135,7 @@ class CustomDataset(Dataset):
             trainIDs = torch.load(filePath+"/trainID.bin")
             trainIDs = trainIDs.to(torch.uint8).nonzero().squeeze()
             _,idDict[index] = torch.sort(trainIDs)
-            idDict[index] = idDict[index][:4]
+            idDict[index] = idDict[index][:5]
             self.trainNUM += len(idDict[index])
         return idDict
 
@@ -172,28 +172,43 @@ class CustomDataset(Dataset):
         self.cacheData = self.cacheData[0:2]
             
     def sampleNeig(self,sampleIDs,cacheGraph,sampleBound):
-        # 需要返回一个多维list，与fanout的长度一致
-        sampleList = sampleIDs[sampleBound[0]:sampleBound[1]]
-        #print("采样数据:{}".format(sampleList))
         layer = len(self.fanout)
         bound = [sampleBound[0],sampleBound[1]]
+        sampleIndex = [i for i in range(sampleBound[0],sampleBound[1])]
+        
         for l, number in enumerate(self.fanout):
-            for index, ids in enumerate(sampleList):
+            number -= 1
+            tmp = []
+            if l != 0:     
+                last_lens = len(cacheGraph[layer-l][0])      
+                cacheGraph[layer-l-1][0][0:last_lens] = cacheGraph[layer-l][0]
+                cacheGraph[layer-l-1][1][0:last_lens] = cacheGraph[layer-l][0]
+            else:
+                last_lens = len(sampleIDs)
+                cacheGraph[layer-l-1][0][0:last_lens] = sampleIDs
+                cacheGraph[layer-l-1][1][0:last_lens] = sampleIDs
+            for index in sampleIndex:
+                ids = cacheGraph[layer-l-1][0][index]
                 if ids == -1:
                     continue
                 NeigList = self.cacheData[0][self.cacheData[1][ids*2]+1:self.cacheData[1][ids*2+1]]
                 if len(NeigList) < number:
                     sampled_values = NeigList
-                    sampled_values = np.insert(sampled_values,0,ids)
                 else:
-                    sampled_values = np.random.choice(NeigList,number-1)
-                    sampled_values = np.insert(sampled_values,0,ids)
-                # 插入对应位置
-                offset = (bound[0] + index) * number 
-                cacheGraph[layer-l-1][0][offset:offset+len(sampled_values)] = sampled_values # src
-                cacheGraph[layer-l-1][1][offset:offset+number] = [ids] * number # dst
-            sampleList = cacheGraph[layer-l-1][0][bound[0]*number:bound[1]*number]
-        bound = [bound[0]*number,bound[1]*number]
+                    sampled_values = np.random.choice(NeigList,number)
+                
+                offset = last_lens + (index * number)
+                fillsize = len(sampled_values)
+                cacheGraph[layer-l-1][0][offset:offset+fillsize] = sampled_values # src
+                cacheGraph[layer-l-1][1][offset:offset+fillsize] = [ids] * fillsize # dst
+                tmp.extend([i for i in range(offset,offset+fillsize)])
+            sampleIndex.extend(tmp)
+            #sampleList = cacheGraph[layer-l-1][0][bound[0]*number:bound[1]*number]
+            bound = [last_lens+bound[0]*number,last_lens+bound[1]*number]
+            
+            
+        return sampleIndex
+
             
             
 
@@ -262,8 +277,7 @@ class CustomDataset(Dataset):
             tmp = tmp * fan
             number += tmp
 
-        #cacheFeat = torch.zeros(number, self.featlen)
-        cacheFeat = None
+        cacheFeat = torch.zeros(number, self.featlen)
         sampleIDs = [0] * self.batchsize
         self.batch_called += 1
         if self.trainptr + self.batchsize >= self.subGtrainNodesNUM:
@@ -272,8 +286,8 @@ class CustomDataset(Dataset):
             # 当前采样图的最后一个批   先采样剩余部分        
             sampleIDs[0:self.subGtrainNodesNUM-self.trainptr] = self.trainNodes[self.trainptr:self.subGtrainNodesNUM].tolist()
             sampleBound = [0,self.subGtrainNodesNUM-self.trainptr]
-            self.sampleNeig(sampleIDs,cacheGraph,sampleBound)
-            # self.featMerge(cacheFeat,sampleBound)
+            sampledList = self.sampleNeig(sampleIDs,cacheGraph,sampleBound)
+            self.featMerge(cacheGraph,cacheFeat,sampledList)
             
             # 重加载
             self.batch_called = 0 #重置
@@ -285,8 +299,8 @@ class CustomDataset(Dataset):
             
             sampleIDs[self.batchsize-left:self.batchsize] = self.trainNodes[0:left].tolist()
             sampleBound = [self.batchsize-left,self.batchsize]
-            self.sampleNeig(sampleIDs,cacheGraph,sampleBound)
-            #self.featMerge(cacheFeat,sampleBound)
+            sampledList = self.sampleNeig(sampleIDs,cacheGraph,sampleBound)
+            self.featMerge(cacheGraph,cacheFeat,sampledList)
             cacheData = [cacheGraph,cacheFeat]
             #cacheData = self.create_dgl_block(cacheData)
             self.graphPipe.put(cacheData)
@@ -299,8 +313,8 @@ class CustomDataset(Dataset):
             
             sampleIDs[0:self.batchsize] = self.trainNodes[self.trainptr:self.trainptr+self.batchsize].tolist()
             sampleBound = [0,self.batchsize]
-            self.sampleNeig(sampleIDs,cacheGraph,sampleBound)
-            #self.featMerge(cacheFeat,sampleBound)
+            sampledList = self.sampleNeig(sampleIDs,cacheGraph,sampleBound)
+            self.featMerge(cacheGraph,cacheFeat,sampledList)
             #cacheData = self.create_dgl_block(cacheData)
             cacheData = [cacheGraph,cacheFeat]
             self.graphPipe.put(cacheData)
@@ -318,7 +332,10 @@ class CustomDataset(Dataset):
         
         pass
 
-    def featMerge(self,SubG):
+    def featMerge(self,cacheGraph,cacheFeat,sampledList):    
+        print(cacheGraph[0][0])
+        print("sampleList:{}".format(sampledList))
+        return 0
         # 获取采样子图(SubG) 转换为训练子图(block)
         # mmap返回特征
         batchFeats = []
@@ -387,6 +404,6 @@ if __name__ == "__main__":
     for index in range(epoch):
         count = 0
         for i,feat in train_loader:
-            #pass
-            print(i)
-            exit()
+            pass
+            # print(i)
+            #exit()

@@ -44,11 +44,11 @@ def loadingDGLdata(datapath,rank,seeds):
 def loadingProcessedData(datapath,rank,wsize,number):
     # 处理后数据
     datapath += "/part"+str(rank)
-    srcdata = np.fromfile(datapath+"/srcList.bin", dtype=np.int32)
-    rangedata = np.fromfile(datapath+"/range.bin", dtype=np.int32)
+    srcdata = np.fromfile(datapath+"/tmp_srcList.bin", dtype=np.int32)
+    rangedata = np.fromfile(datapath+"/tmp_range.bin", dtype=np.int32)
     halo = []
     for i in range(wsize):
-        data = np.fromfile(datapath+"/halo"+str(i)+".bin", dtype=np.int32)
+        data = np.fromfile(datapath+"/tmp_halo"+str(i)+".bin", dtype=np.int32)
         halo.append(data)
     print(halo)
     seeds = [i for i in range(number)]
