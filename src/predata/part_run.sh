@@ -1,1 +1,0 @@
-python3 part_train.py --graph_name ogb-product --ip_config ip_config.txt --num_epochs 3 --batch_size 1000 --part_config data/ogb-product.json --standalone
