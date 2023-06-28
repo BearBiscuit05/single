@@ -65,7 +65,7 @@ if __name__ == '__main__':
     block = dgl.graph((src, dst))
     block = dgl.to_block(block)
     blocks.append(block.to('cuda:0'))
-    print(blocks)
+    print(blocks[0].device)
     model = SAGE(10, 16, 3).to('cuda:0')
     # print(blocks)
     model.train()

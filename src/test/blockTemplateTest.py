@@ -50,17 +50,13 @@ fan1*fan2*1-2*fan2*fan1 :ID序列
 # 给出fanout，batchsize的情况下，填图block
 # graphNodes = batchsize
 
-def template_graph_gen():
-    fanout = [4,4]
+def genBlockTemplate():
     template = []
     blocks = []
-    batchsize = 4
-
     ptr = 0
-    seeds = [i for i in range(1,4)]
-    dst = [i for i in range(1,4)]
-    src = [i for i in range(1,4)]
-
+    fanout=[4,4]
+    batchsize=4
+    seeds = [i for i in range(1,batchsize+1)]
     for number in fanout:
         dst = copy.deepcopy(seeds)
         src = copy.deepcopy(seeds)
@@ -70,17 +66,19 @@ def template_graph_gen():
                 dst.append(ids)
                 src.append(ptr)
                 ptr += 1
-        template.insert(0,[th.tensor(src),th.tensor(dst)])
         seeds = copy.deepcopy(src)
-    # print("="*15+"\n" +"graph template: {}\n".format(template)+"="*15)
+        src.append(0)
+        dst.append(0)
+        template.insert(0,[th.tensor(src),th.tensor(dst)])
     return template
 
-template = template_graph_gen()
+template = genBlockTemplate()
+print(template)
 for index,mask in enumerate(masks):
     src,dst = template[index]
     src *= mask
     dst *= mask
-print(template)
+# print(template)
 
 blocks = []
 for src,dst in template:
