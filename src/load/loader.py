@@ -10,6 +10,7 @@ import torch
 import torch
 from dgl.heterograph import DGLBlock
 import random
+import copy
 #变量控制原则 : 谁用谁负责
 """
 数据加载的逻辑:
@@ -69,6 +70,9 @@ class CustomDataset(Dataset):
         self.initNextGraphData()
         self.sample_flag = self.executor.submit(self.preGraphBatch) #发送采样命令
         
+        #### dgl.block ####
+        self.templateBlock = self.genBlockTemplate()
+
     def __len__(self):  
         return self.trainNUM
     
@@ -152,7 +156,7 @@ class CustomDataset(Dataset):
             trainIDs = torch.load(filePath+"/trainID.bin")
             trainIDs = trainIDs.to(torch.uint8).nonzero().squeeze()
             _,idDict[index] = torch.sort(trainIDs)
-            idDict[index] = idDict[index][:5]
+            idDict[index] = idDict[index]
             current_length = len(idDict[index])
             numberList[index] = current_length
             fill_length = self.batchsize - current_length % self.batchsize
@@ -244,7 +248,9 @@ class CustomDataset(Dataset):
             sampleIndex.extend(tmp)
             #sampleList = cacheGraph[layer-l-1][0][bound[0]*number:bound[1]*number]
             bound = [last_lens+bound[0]*number,last_lens+bound[1]*number]
-            
+        for info in cacheGraph:
+            info[0] = torch.tensor(info[0])
+            info[1] = torch.tensor(info[1])
         return sampleIndex
 
     def initCacheData(self):
@@ -287,7 +293,8 @@ class CustomDataset(Dataset):
             batchlen = self.subGtrainNodesNUM - offset
             cacheLabel = self.nodeLabels[sampleIDs[0:self.subGtrainNodesNUM - offset]]
         sampledList = self.sampleNeig(sampleIDs,cacheGraph,sampleBound)
-        self.featMerge(cacheGraph,cacheFeat,sampledList)
+        cacheFeat = self.featMerge(cacheGraph,cacheFeat,sampledList)
+        cacheGraph = self.transGraph2Block(cacheGraph)
         cacheData = [cacheGraph,cacheFeat,cacheLabel,batchlen]
         self.graphPipe.put(cacheData)
         self.trainptr += 1
@@ -340,9 +347,59 @@ class CustomDataset(Dataset):
                     feat = torch.frombuffer(self.mmapfile[self.trainingGID], dtype=torch.float32, offset=nodeID*self.featlen* float_size, count=self.featlen)
             cacheFeat[ptr] = feat
             ptr += 1
-        cacheFeat = cacheFeat[:ptr]
+        # print("="*40)
+        # print("ptr:{}".format(ptr))
+        # print("before len:{}".format(len(cacheFeat)))
+        
+        return cacheFeat[:ptr]
+        # print(cacheFeat)
+        #print("="*40)
+        # exit()
 
-########################## dgl接口 ##########################      
+########################## dgl接口 ##########################  
+    def genBlockTemplate(self):
+        template = []
+        blocks = []
+        ptr = 0
+        seeds = [i for i in range(1,self.batchsize+1)]
+        for number in self.fanout:
+            dst = copy.deepcopy(seeds)
+            src = copy.deepcopy(seeds)
+            ptr = len(src) + 1    
+            for ids in seeds:
+                for i in range(number-1):
+                    dst.append(ids)
+                    src.append(ptr)
+                    ptr += 1
+            seeds = copy.deepcopy(src)
+            src.append(0)
+            dst.append(0)
+            template.insert(0,[torch.tensor(src),torch.tensor(dst)])
+        return template
+        
+    def transGraph2Block(self,graphdata):
+        # 先生成掩码
+        masks = []
+        for src, dst in graphdata:
+            layer_mask = torch.ge(src, 0)
+            layer_mask = torch.cat((layer_mask, torch.tensor([True])))
+            masks.append(layer_mask)
+        
+        template = copy.deepcopy(self.templateBlock)
+        # 获取初始化template
+        for index,mask in enumerate(masks):
+            src,dst = template[index]
+            src *= mask
+            dst *= mask
+        
+        blocks = []
+        for src,dst in template:
+            block = dgl.graph((src, dst))
+            block = dgl.to_block(block)
+            blocks.append(block)
+        # 转换当前数据
+        return blocks
+
     def create_dgl_block(self,cacheData):
         coo = cacheData[0]
         for index, edges in enumerate(coo):
@@ -357,7 +414,7 @@ class CustomDataset(Dataset):
         return cacheData
 
     def tmp_create_dgl_block(self,cacheData):
-        blcoks = []
+        blocks = []
         # 传入数据结构:二维list数组，分别为每一个hop的COO图数据
         # 输出时，最边缘图在前面
         for info in cacheData:
@@ -366,7 +423,7 @@ class CustomDataset(Dataset):
             dst = np.array(info[1],dtype=np.int32)
             block = dgl.graph((src, dst))
             block = dgl.to_block(block)
-            blcoks.insert(0,block)  
+            blocks.insert(0,block)  
         return blocks
 
 
@@ -391,5 +448,9 @@ if __name__ == "__main__":
         count = 0
         for graph,feat,label,number in train_loader:
             #pass
-            print(feat)
+            print("="*40)
+            print("block:",graph)
+            print("feat:",len(feat))
+            print("label:",len(label))
+            print("batch number :",number)
             #exit()
