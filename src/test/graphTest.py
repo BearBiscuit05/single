@@ -38,26 +38,22 @@ def loadingDGLdata(datapath,rank,seeds):
         #maximum = torch.max(input_nodes)
         print(input_nodes)
 
-
-
-
 def loadingProcessedData(datapath,rank,wsize,number):
     # 处理后数据
     datapath += "/part"+str(rank)
-    srcdata = np.fromfile(datapath+"/tmp_srcList.bin", dtype=np.int32)
-    rangedata = np.fromfile(datapath+"/tmp_range.bin", dtype=np.int32)
+    srcdata = np.fromfile(datapath+"/srcList.bin", dtype=np.int32)
+    rangedata = np.fromfile(datapath+"/range.bin", dtype=np.int32)
     halo = []
     for i in range(wsize):
-        data = np.fromfile(datapath+"/tmp_halo"+str(i)+".bin", dtype=np.int32)
+        data = np.fromfile(datapath+"/halo"+str(i)+".bin", dtype=np.int32)
         halo.append(data)
-    print(halo)
+
     seeds = [i for i in range(number)]
     data = []
     for i in seeds:
         print(srcdata[rangedata[i*2]:rangedata[i*2+1]])
-
+    print(halo)
 if __name__ == '__main__':
-    loadingDGLdata("./../../data/raw-products",0,5)
     processed = loadingProcessedData("./../../data/products",0,4,5)
 
 
