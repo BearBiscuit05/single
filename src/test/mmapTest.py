@@ -23,17 +23,18 @@ def mmap_read(head,featLen,trainIDs):
     return feats
 
 def mem_read(filePath,trainIDs):
-    #arr = np.fromfile(filePath+"/feat.bin", dtype=np.float32)
-    arr = torch.from_file(filePath+"/feat.bin",dtype = torch.float32).view((-1,100))
+    arr = np.fromfile(filePath+"/feat.bin", dtype=np.float32)
+    #arr = torch.from_file(filePath+"/feat.bin",dtype = torch.float32).view((-1,100))
+    arr = torch.from_numpy(arr).reshape(-1,100)
     print(arr)
     # feats = arr.reshape(-1,100)
     # feats = torch.tensor(feats)
-    # start = time.time()
-    # #ans = torch.zeros((len(trainIDs), 100), dtype=torch.float32)
-    # ans = feats[trainIDs]
-    # # for index, nodeID in enumerate(trainIDs):
-    # #     ans[index] = feats[nodeID]
-    # print("mem run time :{}s".format(time.time() - start))
+    start = time.time()
+    #ans = torch.zeros((len(trainIDs), 100), dtype=torch.float32)
+    ans = arr[trainIDs]
+    # for index, nodeID in enumerate(trainIDs):
+    #     ans[index] = feats[nodeID]
+    print("mem run time :{}s".format(time.time() - start))
 
 if __name__ == '__main__':
     trainIDs = np.fromfile("./TestData/ids.bin", dtype=np.int64)

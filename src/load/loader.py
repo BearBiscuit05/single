@@ -65,10 +65,12 @@ class CustomDataset(Dataset):
         #### mmap 特征部分 ####
         self.readfile = []  # 包含两个句柄/可能有三个句柄
         self.mmapfile = []  
+        self.feats = []
         self.loadingFeatFileHead()      # 读取特征文件
 
         #### 数据预取 ####
         self.loadingGraph(merge=False)
+        self.loadingMemFeat(self.trainSubGTrack[self.subGptr//self.partNUM][self.subGptr%self.partNUM])
         # maxnum = torch.max(self.cacheData[0])
         # minnum = torch.min(self.cacheData[0])
         # print("first max num:{},min num:{}".format(maxnum,minnum))
@@ -149,11 +151,12 @@ class CustomDataset(Dataset):
         self.trainLoop = ((self.subGtrainNodesNUM - 1) // self.batchsize) + 1
         self.graphNodeNUM = int(len(self.cacheData[1]) / 2 )# 获取当前节点数目
         self.graphEdgeNUM = len(self.cacheData[0])
-        self.nodeLabels = self.loadingLabels(self.trainingGID)
+        self.nodeLabels = self.loadingLabels(self.trainingGID)       
         # 对于辅助计算的子图，进行加载，以及加载融合边
         self.loadingGraph()
         self.nextGID = self.trainSubGTrack[self.subGptr//self.partNUM][self.subGptr%self.partNUM]
         self.loadingHalo()
+        self.loadingMemFeat(self.nextGID)
         print("当前训练图为:{},下一个图:{},图训练集规模:{},图节点数目:{},图边数目:{},加载耗时:{}s"\
                         .format(self.trainingGID,self.nextGID,self.subGtrainNodesNUM,\
                         self.graphNodeNUM,self.graphEdgeNUM,time.time()-start))
@@ -208,6 +211,7 @@ class CustomDataset(Dataset):
         self.cacheData[1] = self.cacheData[1][self.graphNodeNUM*2:]   # 范围
         self.cacheData[0] = self.cacheData[0] - self.graphNodeNUM   # 边 nodeID
         self.cacheData[1] = self.cacheData[1] - self.graphEdgeNUM
+        self.feats = self.feats[self.graphNodeNUM:]
         print("after move srclist len:{}".format(len(self.cacheData[0])))
         print("after move range len:{}".format(len(self.cacheData[1])))
         # print(self.cacheData[0])       
@@ -244,22 +248,19 @@ class CustomDataset(Dataset):
                     endidx += 1
 
 ########################## 采样图结构 ##########################
-    def sampleNeig(self,sampleIDs,cacheGraph,sampleBound): 
+    def sampleNeig(self,sampleIDs,cacheGraph): 
         layer = len(self.fanout)
-        bound = [sampleBound[0],sampleBound[1]]
-        sampleIndex = [i for i in range(sampleBound[0],sampleBound[1])]
         for l, number in enumerate(self.fanout):
             number -= 1
-            tmp = []
             if l != 0:     
                 last_lens = len(cacheGraph[layer-l][0])      
-                cacheGraph[layer-l-1][0][0:last_lens] = cacheGraph[layer-l][0]
-                cacheGraph[layer-l-1][1][0:last_lens] = cacheGraph[layer-l][0]
+                lastids = cacheGraph[layer - l][0]
             else:
                 last_lens = len(sampleIDs)
-                cacheGraph[layer-l-1][0][0:last_lens] = sampleIDs
-                cacheGraph[layer-l-1][1][0:last_lens] = sampleIDs
-            for index in sampleIndex:
+                lastids = sampleIDs
+            cacheGraph[layer-l-1][0][0:last_lens] = lastids
+            cacheGraph[layer-l-1][1][0:last_lens] = lastids
+            for index in range(len(lastids)):
                 ids = cacheGraph[layer-l-1][0][index]
                 if ids == -1:
                     continue
@@ -273,17 +274,14 @@ class CustomDataset(Dataset):
                     sampled_values = NeigList
                 else:
                     sampled_values = np.random.choice(NeigList,number)
+                
                 offset = last_lens + (index * number)
                 fillsize = len(sampled_values)
                 cacheGraph[layer-l-1][0][offset:offset+fillsize] = sampled_values # src
                 cacheGraph[layer-l-1][1][offset:offset+fillsize] = [ids] * fillsize # dst
-                tmp.extend([i for i in range(offset,offset+fillsize)])
-            sampleIndex.extend(tmp)
-            bound = [last_lens+bound[0]*number,last_lens+bound[1]*number]
         for info in cacheGraph:
             info[0] = torch.tensor(info[0])
             info[1] = torch.tensor(info[1])
-        return sampleIndex
 
     def initCacheData(self):
         number = self.batchsize
@@ -316,24 +314,22 @@ class CustomDataset(Dataset):
         if self.trainptr < self.trainLoop - 1:
             # 完整batch
             sampleIDs = self.trainNodes[self.trainptr*self.batchsize:(self.trainptr+1)*self.batchsize]
-            sampleBound = [0,self.batchsize]
             batchlen = self.batchsize
             cacheLabel = self.nodeLabels[sampleIDs]
         else:
             # 最后一个batch
             offset = self.trainptr*self.batchsize
             sampleIDs[:self.subGtrainNodesNUM - offset] = self.trainNodes[offset:self.subGtrainNodesNUM]
-            sampleBound = [0,self.subGtrainNodesNUM - offset]
             batchlen = self.subGtrainNodesNUM - offset
             cacheLabel = self.nodeLabels[sampleIDs[0:self.subGtrainNodesNUM - offset]]
-        sampledList = self.sampleNeig(sampleIDs,cacheGraph,sampleBound)
+        self.sampleNeig(sampleIDs,cacheGraph)
         
         min = torch.min(cacheGraph[0][0])
         if min < -1:
             print("big error ...")
             exit()
         
-        cacheFeat = self.featMerge(cacheGraph,cacheFeat,sampledList)
+        cacheFeat = self.featMerge(cacheGraph,cacheFeat)
         cacheGraph = self.transGraph2Block(cacheGraph)
         cacheData = [cacheGraph,cacheFeat,cacheLabel,batchlen]
         self.graphPipe.put(cacheData)
@@ -365,30 +361,20 @@ class CustomDataset(Dataset):
         for file in self.readfile:
             file.close()
 
-    def featMerge(self,cacheGraph,cacheFeat,sampledList):    
-        return 
-        float_size = np.dtype(np.float32).itemsize
-        ptr = 1
-        for index in sampledList:
-            try:
-                nodeID = cacheGraph[0][0][index]
-                if nodeID < self.graphNodeNUM: # 本地抽取
-                    feat = torch.frombuffer(self.mmapfile[self.trainingGID], dtype=torch.float32, offset=nodeID*self.featlen* float_size, count=self.featlen)
-                else:
-                    if self.nextGID == 0:
-                        # graph_0
-                        tmpID = nodeID - self.graphNodeNUM
-                        feat = torch.frombuffer(self.mmapfile[self.nextGID], dtype=torch.float32, offset=tmpID*self.featlen* float_size, count=self.featlen)
-                    else:
-                        tmpID = nodeID - self.idbound[self.nextGID][0]
-                        feat = torch.frombuffer(self.mmapfile[self.nextGID], dtype=torch.float32, offset=tmpID*self.featlen* float_size, count=self.featlen)
-                cacheFeat[ptr] = feat
-                ptr += 1
-            except:
-                print("feat merge error id :{},tmpid: {} ,now graph id:{}".format(nodeID,tmpID,self.graphNodeNUM))
-                exit(-1)
-        
-        return cacheFeat[:ptr]
+    def loadingMemFeat(self,rank):
+        filePath = self.dataPath + "/part" + str(rank)
+        tmp_feat = np.fromfile(filePath+"/feat.bin", dtype=np.float32)
+        if self.feats == []:
+            self.feats = torch.from_numpy(tmp_feat).reshape(-1,100)
+        else:
+            tmp_feat = torch.from_numpy(tmp_feat).reshape(-1,100)
+            self.feats = torch.cat([self.feats,tmp_feat])
+    
+    def featMerge(self,cacheGraph,cacheFeat):    
+        nodeids = cacheGraph[0][0]
+        positive_nums = torch.masked_select(nodeids, nodeids > -1)
+        positive_nums = torch.cat([torch.tensor([0]),positive_nums])
+        return self.feats[positive_nums]
 
 ########################## dgl接口 ##########################  
     def genBlockTemplate(self):
@@ -486,6 +472,6 @@ if __name__ == "__main__":
             print("batch time:{}s".format(time.time() - start))
             start = time.time()
             # print("="*40)
-            # #print("feat:",len(feat))
-            # print("label:",len(label))
+            print("feat:",len(feat))
+            print("label:",len(label))
             # print("batch number :",number)
