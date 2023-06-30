@@ -22,7 +22,7 @@ def gen_format_file(rank,Wsize,dataPath,datasetName,savePath):
     subg, node_feat, _, gpb, _, node_type, _ = dgl.distributed.load_partition(part_config, rank)
     node_type = node_type[0]
     train_mask = node_feat[node_type + '/train_mask']
-    # torch.save(train_mask, "trainID_"+str(rank)+".bin")
+    torch.save(train_mask, "trainID_"+str(rank)+".bin")
     print(train_mask)
     print("data-{} processed ! ".format(rank))
 
