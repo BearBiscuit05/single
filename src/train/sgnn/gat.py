@@ -84,49 +84,19 @@ def layerwise_infer(device, graph, nid, model, batch_size):
         label = graph.ndata['label'][nid].to(pred.device)
     return sklearn.metrics.accuracy_score(label.cpu().numpy(), pred.argmax(1).cpu().numpy())
 
-def train(args, device, g, dataset, model,data=None):
-    if data != None:
-        train_idx,val_idx,test_idx = data 
-    else:
-        train_idx = dataset.train_idx.to(device)
-        val_idx = dataset.val_idx.to(device)
-    # sampler = dgl.dataloading.MultiLayerFullNeighborSampler(2)
-    sampler = NeighborSampler([10,25],  # fanout for [layer-0, layer-1, layer-2]
-                            prefetch_node_feats=['feat'],
-                            prefetch_labels=['label'])
-    use_uva = (args.mode == 'mixed')
-    train_dataloader = DataLoader(g, train_idx, sampler, device=device,
-                                  batch_size=1024, shuffle=True,
-                                  drop_last=False, num_workers=0,
-                                  use_uva=use_uva)
-
-    val_dataloader = DataLoader(g, val_idx, sampler, device=device,
-                                batch_size=1024, shuffle=True,
-                                drop_last=False, num_workers=0,
-                                use_uva=use_uva)
-
-    opt = torch.optim.Adam(model.parameters(), lr=1e-3, weight_decay=5e-4)
-    
-    for epoch in range(3):
+def train(args, device, g, dataset, model):
+    opt = torch.optim.Adam(model.parameters(), lr=1e-3, weight_decay=5e-4) 
+    for epoch in range(1):
         start = time.time()
         model.train()
-        total_loss = 0
-        batchTime = time.time()
-        for it, (input_nodes, output_nodes, blocks) in enumerate(train_dataloader):
-            x = blocks[0].srcdata['feat']
-            y = blocks[-1].dstdata['label']
-            y_hat = model(blocks, x)
-            loss = F.cross_entropy(y_hat, y)
-            opt.zero_grad()
-            loss.backward()
-            opt.step()
-            total_loss += loss.item()
-            print("batch time :{}".format(time.time() - batchTime))
-            batchTime = time.time()
+        train_loader = DataLoader(dataset=dataset, batch_size=8, collate_fn=collate_fn,pin_memory=True)
+        for graph,feat,label,number in train_loader:
+            graph = [block.to('cuda:1') for block in graph]
+            y_hat = model(blocks, feat.to('cuda:1'))
         
-        acc = evaluate(model, g, val_dataloader)
-        print("Epoch {:05d} | Loss {:.4f} | Accuracy {:.4f} "
-              .format(epoch, total_loss / (it+1), acc.item()))
+        # acc = evaluate(model, g, val_dataloader)
+        # print("Epoch {:05d} | Loss {:.4f} | Accuracy {:.4f} "
+        #       .format(epoch, total_loss / (it+1), acc.item()))
         print("time :",time.time()-start)
 
 def load_reddit(self_loop=True):
@@ -161,24 +131,22 @@ if __name__ == '__main__':
     
     # load and preprocess dataset
     print('Loading data')
-    dataset = AsNodePredDataset(DglNodePropPredDataset('ogbn-products'))
-    g = dataset[0]
+    #dataset = AsNodePredDataset(DglNodePropPredDataset('ogbn-products'))
+    #g = dataset[0]
     
     #g, dataset,train_idx,val_idx,test_idx= load_reddit()
     #data = (train_idx,val_idx,test_idx)
-    g = g.to('cuda' if args.mode == 'puregpu' else 'cpu')
-    device = torch.device('cpu' if args.mode == 'cpu' else 'cuda')
+    #g = g.to('cuda' if args.mode == 'puregpu' else 'cpu')
+    #device = torch.device('cpu' if args.mode == 'cpu' else 'cuda')
 
     # create GraphSAGE model
-    in_size = g.ndata['feat'].shape[1]
-    out_size = dataset.num_classes
-    model = GAT(in_size, 256, out_size,heads=[1,1]).to(device)
-
+    model = GAT(100, 256, 47,heads=[4,1]).to(device)
+    dataset = CustomDataset("./../../load/config.json")
     # model training
     print('Training...')
     train(args, device, g, dataset, model)
 
-    # test the model
+    # # test the model
     # print('Testing...')
     # #acc = layerwise_infer(device, g, dataset.test_idx, model, batch_size=4096)
     # acc = layerwise_infer(device, g, test_idx, model, batch_size=2)

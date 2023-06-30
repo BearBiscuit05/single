@@ -53,16 +53,6 @@ def read_subG(rank):
     print("edge   :",subg.edges())  
     # print(len(node_feat['_N/labels']))
 
-def save_dict_to_txt(nodeDict, filename, nodeNUM, edgeNUM):
-    with open(filename, 'w') as file:
-        file.write(f"{nodeNUM},{edgeNUM}")
-        file.write("\n")
-        for key, values in nodeDict.items():
-            file.write(f"-{key}")
-            for value in values:
-                file.write(f",{value}")
-            file.write("\n")
-
 def save_coo_bin(nodeDict, filepath, nodeNUM, edgeNUM, basicSpace):
     srcList = []
     range_list = []
@@ -86,8 +76,8 @@ def save_coo_bin(nodeDict, filepath, nodeNUM, edgeNUM, basicSpace):
     # 存储
     srcList = np.array(srcList,dtype=np.int32)
     range_list = np.array(range_list,dtype=np.int32)
-    srcList.tofile(filepath+"/tmp_srcList.bin")
-    range_list.tofile(filepath+"/tmp_range.bin")
+    srcList.tofile(filepath+"/srcList.bin")
+    range_list.tofile(filepath+"/range.bin")
 
 def save_edges_bin(nodeDict, filepath, haloID, nodeNUM, edgeNUM):
     edges = []
@@ -97,15 +87,17 @@ def save_edges_bin(nodeDict, filepath, haloID, nodeNUM, edgeNUM):
             for srcid in srcs:
                 edges.extend([srcid,key])
     edges = np.array(edges,dtype=np.int32)
-    edges.tofile(filepath+"/tmp_halo"+str(haloID)+".bin")
+    edges.tofile(filepath+"/halo"+str(haloID)+".bin")
 
-
-def gen_format_file(rank,Wsize,dataPath,datasetName,savePath):
+def readGraph(rank,dataPath,datasetName):
     graph_dir = dataPath
     part_config = graph_dir + "/"+datasetName +'.json'
     print('loading partitions')
     subg, node_feat, _, gpb, _, node_type, _ = dgl.distributed.load_partition(part_config, rank)
+    return subg, node_feat, node_type
 
+def gen_graph_file(data,rank,Wsize,dataPath,datasetName,savePath):
+    subg, node_feat, node_type = data
     src = subg.edges()[0].tolist()
     dst = subg.edges()[1].tolist()
     inner = subg.ndata['inner_node'].tolist()
@@ -115,10 +107,12 @@ def gen_format_file(rank,Wsize,dataPath,datasetName,savePath):
     for i in range(Wsize):
         partdict.append({})
     # 读取JSON文件
+    part_config = dataPath + "/"+datasetName +'.json'
     with open(part_config, 'r') as file:
         SUBGconf = json.load(file)
     # 使用读取的数据
     boundRange = SUBGconf['node_map']['_N']
+    basiclen = SUBGconf['node_map']['_N'][rank][1] - SUBGconf['node_map']['_N'][rank][0]
     incount = 0
     outcount = [0 for i in range(Wsize)]
     for index in range(len(src)):
@@ -129,39 +123,64 @@ def gen_format_file(rank,Wsize,dataPath,datasetName,savePath):
             nodeDict[dstid].append(srcid)
             incount += 1
         elif inner[srcid] != 1 and inner[dstid] == 1:     # 只需要dst在子图内部即可
-            srcid = subg.ndata[dgl.NID][srcid] # srcid ：local 查询全局ID
-            partid = int((srcid / innernode))
-            if partid > Wsize:
-                partid = Wsize - 1
-            if partid >= 0 and partid <= Wsize - 1 and boundRange[partid][0] <= srcid and boundRange[partid][1] > srcid:
-                pass
-            elif partid > 0 and boundRange[partid-1][0] <= srcid and boundRange[partid-1][1] > srcid:
-                partid -= 1
-            elif partid < Wsize - 1 and boundRange[partid+1][0] <= srcid and boundRange[partid+1][1] > srcid:
-                partid += 1
-            else:
-                print("src error id: ",srcid)
-                print("partid:{},innernode:{}".format(partid,innernode))
-                exit(-1)
+            srcid = subg.ndata[dgl.NID][srcid] # srcid ：local 查询全局ID 
+            partid = -1
+            for pid,(left,right) in enumerate(boundRange):
+                if left <= srcid and srcid < right:
+                    partid = pid
+                    break
             if dstid not in partdict[partid]:
                 partdict[partid][dstid] = []
-            partdict[partid][dstid].append(srcid)
-            outcount[partid] += 1        
+            # 计算合并id
+            newsrcid = srcid - SUBGconf['node_map']['_N'][partid][0] + basiclen
+            if srcid - SUBGconf['node_map']['_N'][partid][0] < 0:
+                print("count error: srcid:{},partid:{},bound:{}...".format(srcid,partid,SUBGconf['node_map']['_N'][partid][0]))
+                exit()
+            partdict[partid][dstid].append(newsrcid)
+            outcount[partid] += 1 
     save_coo_bin(nodeDict,savePath+"/part"+str(rank),boundRange[rank][1] - boundRange[rank][0], incount,20)
     for i in range(Wsize):
         save_edges_bin(partdict[i], savePath+"/part"+str(rank), i, boundRange[rank][1] - boundRange[rank][0], outcount[i])
 
-    print("data-{} processed ! ".format(rank))
+    print("graphdata-part{} processed ! ".format(rank))
+
+def gen_labels_file(data,rank,savePath):
+    savePath = savePath + "/part"+str(rank)
+    subg, node_feat, node_type = data
+    nt = node_type[0]
+    labelInfo = node_feat[nt + '/labels']
+    labelInfo = labelInfo.to(torch.int32).detach().numpy()
+    labelInfo.tofile(savePath + "/label.bin")
+    print("label-part{} processed ! ".format(rank))
+
+def gen_trainid_file(data,rank,savePath):
+    savePath = savePath + "/part"+str(rank)
+    subg, node_feat, node_type = data
+    nt = node_type[0]
+    train_mask = node_feat[nt + '/train_mask']
+    torch.save(train_mask, savePath + "/trainID.bin")
+    print("trainid-part{} processed ! ".format(rank))
+
+def gen_feat_file(data,rank,savePath):
+    savePath = savePath + "/part"+str(rank)
+    subg, node_feat, node_type = data
+    nt = node_type[0]
+    featInfo = node_feat[nt + '/features']
+    featInfo = featInfo.detach().numpy()
+    featInfo.tofile(savePath +"/feat.bin")
+    print("feat-part{} processed ! ".format(rank))
 
 
 if __name__ == '__main__':
-    # dataPath = sys.argv[1]
-    # dataName = sys.argv[2]
-    # savePath = sys.argv[3]
-
     dataPath = "./../../data/raw-products"
     dataName = "ogb-product"
-    savePath = "./../../data/g- products"
-    #gen_format_file(0,4,dataPath,dataName,savePath)
-    for i in range(4):
-        gen_format_file(i,4,dataPath,dataName,savePath)
+    savePath = "./../../data/products"
+
+    for rank in range(1,4):
+        subg, node_feat, node_type = readGraph(rank,dataPath,dataName)
+        data = (subg, node_feat, node_type)
+        gen_graph_file(data,rank,4,dataPath,dataName,savePath)
+        gen_labels_file(data,rank,savePath)
+        gen_feat_file(data,rank,savePath)
+        gen_trainid_file(data,rank,savePath)
+        
