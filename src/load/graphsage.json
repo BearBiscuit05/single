@@ -9,6 +9,7 @@
     "preRating":2,
     "featlen":100,
     "fanout":[25,10],
+    "framework":"pyg",
     "idbound":[
         [
             0,

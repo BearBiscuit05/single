@@ -136,7 +136,7 @@ if __name__ == '__main__':
     # in_size = g.ndata['feat'].shape[1]
     # out_size = dataset.num_classes
     model = SAGE(100, 256, 47).to('cuda:1')
-    dataset = CustomDataset("./../../load/config.json")
+    dataset = CustomDataset("./../../load/graphsage.json")
     print('Training...')
     train(args, device, dataset, model)
 
