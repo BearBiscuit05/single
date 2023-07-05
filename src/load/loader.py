@@ -38,6 +38,7 @@ class CustomDataset(Dataset):
         self.featlen = 0
         self.idbound = []
         self.fanout = []
+        self.framework = ""
         self.readConfig(confPath)
         # ================
 
@@ -71,17 +72,15 @@ class CustomDataset(Dataset):
         #### 数据预取 ####
         self.loadingGraph(merge=False)
         self.loadingMemFeat(self.trainSubGTrack[self.subGptr//self.partNUM][self.subGptr%self.partNUM])
-        # maxnum = torch.max(self.cacheData[0])
-        # minnum = torch.min(self.cacheData[0])
-        # print("first max num:{},min num:{}".format(maxnum,minnum))
         self.initNextGraphData()
-        # maxnum = torch.max(self.cacheData[0])
-        # minnum = torch.min(self.cacheData[0])
-        # print("after loading max num:{},min num:{}".format(maxnum,minnum))
         self.sampleFlagQueue.put(self.executor.submit(self.preGraphBatch)) #发送采样命令
         
         #### dgl.block ####
-        self.templateBlock = self.genBlockTemplate()
+        if self.framework == "dgl":
+            self.templateBlock = self.genBlockTemplate()
+        elif self.framework == "pyg":
+        #### pyg.batch ####
+            self.templateBlock = self.genPYGBatchTemplate()
 
     def __len__(self):  
         return self.trainNUM
@@ -120,6 +119,7 @@ class CustomDataset(Dataset):
         self.featlen = config['featlen']
         self.fanout = config['fanout']
         self.idbound = config['idbound']
+        self.framework = config['framework']
         formatted_data = json.dumps(config, indent=4)
         print(formatted_data)
 
@@ -330,7 +330,10 @@ class CustomDataset(Dataset):
             exit()
         
         cacheFeat = self.featMerge(cacheGraph,cacheFeat)
-        cacheGraph = self.transGraph2Block(cacheGraph)
+        if self.framework == "dgl":
+            cacheGraph = self.transGraph2DGLBlock(cacheGraph)
+        elif self.framework == "pyg":
+            cacheGraph = self.transGraph2PYGBatch(cacheGraph)
         cacheData = [cacheGraph,cacheFeat,cacheLabel,batchlen]
         self.graphPipe.put(cacheData)
         self.trainptr += 1
@@ -397,7 +400,7 @@ class CustomDataset(Dataset):
             template.insert(0,[torch.tensor(src),torch.tensor(dst)])
         return template
         
-    def transGraph2Block(self,graphdata):
+    def transGraph2DGLBlock(self,graphdata):
         # 先生成掩码
         masks = []
         for src, dst in graphdata:
@@ -444,6 +447,43 @@ class CustomDataset(Dataset):
             blocks.insert(0,block)  
         return blocks
 
+########################## pyg接口 ##########################
+    def genPYGBatchTemplate(self):
+        zeros = torch.tensor([0])
+        template_src = torch.empty(0,dtype=torch.int32)
+        template_dst = torch.empty(0,dtype=torch.int32)
+        ptr = self.batchsize + 1
+        seeds = [i for i in range(1, self.batchsize + 1)]
+        for number in self.fanout:
+            dst = copy.deepcopy(seeds)
+            src = copy.deepcopy(seeds)
+            for ids in seeds:
+                for i in range(number-1):
+                    dst.append(ids)
+                    src.append(ptr)
+                    ptr += 1
+            seeds = copy.deepcopy(src)
+            template_src = torch.cat([template_src,torch.tensor(src,dtype=torch.int32)])
+            template_dst = torch.cat([template_dst,torch.tensor(dst,dtype=torch.int32)])
+        template_src = torch.cat([template_src,zeros])
+        template_dst = torch.cat([template_dst,zeros])
+        PYGTemplate = torch.stack([template_src,template_dst])
+        return PYGTemplate
+
+    def transGraph2PYGBatch(self,graphdata):
+        # 先生成掩码
+        masks = []
+        for src, dst in graphdata:
+            layer_mask = torch.ge(src, 0)
+            masks.append(layer_mask)
+        masks.insert(0,torch.tensor([0]))
+        masks = torch.cat(masks)
+        
+        template = copy.deepcopy(self.templateBlock)
+        template = template * masks
+        return template
+        
+
 
 def collate_fn(data):
     """
@@ -469,9 +509,13 @@ if __name__ == "__main__":
             # pass
             print("="*40)
             print("block:",graph)
+            maxid = torch.max(graph[0])
+            print("ids :",maxid)
+            
             print("batch time:{}s".format(time.time() - start))
             start = time.time()
             # print("="*40)
             print("feat:",len(feat))
             print("label:",len(label))
+            #exit()
             # print("batch number :",number)
