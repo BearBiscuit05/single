@@ -138,6 +138,7 @@ def gen_graph_file(data,rank,Wsize,dataPath,datasetName,savePath):
                 exit()
             partdict[partid][dstid].append(newsrcid)
             outcount[partid] += 1 
+    
     save_coo_bin(nodeDict,savePath+"/part"+str(rank),boundRange[rank][1] - boundRange[rank][0], incount,20)
     for i in range(Wsize):
         save_edges_bin(partdict[i], savePath+"/part"+str(rank), i, boundRange[rank][1] - boundRange[rank][0], outcount[i])
@@ -172,14 +173,14 @@ def gen_feat_file(data,rank,savePath):
 
 
 if __name__ == '__main__':
-    dataPath = "./../../data/raw-products"
-    dataName = "ogb-product"
-    savePath = "./../../data/products"
-
-    for rank in range(1,4):
+    dataPath = "./../../data/raw-reddit_8"
+    dataName = "reddit"
+    savePath = "./../../data/reddit_8"
+    index=8
+    for rank in range(index):
         subg, node_feat, node_type = readGraph(rank,dataPath,dataName)
         data = (subg, node_feat, node_type)
-        gen_graph_file(data,rank,4,dataPath,dataName,savePath)
+        gen_graph_file(data,rank,index,dataPath,dataName,savePath)
         gen_labels_file(data,rank,savePath)
         gen_feat_file(data,rank,savePath)
         gen_trainid_file(data,rank,savePath)

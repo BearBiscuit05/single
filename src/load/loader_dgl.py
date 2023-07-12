@@ -321,18 +321,22 @@ class CustomDataset(Dataset):
             sampleIDs[:self.subGtrainNodesNUM - offset] = self.trainNodes[offset:self.subGtrainNodesNUM]
             batchlen = self.subGtrainNodesNUM - offset
             cacheLabel = self.nodeLabels[sampleIDs[0:self.subGtrainNodesNUM - offset]]
+        
+        sampleTime = time.time()
         self.sampleNeig(sampleIDs,cacheGraph)
-        
-        # min = torch.min(cacheGraph[0][0])
-        # if min < -1:
-        #     print("big error ...")
-        #     exit()
-        
+        print("sample subG cost {}s".format(time.time()-sampleTime))
+
+        featTime = time.time()
         cacheFeat = self.featMerge(cacheGraph,cacheFeat)
+        print("subG feat merge cost {}s".format(time.time()-featTime))
+
+        transTime = time.time()
         if self.framework == "dgl":
             cacheGraph = self.transGraph2DGLBlock(cacheGraph)
         elif self.framework == "pyg":
             cacheGraph = self.transGraph2PYGBatch(cacheGraph)
+        print("subG trans cost {}s".format(time.time()-transTime))
+
         cacheData = [cacheGraph,cacheFeat,cacheLabel,batchlen]
         self.graphPipe.put(cacheData)
         self.trainptr += 1
@@ -403,37 +407,45 @@ class CustomDataset(Dataset):
         # 先生成掩码
         masks = []
         blocks = []
+        layer_node_number = []
         for src, dst in graphdata:
             layer_mask = torch.ge(src, 0)
             layer_mask = torch.cat((layer_mask, torch.tensor([True])))
-            # num_true = layer_mask.size(0) - layer_mask.sum().item()
+            #num_true = layer_mask.sum().item()
             masks.append(layer_mask)
+
 
         template = copy.deepcopy(self.templateBlock)
         # 获取初始化template
+        lastLayerNodeNumber = masks[-1][:self.batchsize].sum().item() + 1
+        
+        for index,mask in enumerate(reversed(masks)):
+            LayerNodeNumber = mask.sum().item()
+            layer_node_number.insert(0,[LayerNodeNumber,lastLayerNodeNumber])
+            lastLayerNodeNumber = LayerNodeNumber
+
         for index,mask in enumerate(masks):
             src,dst = template[index]
             src *= mask
             dst *= mask
+
+        # print(layer_node_number)
+        # exit(-1)
         
         ## 修改部分
-        for src,dst in template:
-            block = dgl.graph((src, dst))
-            block = dgl.to_block(block)
+        for index,(src,dst) in enumerate(template):
+            data = (src,dst)
+            block = self.create_dgl_block(data,layer_node_number[index][0],layer_node_number[index][1])
             blocks.append(block)
+        
         # 转换当前数据
         return blocks
 
-    def create_dgl_block(self,cacheData):
-        coo = cacheData[0]
-        for index, edges in enumerate(coo):
-            row, col = edges[0],edges[1]
-            row = torch.tensor(row)
-            col = torch.tensor(col,dtype=torch.int32)
-            gidx = dgl.heterograph_index.create_unitgraph_from_coo(2, len(row), 1, row, col, 'coo')
-            g = DGLBlock(gidx, (['_N'], ['_N']), ['_E'])
-            coo[index] = g
-        return cacheData
+    def create_dgl_block(self, data, num_src_nodes, num_dst_nodes):
+        row, col = data
+        gidx = dgl.heterograph_index.create_unitgraph_from_coo(2, num_src_nodes, num_dst_nodes, row, col, 'coo')
+        g = DGLBlock(gidx, (['_N'], ['_N']), ['_E'])
+        return g
 
     def tmp_create_dgl_block(self,cacheData):
         blocks = []
@@ -482,8 +494,7 @@ class CustomDataset(Dataset):
         masks = torch.cat(masks)
         template = copy.deepcopy(self.templateBlock)
         template = template * masks
-        return template
-        
+        return template      
 
 
 def collate_fn(data):
@@ -511,7 +522,7 @@ if __name__ == "__main__":
             print("="*40)
             print("block:",graph)
             
-            #print("batch time:{}s".format(time.time() - start))
+            # print("batch time:{}s".format(time.time() - start))
             start = time.time()
             # print("="*40)
             print("feat:",len(feat))
