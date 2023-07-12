@@ -400,13 +400,14 @@ class CustomDataset(Dataset):
         return template
         
     def transGraph2DGLBlock(self,graphdata):
+        tmp_graphdata = copy.deepcopy(graphdata)
+        
         # 先生成掩码
         masks = []
         blocks = []
         for src, dst in graphdata:
             layer_mask = torch.ge(src, 0)
             layer_mask = torch.cat((layer_mask, torch.tensor([True])))
-            # num_true = layer_mask.size(0) - layer_mask.sum().item()
             masks.append(layer_mask)
 
         template = copy.deepcopy(self.templateBlock)
@@ -422,18 +423,41 @@ class CustomDataset(Dataset):
             block = dgl.to_block(block)
             blocks.append(block)
         # 转换当前数据
-        return blocks
+        
+        #=============[dgl.create_block]==========
 
-    def create_dgl_block(self,cacheData):
-        coo = cacheData[0]
-        for index, edges in enumerate(coo):
-            row, col = edges[0],edges[1]
-            row = torch.tensor(row)
-            col = torch.tensor(col,dtype=torch.int32)
-            gidx = dgl.heterograph_index.create_unitgraph_from_coo(2, len(row), 1, row, col, 'coo')
-            g = DGLBlock(gidx, (['_N'], ['_N']), ['_E'])
-            coo[index] = g
-        return cacheData
+
+
+        #=============[TEST]===================
+        template = copy.deepcopy(self.templateBlock)
+        tmp_blocks = []
+        lastLayerNodeNumber = masks[-1][:self.batchsize].sum().item() + 1
+        layer_node_number = []
+        for index,mask in enumerate(reversed(masks)):
+            LayerNodeNumber = mask.sum().item()
+            layer_node_number.insert(0,[LayerNodeNumber,lastLayerNodeNumber])
+            lastLayerNodeNumber = LayerNodeNumber
+        
+        for index,mask in enumerate(masks):
+            src,dst = template[index]
+            src *= mask
+            dst *= mask
+        
+        for index,(src,dst) in enumerate(template):
+            data = (src,dst)
+            block = dgl.create_block(data,layer_node_number[index][0],layer_node_number[index][1])
+            tmp_blocks.append(block)
+        
+        print("tmp block is : {}".format(tmp_blocks[0]))
+        print("block is : {}".format(blocks[0]))
+        exit()
+        return tmp_blocks
+
+    def create_dgl_block(self, data, num_src_nodes, num_dst_nodes):
+        row, col = data
+        gidx = dgl.heterograph_index.create_unitgraph_from_coo(2, num_src_nodes, num_dst_nodes, row, col, 'coo')
+        g = DGLBlock(gidx, (['_N'], ['_N']), ['_E'])
+        return g
 
     def tmp_create_dgl_block(self,cacheData):
         blocks = []
@@ -503,11 +527,15 @@ if __name__ == "__main__":
     train_loader = DataLoader(dataset=dataset, batch_size=batchsize, collate_fn=collate_fn,pin_memory=True)
     time.sleep(2)
     
+    count = 0
     for index in range(epoch):
         count = 0
         start = time.time()
         for graph,feat,label,number in train_loader:
             # pass
+            if count > 10:
+                break
+            count += 1
             print("="*40)
             print("block:",graph)
             

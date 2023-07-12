@@ -291,9 +291,8 @@ class CustomDataset(Dataset):
             src = [-1] * tmp * fan
             cacheGraph.insert(0,[src,dst])
             tmp = tmp * fan
-        cacheFeat = torch.zeros(len(cacheGraph[0][0])+1, self.featlen)
         cacheLabel = torch.zeros(self.batchsize)
-        return cacheGraph,cacheFeat,cacheLabel
+        return cacheGraph,cacheLabel
 
     def preGraphBatch(self):
         # 如果当前管道已经被充满，则不采样，该函数直接返回
@@ -307,7 +306,7 @@ class CustomDataset(Dataset):
             self.initNextGraphData()
             
         
-        cacheGraph,cacheFeat,cacheLabel = self.initCacheData()
+        cacheGraph,cacheLabel = self.initCacheData()
         sampleIDs = [-1] * self.batchsize
         batchlen = 0
         if self.trainptr < self.trainLoop - 1:
@@ -327,7 +326,7 @@ class CustomDataset(Dataset):
         print("sample subG cost {}s".format(time.time()-sampleTime))
 
         featTime = time.time()
-        cacheFeat = self.featMerge(cacheGraph,cacheFeat)
+        cacheFeat = self.featMerge(cacheGraph)
         print("subG feat merge cost {}s".format(time.time()-featTime))
 
         transTime = time.time()
@@ -376,11 +375,10 @@ class CustomDataset(Dataset):
             tmp_feat = torch.from_numpy(tmp_feat).reshape(-1,100)
             self.feats = torch.cat([self.feats,tmp_feat])
     
-    def featMerge(self,cacheGraph,cacheFeat):    
+    def featMerge(self,cacheGraph):    
         nodeids = cacheGraph[0][0]
-        positive_nums = torch.masked_select(nodeids, nodeids > -1)
-        positive_nums = torch.cat([torch.tensor([0]),positive_nums])
-        return self.feats[positive_nums]
+        nodeids = torch.cat([torch.tensor([0]),nodeids])
+        return self.feats[nodeids]
 
 ########################## dgl接口 ##########################  
     def genBlockTemplate(self):
@@ -398,8 +396,8 @@ class CustomDataset(Dataset):
                     src.append(ptr)
                     ptr += 1
             seeds = copy.deepcopy(src)
-            src.append(0)
-            dst.append(0)
+            # src.append(0)
+            # dst.append(0)
             template.insert(0,[torch.tensor(src),torch.tensor(dst)])
         return template
         
@@ -407,38 +405,23 @@ class CustomDataset(Dataset):
         # 先生成掩码
         masks = []
         blocks = []
-        layer_node_number = []
         for src, dst in graphdata:
             layer_mask = torch.ge(src, 0)
-            layer_mask = torch.cat((layer_mask, torch.tensor([True])))
-            #num_true = layer_mask.sum().item()
             masks.append(layer_mask)
-
-
+            #layer_mask = torch.cat((layer_mask, torch.tensor([True])))            
         template = copy.deepcopy(self.templateBlock)
-        # 获取初始化template
-        lastLayerNodeNumber = masks[-1][:self.batchsize].sum().item() + 1
-        
-        for index,mask in enumerate(reversed(masks)):
-            LayerNodeNumber = mask.sum().item()
-            layer_node_number.insert(0,[LayerNodeNumber,lastLayerNodeNumber])
-            lastLayerNodeNumber = LayerNodeNumber
 
         for index,mask in enumerate(masks):
             src,dst = template[index]
             src *= mask
             dst *= mask
-
-        # print(layer_node_number)
-        # exit(-1)
         
         ## 修改部分
         for index,(src,dst) in enumerate(template):
             data = (src,dst)
-            block = self.create_dgl_block(data,layer_node_number[index][0],layer_node_number[index][1])
+            #block = dgl.create_block(data,len(self.templateBlock[index][0])+1,(len(self.templateBlock[index][0])//self.fanout[-(index+1)])+1)
+            block = self.create_dgl_block(data,len(self.templateBlock[index][0])+1,(len(self.templateBlock[index][0])//self.fanout[-(index+1)])+1)
             blocks.append(block)
-        
-        # 转换当前数据
         return blocks
 
     def create_dgl_block(self, data, num_src_nodes, num_dst_nodes):

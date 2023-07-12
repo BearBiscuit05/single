@@ -1,6 +1,3 @@
-"""
-测试构建block模块满足训练要求
-"""
 import dgl
 import numpy as np
 import torch as th
@@ -17,7 +14,6 @@ import mmap
 def create_dgl_block(data, num_src_nodes, num_dst_nodes):
     row, col = data
     gidx = dgl.heterograph_index.create_unitgraph_from_coo(2, num_src_nodes, num_dst_nodes, row, col, 'coo')
-    print(gidx)
     g = DGLBlock(gidx, (['_N'], ['_N']), ['_E'])
     #g = DGLBlock(gidx)
     return g
@@ -43,46 +39,49 @@ class SAGE(nn.Module):
 
 
 if __name__ == '__main__':
-    # filePath = "../../data/products_4/part0"
-    # file = open(filePath+"/feat.bin", "r+b")
-    # head = mmap.mmap(file.fileno(), 0, access=mmap.ACCESS_DEFAULT)
-    # float_size = np.dtype(float).itemsize
-    # nodeIDs = [i for i in range(12)]
-    # feats = torch.zeros((len(nodeIDs), 10), dtype=torch.float32)
-    # for index, nodeID in enumerate(nodeIDs):
-    #     feat = torch.frombuffer(head, dtype=torch.float32, offset=nodeID*10*float_size, count=10)
-    #     feats[index] = feat
-    # print(feats.size())
-    
-    # feat = torch.rand((12, 10))
+
     feats = torch.rand((12, 10), dtype=torch.float32)
     blocks = []
     s = time.time()
     dst = th.tensor([0, 0, 0 ,1, 2, 0, 0, 0, 1, 1, 1, 2, 2, 2])
     src = th.tensor([0, 0, 0 , 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11])
-    
-    data = (src,dst)
-    block = create_dgl_block(data, 12, 12)
+
+    block = dgl.create_block((src , dst), num_src_nodes=12, num_dst_nodes=3)    
     print(block)
-    # block = dgl.graph((src, dst))
-    # block = dgl.to_block(block)
 
-    blocks.append(block.to('cuda:0'))
+    #============[TEST]=================
+    src = th.tensor([i for i in range(10000)])
+    dst = th.tensor([i for i in range(10000)])
+    
+    normalTime = time.time()
+    for i in range(10000):
+        block = dgl.graph((src, dst))
+        block = dgl.to_block(block)
+    print("normal create time:{}".format(time.time()-normalTime))
 
-    dst = th.tensor([0, 0, 0])
-    src = th.tensor([1, 2, 0])
-    data = (src,dst)
-    block = create_dgl_block(data, 12, 12)
-    blocks.append(block.to('cuda:0'))
-    # print(blocks)
-    # block = dgl.graph((src, dst))
-    # block = dgl.to_block(block)
+    normalTime = time.time()
+    for i in range(10000):
+        block = dgl.create_block((src , dst), num_src_nodes=10000, num_dst_nodes=10000)    
+    print("direct create time:{}".format(time.time()-normalTime))
 
+    normalTime = time.time()
+    for i in range(10000):
+        create_dgl_block((src , dst), 10000, 10000)
+    print("gnnlab create time:{}".format(time.time()-normalTime))
+
+    # data = (src,dst)
+    # block = create_dgl_block(data, 12, 12)
+    # print(block)
 
     # blocks.append(block.to('cuda:0'))
-    # print(blocks[0].device)
-    model = SAGE(10, 16, 3).to('cuda:0')
-    # # # print(blocks)
-    model.train()
-    y_hat = model(blocks, feats.to('cuda:0'))
-    print(y_hat)
+
+    # dst = th.tensor([0, 0, 0])
+    # src = th.tensor([1, 2, 0])
+    # data = (src,dst)
+    # block = create_dgl_block(data, 12, 12)
+    # blocks.append(block.to('cuda:0'))
+
+    # model = SAGE(10, 16, 3).to('cuda:0')
+    # model.train()
+    # y_hat = model(blocks, feats.to('cuda:0'))
+    # print(y_hat)
