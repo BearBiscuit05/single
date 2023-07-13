@@ -154,13 +154,17 @@ def gen_labels_file(data,rank,savePath):
     labelInfo.tofile(savePath + "/label.bin")
     print("label-part{} processed ! ".format(rank))
 
-def gen_trainid_file(data,rank,savePath):
+def gen_ids_file(data,rank,savePath):
     savePath = savePath + "/part"+str(rank)
     subg, node_feat, node_type = data
     nt = node_type[0]
     train_mask = node_feat[nt + '/train_mask']
+    val_mask = node_feat[node_type + '/val_mask']
+    test_mask = node_feat[node_type + '/test_mask']
     torch.save(train_mask, savePath + "/trainID.bin")
-    print("trainid-part{} processed ! ".format(rank))
+    torch.save(train_mask, savePath + "/valID.bin")
+    torch.save(train_mask, savePath + "/testID.bin")
+    print("ids-part{} processed ! ".format(rank))
 
 def gen_feat_file(data,rank,savePath):
     savePath = savePath + "/part"+str(rank)
@@ -183,5 +187,5 @@ if __name__ == '__main__':
         gen_graph_file(data,rank,index,dataPath,dataName,savePath)
         gen_labels_file(data,rank,savePath)
         gen_feat_file(data,rank,savePath)
-        gen_trainid_file(data,rank,savePath)
+        gen_ids_file(data,rank,savePath)
         
