@@ -32,9 +32,6 @@ class SAGE(nn.Module):
     def forward(self, blocks, x):
         h = x
         for l, (layer, block) in enumerate(zip(self.layers, blocks)):
-            print(block)
-            print(h.shape)
-
             h = layer(block, h)
             if l != len(self.layers) - 1:
                 h = F.relu(h)
@@ -100,21 +97,18 @@ def train(args, device, dataset, model):
     opt = torch.optim.Adam(model.parameters(), lr=1e-3, weight_decay=5e-4)
     for epoch in range(1):
         start = time.time()
+        total_loss = 0
         model.train()
         train_loader = DataLoader(dataset=dataset, batch_size=1024, collate_fn=collate_fn,pin_memory=True)
         for graph,feat,label,number in train_loader:
             graph = [block.to('cuda:1') for block in graph]
-            # for info in graph:
-            #     print(info)
-            #     info.to('cuda:1')
-            print(graph[0].device)
             y_hat = model(graph, feat.to('cuda:1'))
-            print("train once...")
-            # loss = F.cross_entropy(y_hat, y)
-            # opt.zero_grad()
-            # loss.backward()
-            # opt.step()
-            # total_loss += loss.item()
+            print("y_hat len:{},label len:{},number:{}".format(len(y_hat),len(label),number))
+            loss = F.cross_entropy(y_hat[1:number+1], label[:number].to(torch.int64).to('cuda:1'))
+            opt.zero_grad()
+            loss.backward()
+            opt.step()
+            total_loss += loss.item()
         
         # acc = evaluate(model, g, val_dataloader)
         # print("Epoch {:05d} | Loss {:.4f} | Accuracy {:.4f} "
