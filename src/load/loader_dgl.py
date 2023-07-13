@@ -498,7 +498,6 @@ if __name__ == "__main__":
     time.sleep(2)
     
     for index in range(epoch):
-        count = 0
         start = time.time()
         for graph,feat,label,number in train_loader:
             # pass
