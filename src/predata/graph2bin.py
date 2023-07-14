@@ -81,13 +81,21 @@ def save_coo_bin(nodeDict, filepath, nodeNUM, edgeNUM, basicSpace):
 
 def save_edges_bin(nodeDict, filepath, haloID, nodeNUM, edgeNUM):
     edges = []
+    bound = [0]
+    ptr = 0
     for key in range(nodeNUM):
         if key in nodeDict:
             srcs = nodeDict[key]
             for srcid in srcs:
                 edges.extend([srcid,key])
+            ptr += len(srcs)*2
+            bound.append(ptr)
+        else:
+            bound.append(ptr)
     edges = np.array(edges,dtype=np.int32)
+    bound = np.array(bound,dtype=np.int32)
     edges.tofile(filepath+"/halo"+str(haloID)+".bin")
+    bound.tofile(filepath+"/halo"+str(haloID)+"_bound.bin")
 
 def readGraph(rank,dataPath,datasetName):
     graph_dir = dataPath
@@ -138,6 +146,7 @@ def gen_graph_file(data,rank,Wsize,dataPath,datasetName,savePath):
                 exit()
             partdict[partid][dstid].append(newsrcid)
             outcount[partid] += 1 
+    
     save_coo_bin(nodeDict,savePath+"/part"+str(rank),boundRange[rank][1] - boundRange[rank][0], incount,20)
     for i in range(Wsize):
         save_edges_bin(partdict[i], savePath+"/part"+str(rank), i, boundRange[rank][1] - boundRange[rank][0], outcount[i])
@@ -153,13 +162,17 @@ def gen_labels_file(data,rank,savePath):
     labelInfo.tofile(savePath + "/label.bin")
     print("label-part{} processed ! ".format(rank))
 
-def gen_trainid_file(data,rank,savePath):
+def gen_ids_file(data,rank,savePath):
     savePath = savePath + "/part"+str(rank)
     subg, node_feat, node_type = data
     nt = node_type[0]
     train_mask = node_feat[nt + '/train_mask']
+    val_mask = node_feat[node_type + '/val_mask']
+    test_mask = node_feat[node_type + '/test_mask']
     torch.save(train_mask, savePath + "/trainID.bin")
-    print("trainid-part{} processed ! ".format(rank))
+    torch.save(train_mask, savePath + "/valID.bin")
+    torch.save(train_mask, savePath + "/testID.bin")
+    print("ids-part{} processed ! ".format(rank))
 
 def gen_feat_file(data,rank,savePath):
     savePath = savePath + "/part"+str(rank)
@@ -172,15 +185,15 @@ def gen_feat_file(data,rank,savePath):
 
 
 if __name__ == '__main__':
-    dataPath = "./../../data/raw-products"
-    dataName = "ogb-product"
-    savePath = "./../../data/products"
-
-    for rank in range(1,4):
+    dataPath = "./../../data/raw-reddit_8"
+    dataName = "reddit"
+    savePath = "./../../data/reddit_8"
+    index=8
+    for rank in range(index):
         subg, node_feat, node_type = readGraph(rank,dataPath,dataName)
         data = (subg, node_feat, node_type)
-        gen_graph_file(data,rank,4,dataPath,dataName,savePath)
+        gen_graph_file(data,rank,index,dataPath,dataName,savePath)
         gen_labels_file(data,rank,savePath)
         gen_feat_file(data,rank,savePath)
-        gen_trainid_file(data,rank,savePath)
+        gen_ids_file(data,rank,savePath)
         

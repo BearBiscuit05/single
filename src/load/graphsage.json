@@ -1,6 +1,6 @@
 {
     "train_name" : "node_classification",
-    "dataset" : "products",
+    "dataset" : "products_4",
     "datasetpath": "/home/bear/workspace/singleGNN/data",
     "partNUM":4,
     "cacheNUM":4,
@@ -10,6 +10,7 @@
     "featlen":100,
     "fanout":[25,10],
     "framework":"pyg",
+    "mode":"train",
     "idbound":[
         [
             0,
