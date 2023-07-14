@@ -557,8 +557,8 @@ class CustomDataset(Dataset):
 ########################## pyg接口 ##########################
     def genPYGBatchTemplate(self):
         zeros = torch.tensor([0])
-        template_src = torch.empty(0,dtype=torch.int32)
-        template_dst = torch.empty(0,dtype=torch.int32)
+        template_src = torch.empty(0,dtype=torch.int64)
+        template_dst = torch.empty(0,dtype=torch.int64)
         ptr = self.batchsize + 1
         seeds = [i for i in range(1, self.batchsize + 1)]
         for number in self.fanout:
@@ -570,8 +570,8 @@ class CustomDataset(Dataset):
                     src.append(ptr)
                     ptr += 1
             seeds = copy.deepcopy(src)
-            template_src = torch.cat([template_src,torch.tensor(src,dtype=torch.int32)])
-            template_dst = torch.cat([template_dst,torch.tensor(dst,dtype=torch.int32)])
+            template_src = torch.cat([template_src,torch.tensor(src,dtype=torch.int64)])
+            template_dst = torch.cat([template_dst,torch.tensor(dst,dtype=torch.int64)])
         # template_src = torch.cat([template_src,zeros])
         # template_dst = torch.cat([template_dst,zeros])
         PYGTemplate = torch.stack([template_src,template_dst])

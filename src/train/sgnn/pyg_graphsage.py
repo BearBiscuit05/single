@@ -16,7 +16,7 @@ import sys
 import os
 current_folder = os.path.abspath(os.path.dirname(__file__))
 sys.path.append(current_folder+"/../../"+"load")
-from loader_dgl import CustomDataset
+from loader import CustomDataset
 
 class SAGE(torch.nn.Module):
     def __init__(self, in_channels: int, hidden_channels: int,
@@ -31,6 +31,8 @@ class SAGE(torch.nn.Module):
  
     def forward(self, x: Tensor, edge_index: Tensor) -> Tensor:
         for i, conv in enumerate(self.convs):
+            print("x:",x.dtype)
+            print("edge_index:",edge_index.dtype)
             x = conv(x, edge_index)
             if i < len(self.convs) - 1:
                 x = x.relu_()
@@ -64,49 +66,24 @@ class SAGE(torch.nn.Module):
 
 
 def run(rank, world_size, dataset):
-    #data = dataset[0]
-    #data = data.to('cuda:0', 'x', 'y')  # Move to device for faster feature fetch.
-
-    #train_idx = data.train_mask.nonzero(as_tuple=False).view(-1)
     train_loader = DataLoader(dataset=dataset, batch_size=1024, collate_fn=collate_fn,pin_memory=True)
-    # kwargs = dict(batch_size=1024, num_workers=1, persistent_workers=True)
-    # train_loader = NeighborLoader(data, input_nodes=train_idx,
-    #                               num_neighbors=[25, 10], shuffle=True,
-    #                               drop_last=True, **kwargs)
-
-
     torch.manual_seed(12345)
     model = SAGE(100, 256, 47).to('cuda:0')
-    #model = DistributedDataParallel(model, device_ids=[rank])
     optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
-
+    count = 0
     for epoch in range(1, 2):
         model.train()    
         for graph,feat,label,number in train_loader:        
+            count += 1
+            if count > 5:
+                break
             optimizer.zero_grad()     
             out = model(feat.to('cuda:0'), graph.to('cuda:0'))[1:number+1]
             loss = F.cross_entropy(out, label[:number].to(torch.int64).to('cuda:0'))
             loss.backward()
             optimizer.step()
-            
-        # dist.barrier()
-
-        # if rank == 0:
         print(f'Epoch: {epoch:02d}, Loss: {loss:.4f}')
 
-        # if rank == 0 and epoch % 5 == 0:  # We evaluate on a single GPU for now
-        #     model.eval()
-        #     with torch.no_grad():
-        #         out = model.module.inference(data.x, rank, subgraph_loader)
-        #     res = out.argmax(dim=-1) == data.y.to(out.device)
-        #     acc1 = int(res[data.train_mask].sum()) / int(data.train_mask.sum())
-        #     acc2 = int(res[data.val_mask].sum()) / int(data.val_mask.sum())
-        #     acc3 = int(res[data.test_mask].sum()) / int(data.test_mask.sum())
-        #     print(f'Train: {acc1:.4f}, Val: {acc2:.4f}, Test: {acc3:.4f}')
-
-    #     dist.barrier()
-
-    # dist.destroy_process_group()
 def collate_fn(data):
     """
     data 输入结构介绍：
