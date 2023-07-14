@@ -16,8 +16,8 @@ import sys
 import os
 current_folder = os.path.abspath(os.path.dirname(__file__))
 sys.path.append(current_folder+"/../../"+"load")
-from loader_dgl import CustomDataset
-#from loader import CustomDataset
+#from loader_dgl import CustomDataset
+from loader import CustomDataset
 
 class SAGE(nn.Module):
     def __init__(self, in_size, hid_size, out_size):
