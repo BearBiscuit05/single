@@ -81,13 +81,21 @@ def save_coo_bin(nodeDict, filepath, nodeNUM, edgeNUM, basicSpace):
 
 def save_edges_bin(nodeDict, filepath, haloID, nodeNUM, edgeNUM):
     edges = []
+    bound = [0]
+    ptr = 0
     for key in range(nodeNUM):
         if key in nodeDict:
             srcs = nodeDict[key]
             for srcid in srcs:
                 edges.extend([srcid,key])
+            ptr += len(srcs)*2
+            bound.append(ptr)
+        else:
+            bound.append(ptr)
     edges = np.array(edges,dtype=np.int32)
+    bound = np.array(bound,dtype=np.int32)
     edges.tofile(filepath+"/halo"+str(haloID)+".bin")
+    bound.tofile(filepath+"/halo"+str(haloID)+"_bound.bin")
 
 def readGraph(rank,dataPath,datasetName):
     graph_dir = dataPath
