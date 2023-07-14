@@ -117,17 +117,18 @@ def train(args, device, g, dataset, model,data=None):
             x = blocks[0].srcdata['feat']
             y = blocks[-1].dstdata['label']
             y_hat = model(blocks, x)
+            print("y_hat",y_hat,y_hat.dtype)
+            print("y",y,y.dtype)
+            exit()
             loss = F.cross_entropy(y_hat, y)
             opt.zero_grad()
             loss.backward()
             opt.step()
             total_loss += loss.item()
-            print("batch time:{}s".format(time.time() - startTime))
             startTime = time.time()
         acc = evaluate(model, g, val_dataloader)
         print("Epoch {:05d} | Loss {:.4f} | Accuracy {:.4f} "
               .format(epoch, total_loss / (it+1), acc.item()))
-        print("epoch time :",time.time()-start)
 
 def load_reddit(self_loop=True):
     from dgl.data import RedditDataset
@@ -174,7 +175,6 @@ if __name__ == '__main__':
     in_size = g.ndata['feat'].shape[1]
     out_size = dataset.num_classes
     model = SAGE(in_size, 256, out_size).to(device)
-
     # model training
     print('Training...')
     train(args, device, g, dataset, model,data=data)
