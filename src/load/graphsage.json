@@ -10,6 +10,7 @@
     "featlen":100,
     "fanout":[25,10],
     "framework":"dgl",
+    "mode":"train",
     "idbound":[
         [
             0,

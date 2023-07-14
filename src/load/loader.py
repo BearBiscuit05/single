@@ -11,6 +11,14 @@ import torch
 from dgl.heterograph import DGLBlock
 import random
 import copy
+
+import logging
+logging.basicConfig(level=logging.DEBUG,filename='./log/loader.log',filemode='w',
+                    format='%(asctime)s-%(levelname)s-%(message)s',datefmt='%H:%M:%S')
+                    #format='%(message)s')
+logger = logging.getLogger(__name__)
+
+TESTNODE = 3000
 #变量控制原则 : 谁用谁负责 
 """
 数据加载的逻辑:
@@ -39,17 +47,22 @@ class CustomDataset(Dataset):
         self.idbound = []
         self.fanout = []
         self.framework = ""
+        self.mode = ""
         self.readConfig(confPath)
         # ================
 
         #### 训练记录 ####
         self.trainSubGTrack = self.randomTrainList()    # 训练轨迹
         self.subGptr = -1                               # 子图训练指针，记录当前训练的位置，在加载图时发生改变
-        print("train track:{}".format(self.trainSubGTrack))
-
-        #### 训练集部分 ####
+        
+        #### 节点类型加载 ####
+        self.NodeLen = 0        # 用于记录数据集中节点的数目，默认为train节点个数
         self.trainNUM = 0       # 训练集总数目
-        self.trainNodeDict,self.trainNodeNumbers = self.loadingTrainID() # 训练节点字典，训练节点数目
+        self.valNUM = 0
+        self.testNUM = 0
+        self.trainNodeDict,self.valNodeDict,self.testNodeDict = {},{},{}
+        self.trainNodeNumbers,self.valNodeNumbers,self.testNodeNumbers = 0,0,0
+        self.loadModeData(self.mode)
 
         #### 图结构信息 ####
         self.graphNodeNUM = 0           # 当前训练子图节点数目
@@ -63,7 +76,7 @@ class CustomDataset(Dataset):
         self.trainLoop = 0              # 当前子图可读取次数
         
         #### mmap 特征部分 ####
-        self.readfile = []  # 包含两个句柄/可能有三个句柄
+        self.readfile = []              # 包含两个句柄/可能有三个句柄
         self.mmapfile = []  
         self.feats = []
         self.loadingFeatFileHead()      # 读取特征文件
@@ -82,13 +95,12 @@ class CustomDataset(Dataset):
             self.templateBlock = self.genPYGBatchTemplate()
 
     def __len__(self):  
-        return self.trainNUM
+        return self.NodeLen
     
     def __getitem__(self, index):
         # 批数据预取 缓存1个
         if index % self.preRating == 0:
             # 调用预取函数
-            # data = self.sample_flag.result()
             self.sampleFlagQueue.put(self.executor.submit(self.preGraphBatch))
         
         # 获取采样数据
@@ -119,10 +131,11 @@ class CustomDataset(Dataset):
         self.fanout = config['fanout']
         self.idbound = config['idbound']
         self.framework = config['framework']
+        self.mode = config['mode']
         formatted_data = json.dumps(config, indent=4)
         print(formatted_data)
 
-    def randomTrainList(self):
+    def randomTrainList(self): 
         epochList = []
         for i in range(self.epoch + 1): # 额外多增加一行
             random_array = np.random.choice(np.arange(0, self.partNUM), size=self.partNUM, replace=False)
@@ -134,7 +147,8 @@ class CustomDataset(Dataset):
                 while(lastid == random_array[0]):
                     random_array = np.random.choice(np.arange(0, self.partNUM), size=self.partNUM, replace=False)
                 epochList.append(random_array)
-            
+
+        logger.info("train track:{}".format(epochList))    
         return epochList
 
 ########################## 加载/释放 图结构数据 ##########################
@@ -145,18 +159,27 @@ class CustomDataset(Dataset):
             self.moveGraph()
         # 对于将要计算的子图(已经加载)，修改相关信息
         self.trainingGID = self.trainSubGTrack[self.subGptr//self.partNUM][self.subGptr%self.partNUM]
-        self.trainNodes = self.trainNodeDict[self.trainingGID]
-        self.subGtrainNodesNUM = self.trainNodeNumbers[self.trainingGID]
         self.trainLoop = ((self.subGtrainNodesNUM - 1) // self.batchsize) + 1
         self.graphNodeNUM = int(len(self.cacheData[1]) / 2 )# 获取当前节点数目
         self.graphEdgeNUM = len(self.cacheData[0])
-        self.nodeLabels = self.loadingLabels(self.trainingGID)       
+        self.nodeLabels = self.loadingLabels(self.trainingGID)  
+ 
+        # 节点设置部分
+        if "train" == self.mode:
+            self.trainNodes = self.trainNodeDict[self.trainingGID]
+            self.subGtrainNodesNUM = self.trainNodeNumbers[self.trainingGID]   
+        elif "val" == self.mode:
+            self.trainNodes = self.valNodeDict[self.trainingGID]
+            self.subGtrainNodesNUM = self.valNodeNumbers[self.trainingGID]  
+        elif "test" == self.mode:
+            self.trainNodes = self.testNodeDict[self.trainingGID]
+            self.subGtrainNodesNUM = self.testNodeNumbers[self.trainingGID]
         # 对于辅助计算的子图，进行加载，以及加载融合边
         self.loadingGraph()
         self.nextGID = self.trainSubGTrack[self.subGptr//self.partNUM][self.subGptr%self.partNUM]
         self.loadingHalo()
         self.loadingMemFeat(self.nextGID)
-        print("当前训练图为:{},下一个图:{},图训练集规模:{},图节点数目:{},图边数目:{},加载耗时:{}s"\
+        logger.info("当前训练图为:{},下一个图:{},图训练集规模:{},图节点数目:{},图边数目:{},加载耗时:{}s"\
                         .format(self.trainingGID,self.nextGID,self.subGtrainNodesNUM,\
                         self.graphNodeNUM,self.graphEdgeNUM,time.time()-start))
 
@@ -169,7 +192,7 @@ class CustomDataset(Dataset):
             trainIDs = torch.load(filePath+"/trainID.bin")
             trainIDs = trainIDs.to(torch.uint8).nonzero().squeeze()
             _,idDict[index] = torch.sort(trainIDs)
-            idDict[index] = idDict[index][:10000]
+            idDict[index] = idDict[index][:TESTNODE]
             current_length = len(idDict[index])
             numberList[index] = current_length
             fill_length = self.batchsize - current_length % self.batchsize
@@ -184,16 +207,16 @@ class CustomDataset(Dataset):
         numberList = [0 for i in range(self.partNUM)]  
         for index in range(self.partNUM):
             filePath = self.dataPath + "/part" + str(index)   
-            ValIDs = torch.load(filePath+"/ValID.bin")
+            ValIDs = torch.load(filePath+"/valID.bin")
             ValIDs = ValIDs.to(torch.uint8).nonzero().squeeze()
             _,idDict[index] = torch.sort(ValIDs)
-            idDict[index] = idDict[index]
+            idDict[index] = idDict[index][:TESTNODE]
             current_length = len(idDict[index])
             numberList[index] = current_length
             fill_length = self.batchsize - current_length % self.batchsize
             padding = torch.full((fill_length,), -1, dtype=idDict[index].dtype)
             idDict[index] = torch.cat((idDict[index], padding))
-            self.trainNUM += idDict[index].shape[0]
+            self.valNUM += idDict[index].shape[0]
         return idDict,numberList
 
     def loadingTestID(self):
@@ -202,16 +225,16 @@ class CustomDataset(Dataset):
         numberList = [0 for i in range(self.partNUM)]  
         for index in range(self.partNUM):
             filePath = self.dataPath + "/part" + str(index)   
-            TestID = torch.load(filePath+"/TestID.bin")
+            TestID = torch.load(filePath+"/testID.bin")
             TestID = TestID.to(torch.uint8).nonzero().squeeze()
             _,idDict[index] = torch.sort(TestID)
-            idDict[index] = idDict[index][:10000]
+            idDict[index] = idDict[index][:TESTNODE]
             current_length = len(idDict[index])
             numberList[index] = current_length
             fill_length = self.batchsize - current_length % self.batchsize
             padding = torch.full((fill_length,), -1, dtype=idDict[index].dtype)
             idDict[index] = torch.cat((idDict[index], padding))
-            self.trainNUM += idDict[index].shape[0]
+            self.testNUM += idDict[index].shape[0]
         return idDict,numberList
 
     def loadingGraph(self,merge=True):
@@ -223,7 +246,6 @@ class CustomDataset(Dataset):
         srcdata = torch.from_numpy(srcdata)
         rangedata = np.fromfile(filePath+"/range.bin", dtype=np.int32)
         rangedata = torch.from_numpy(rangedata)
-        # self.graphNodeNUM 当前节点数目
         if merge :
             srcdata = srcdata + self.graphNodeNUM
             rangedata = rangedata + self.graphEdgeNUM
@@ -236,22 +258,19 @@ class CustomDataset(Dataset):
         
     def loadingLabels(self,rank):
         filePath = self.dataPath + "/part" + str(rank)
-        return torch.from_numpy(np.fromfile(filePath+"/label.bin", dtype=np.int32))
+        return torch.from_numpy(np.fromfile(filePath+"/label.bin", dtype=np.int32)).to(torch.int64)
 
     def moveGraph(self):
-        print("move last graph {},and now graph {}".format(self.trainingGID,self.nextGID))
-        print("befor move srclist len:{}".format(len(self.cacheData[0])))
-        print("befor move range len:{}".format(len(self.cacheData[1])))
+        logger.debug("move last graph {},and now graph {}".format(self.trainingGID,self.nextGID))
+        logger.debug("befor move srclist len:{}".format(len(self.cacheData[0])))
+        logger.debug("befor move range len:{}".format(len(self.cacheData[1])))
         self.cacheData[0] = self.cacheData[0][self.graphEdgeNUM:]   # 边
         self.cacheData[1] = self.cacheData[1][self.graphNodeNUM*2:]   # 范围
         self.cacheData[0] = self.cacheData[0] - self.graphNodeNUM   # 边 nodeID
         self.cacheData[1] = self.cacheData[1] - self.graphEdgeNUM
         self.feats = self.feats[self.graphNodeNUM:]
-        print("after move srclist len:{}".format(len(self.cacheData[0])))
-        print("after move range len:{}".format(len(self.cacheData[1])))
-        # print(self.cacheData[0])       
-        # print(self.cacheData[1])    
-        # exit()         
+        logger.debug("after move srclist len:{}".format(len(self.cacheData[0])))
+        logger.debug("after move range len:{}".format(len(self.cacheData[1])))     
 
     def loadingHalo(self):
         # 要先加载下一个子图，然后再加载halo( 当前<->下一个 )
@@ -302,7 +321,7 @@ class CustomDataset(Dataset):
                 try:
                     NeigList = self.cacheData[0][self.cacheData[1][ids*2]+1:self.cacheData[1][ids*2+1]]
                 except:
-                    print("error: srcLen:{},rangelen:{},ids:{}".format(len(self.cacheData[0]),len(self.cacheData[1]),ids))
+                    logger.error("error: srcLen:{},rangelen:{},ids:{}".format(len(self.cacheData[0]),len(self.cacheData[1]),ids))
                     exit(-1)
 
                 if len(NeigList) < number:
@@ -337,7 +356,7 @@ class CustomDataset(Dataset):
 
         if self.trainptr == self.trainLoop:
             # 当前cache已经失效，则需要reload新图
-            print("触发cache reload ,ptr:{}".format(self.trainptr))
+            logger.debug("触发cache reload ,ptr:{}".format(self.trainptr))
             self.trainptr = 0           
             self.initNextGraphData()
                    
@@ -355,20 +374,22 @@ class CustomDataset(Dataset):
             sampleIDs[:self.subGtrainNodesNUM - offset] = self.trainNodes[offset:self.subGtrainNodesNUM]
             batchlen = self.subGtrainNodesNUM - offset
             cacheLabel = self.nodeLabels[sampleIDs[0:self.subGtrainNodesNUM - offset]]
+        
         sampleTime = time.time()
         self.sampleNeig(sampleIDs,cacheGraph)
-        print("sample subG cost {}s".format(time.time()-sampleTime))
+        logger.debug("sample subG cost {}s".format(time.time()-sampleTime))
 
         featTime = time.time()
         cacheFeat = self.featMerge(cacheGraph)
-        print("subG feat merge cost {}s".format(time.time()-featTime))
+        logger.debug("subG feat merge cost {}s".format(time.time()-featTime))
 
         transTime = time.time()
         if self.framework == "dgl":
             cacheGraph = self.transGraph2DGLBlock(cacheGraph)
         elif self.framework == "pyg":
             cacheGraph = self.transGraph2PYGBatch(cacheGraph)
-        print("subG trans cost {}s".format(time.time()-transTime))
+        logger.debug("subG trans cost {}s".format(time.time()-transTime))
+
         cacheData = [cacheGraph,cacheFeat,cacheLabel,batchlen]
         self.graphPipe.put(cacheData)
         self.trainptr += 1
@@ -391,7 +412,7 @@ class CustomDataset(Dataset):
             file = open(filePath+"/feat.bin", "r+b")
             self.readfile.append(file)
             self.mmapfile.append(mmap.mmap(self.readfile[-1].fileno(), 0, access=mmap.ACCESS_DEFAULT))
-        print("mmap file success...")
+        logger.info("mmap file success...")
 
     def closeMMapFileHead(self):
         for file in self.mmapfile:
@@ -413,8 +434,64 @@ class CustomDataset(Dataset):
         nodeids = torch.cat([torch.tensor([0]),nodeids])
         return self.feats[nodeids]
 
-########################## dgl接口 ##########################
+########################## 数据调整 ##########################
+    def cleanPipe(self):
+        # 清理数据管道及信号
+        while self.graphPipe.qsize() > 0:
+            self.graphPipe.get()    
+        while self.sampleFlagQueue.qsize() > 0:
+            self.sampleFlagQueue.get()
 
+    def changeMode(self,mode):
+        logger.info("change mode from:'{}' to '{}'...".format(self.mode,mode))
+        # 数据集模式:[训练状态，验证状态，测试状态]
+        # 1.修改训练模式
+        lastMode = self.mode
+        self.mode = mode
+        # 2.清空管道与信号量
+        self.cleanPipe()
+        # 3.加载新训练节点
+        self.cleanLastModeData(lastMode)
+        self.loadModeData(self.mode)
+        
+        # 4.重置并初始化数据
+        self.cacheData = [] 
+        self.feats == []
+        self.trainSubGTrack = self.randomTrainList()    
+        self.subGptr = -1
+        self.loadingGraph(merge=False)
+        self.loadingMemFeat(self.trainSubGTrack[self.subGptr//self.partNUM][self.subGptr%self.partNUM])
+        self.initNextGraphData()
+        self.sampleFlagQueue.put(self.executor.submit(self.preGraphBatch)) #发送采样命令                          
+    
+    def cleanLastModeData(self,mode):
+        logger.info("clean last mode:'{}' data".format(mode))
+        if mode == "train":
+            self.trainNodeDict = {}
+            self.trainNodeNumbers = 0
+        elif mode == "val":
+            self.valNodeDict = {}
+            self.valNodeNumbers = 0
+        elif mode == "test":
+            self.testNodeDict = {}
+            self.testNodeNumbers = 0
+    
+    def loadModeData(self,mode):
+        logger.debug("loading mode:'{}' data".format(mode))
+        if "train" == mode:
+            self.trainNodeDict,self.trainNodeNumbers = self.loadingTrainID() # 训练节点字典，训练节点数目
+            self.NodeLen = self.trainNUM
+        elif "val" == mode:
+            self.valNodeDict,self.valNodeNumbers = self.loadingValID() # 训练节点字典，训练节点数目
+            self.NodeLen = self.valNUM
+        elif "test" == mode:
+            self.testNodeDict,self.testNodeNumbers = self.loadingTestID() # 训练节点字典，训练节点数目
+            self.NodeLen = self.testNUM
+
+    def checkMode(self):
+        print("now dataset mode is {}".format(self.mode))
+
+########################## dgl接口 ##########################
     def genBlockTemplate(self):
         template = []
         blocks = []
@@ -507,7 +584,6 @@ class CustomDataset(Dataset):
             layer_mask = torch.ge(src, 0)
             masks.append(layer_mask)
         
-        #masks.append(torch.tensor([True]))
         masks = torch.cat(masks)
         template = copy.deepcopy(self.templateBlock)
         template = template * masks
@@ -537,11 +613,9 @@ if __name__ == "__main__":
             # pass
             print("="*40)
             print("block:",graph)
-            
-            #print("batch time:{}s".format(time.time() - start))
             start = time.time()
-            # print("="*40)
             print("feat:",len(feat))
             print("label:",len(label))
-            # exit()
-            # print("batch number :",number)
+    
+    dataset.changeMode("test")
+
