@@ -1,12 +1,26 @@
-import torch
+import numpy as np
 
-# 创建一个张量
-tensor = torch.tensor([True, True, False, True, True, False])
+def save_edges_bin(nodeDict, filepath, haloID, nodeNUM, edgeNUM):
+    edges = []
+    bound = [0]
+    ptr = 0
+    for key in range(nodeNUM):
+        if key in nodeDict:
+            srcs = nodeDict[key]
+            for srcid in srcs:
+                edges.extend([srcid,key])
+            ptr += len(srcs)*2
+            bound.append(ptr)
+        else:
+            bound.append(ptr)
+    edges = np.array(edges,dtype=np.int32)
+    bound = np.array(bound,dtype=np.int32)
+    print(edges)
+    print(bound)
+    #edges.tofile(filepath+"/halo"+str(haloID)+".bin")
+    #bound.tofile(filepath+"/halo"+str(haloID)+"_bound.bin")
 
-# 将张量转换为布尔类型
-bool_tensor = tensor.bool()
-print(bool_tensor)
-# 计算False的数量
-num_false = bool_tensor.size(0) - bool_tensor.sum().item()
-
-print("False的数量:", num_false)
+if __name__ == '__main__':
+    nodeDict = {1:[11,12,13,14],2:[23,22,28],4:[42,45,46,47,49]}
+    print(nodeDict[1])
+    save_edges_bin(nodeDict, '.', 0, 5, 1)
