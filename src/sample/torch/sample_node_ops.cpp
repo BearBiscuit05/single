@@ -8,19 +8,21 @@
 #include <map>
 #include <sstream>
 #include <cassert>
+#include <pybind11/pybind11.h>
 
 void torch_launch_sample_full(torch::Tensor &outputSRC1,
                         torch::Tensor &outputDST1,
                        const torch::Tensor &graphEdge,
                        const torch::Tensor &boundList,
                        const torch::Tensor &trainNode,
-                       int64_t nodeNUM) {
+                       int64_t nodeNUM,
+                       const int64_t gpuDeviceIndex) {
     launch_sample_full((int*) outputSRC1.data_ptr(),
                  (int*) outputDST1.data_ptr(),
                  (const int*) graphEdge.data_ptr(),
                  (const int*) boundList.data_ptr(),
                  (const int*) trainNode.data_ptr(),
-                 nodeNUM) ;
+                 nodeNUM,gpuDeviceIndex) ;
 }
 
 void torch_launch_sample_1hop(torch::Tensor &outputSRC1,
@@ -29,14 +31,15 @@ void torch_launch_sample_1hop(torch::Tensor &outputSRC1,
                        const torch::Tensor &boundList,
                        const torch::Tensor &trainNode,
                        int64_t sampleNUM1,
-                       int64_t nodeNUM) {
+                       int64_t nodeNUM,
+                       const int64_t gpuDeviceIndex) {
     launch_sample_1hop((int *)outputSRC1.data_ptr(),
                     (int *)outputDST1.data_ptr(), 
                     (const int *)graphEdge.data_ptr(),
                     (const int *)boundList.data_ptr(),
                     (const int *)trainNode.data_ptr(),
                     sampleNUM1,
-                    nodeNUM);
+                    nodeNUM,gpuDeviceIndex);
     
 }
 
@@ -50,7 +53,8 @@ void torch_launch_sample_2hop(torch::Tensor &outputSRC1,
                        const torch::Tensor &trainNode,
                        int64_t sampleNUM1,
                        int64_t sampleNUM2,
-                       int64_t nodeNUM) {
+                       int64_t nodeNUM,
+                       const int64_t gpuDeviceIndex) {
     launch_sample_2hop((int*) outputSRC1.data_ptr(),
                         (int*) outputDST1.data_ptr(),
                         (int* )outputSRC2.data_ptr(),
@@ -58,7 +62,7 @@ void torch_launch_sample_2hop(torch::Tensor &outputSRC1,
                         (const int*) graphEdge.data_ptr(),
                         (const int*) boundList.data_ptr(),
                         (const int*) trainNode.data_ptr(),
-                        sampleNUM1,sampleNUM2,nodeNUM);
+                        sampleNUM1,sampleNUM2,nodeNUM,gpuDeviceIndex);
 }
 
 void torch_launch_sample_3hop(torch::Tensor &outputSRC1,
@@ -73,7 +77,8 @@ void torch_launch_sample_3hop(torch::Tensor &outputSRC1,
                        int64_t sampleNUM1,
                        int64_t sampleNUM2,
                        int64_t sampleNUM3,
-                       int64_t nodeNUM) {
+                       int64_t nodeNUM,
+                       const int64_t gpuDeviceIndex) {
     launch_sample_3hop((int*) outputSRC1.data_ptr(),
                         (int*) outputDST1.data_ptr(),
                         (int* )outputSRC2.data_ptr(),
@@ -83,7 +88,7 @@ void torch_launch_sample_3hop(torch::Tensor &outputSRC1,
                         (const int*) graphEdge.data_ptr(),
                         (const int*) boundList.data_ptr(),
                         (const int*) trainNode.data_ptr(),
-                        sampleNUM1,sampleNUM2,sampleNUM3,nodeNUM);
+                        sampleNUM1,sampleNUM2,sampleNUM3,nodeNUM,gpuDeviceIndex);
 }
 
 
