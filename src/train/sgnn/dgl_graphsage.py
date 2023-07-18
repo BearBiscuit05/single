@@ -95,21 +95,43 @@ def collate_fn(data):
 
 def train(args, device, dataset, model):
     opt = torch.optim.Adam(model.parameters(), lr=1e-3, weight_decay=5e-4)
-    for epoch in range(1):
+    train_loader = DataLoader(dataset=dataset, batch_size=1024, collate_fn=collate_fn,pin_memory=True)
+    for epoch in range(20):
         start = time.time()
         total_loss = 0
         model.train()
-        train_loader = DataLoader(dataset=dataset, batch_size=1024, collate_fn=collate_fn,pin_memory=True)
-        for graph,feat,label,number in train_loader:
+        for it,(graph,feat,label,number) in enumerate(train_loader):
             graph = [block.to('cuda:1') for block in graph]
             y_hat = model(graph, feat.to('cuda:1'))
-            print("y_hat len:{},label len:{},number:{}".format(len(y_hat),len(label),number))
-            loss = F.cross_entropy(y_hat[1:number+1], label[:number].to(torch.int64).to('cuda:1'))
+            #print("y_hat len:{},label len:{},number:{}".format(len(y_hat),len(label),number))
+            try:
+                loss = F.cross_entropy(y_hat[1:number+1], label[:number].to(torch.int64).to('cuda:1'))
+            except:
+                print("graph:{},featLen:{},labelLen:{},predLen:{},number:{}".format(graph,feat.shape,label.shape,y_hat.shape,number))
             opt.zero_grad()
             loss.backward()
             opt.step()
             total_loss += loss.item()
-        
+        print("Epoch {:05d} | Loss {:.4f} |"
+              .format(epoch, total_loss / (it+1)))
+
+    dataset.changeMode("test")    
+    test_loader = DataLoader(dataset=dataset, batch_size=1024, collate_fn=collate_fn,pin_memory=True)
+    model.train()
+    for graph,feat,label,number in test_loader:
+        model.eval()
+        with torch.no_grad():
+            labels = []
+            preds = []         
+            graph = [block.to('cuda:1') for block in graph]
+            pred = model(graph, feat.to('cuda:1')) # pred in buffer_device
+            preds.append(pred[1:number+1])
+            labels.append(label[:number])
+    preds = torch.Tensor(preds)
+    labels = torch.Tensor(labels)
+    acc = sklearn.metrics.accuracy_score(labels.cpu().numpy(), preds.argmax(1).cpu().numpy())
+    print("computing acc is :{}".format(acc))
+
         # acc = evaluate(model, g, val_dataloader)
         # print("Epoch {:05d} | Loss {:.4f} | Accuracy {:.4f} "
         #       .format(epoch, total_loss / (it+1), acc.item()))

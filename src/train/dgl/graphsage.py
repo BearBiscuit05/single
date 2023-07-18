@@ -117,9 +117,6 @@ def train(args, device, g, dataset, model,data=None):
             x = blocks[0].srcdata['feat']
             y = blocks[-1].dstdata['label']
             y_hat = model(blocks, x)
-            print("y_hat",y_hat,y_hat.dtype)
-            print("y",y,y.dtype)
-            exit()
             loss = F.cross_entropy(y_hat, y)
             opt.zero_grad()
             loss.backward()

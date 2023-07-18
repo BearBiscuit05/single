@@ -5,11 +5,11 @@
     "partNUM":4,
     "cacheNUM":4,
     "batchsize":1024,
-    "epoch":1,
+    "epoch":20,
     "preRating":2,
     "featlen":100,
     "fanout":[25,10],
-    "framework":"pyg",
+    "framework":"dgl",
     "mode":"train",
     "idbound":[
         [
