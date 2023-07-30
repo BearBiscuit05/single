@@ -113,6 +113,7 @@ def train(args, device, g, dataset, model,data=None):
         model.train()
         total_loss = 0
         startTime = time.time()
+        count = 0
         for it, (input_nodes, output_nodes, blocks) in enumerate(train_dataloader):
             x = blocks[0].srcdata['feat']
             y = blocks[-1].dstdata['label']
@@ -122,7 +123,9 @@ def train(args, device, g, dataset, model,data=None):
             loss.backward()
             opt.step()
             total_loss += loss.item()
-            startTime = time.time()
+            count = it
+        print("count=",count)
+        print("time=",time.time()-startTime)
         acc = evaluate(model, g, val_dataloader)
         print("Epoch {:05d} | Loss {:.4f} | Accuracy {:.4f} "
               .format(epoch, total_loss / (it+1), acc.item()))

@@ -55,6 +55,7 @@ void torch_launch_sample_2hop(torch::Tensor &outputSRC1,
                        int64_t sampleNUM2,
                        int64_t nodeNUM,
                        const int64_t gpuDeviceIndex) {
+    //auto t_beg = std::chrono::high_resolution_clock::now();
     launch_sample_2hop((int*) outputSRC1.data_ptr(),
                         (int*) outputDST1.data_ptr(),
                         (int* )outputSRC2.data_ptr(),
@@ -63,6 +64,9 @@ void torch_launch_sample_2hop(torch::Tensor &outputSRC1,
                         (const int*) boundList.data_ptr(),
                         (const int*) trainNode.data_ptr(),
                         sampleNUM1,sampleNUM2,nodeNUM,gpuDeviceIndex);
+    //auto t_end = std::chrono::high_resolution_clock::now();
+    //printf("sample2hop time in function`torch_launch_sample_2hop` : %lf ms\n",std::chrono::duration<double, std::milli>(t_end-t_beg).count());
+    
 }
 
 void torch_launch_sample_3hop(torch::Tensor &outputSRC1,
@@ -91,6 +95,45 @@ void torch_launch_sample_3hop(torch::Tensor &outputSRC1,
                         sampleNUM1,sampleNUM2,sampleNUM3,nodeNUM,gpuDeviceIndex);
 }
 
+void torch_launch_loading_halo(torch::Tensor &cacheData0,
+                        torch::Tensor &cacheData1,
+                        const torch::Tensor &edges,
+                        const torch::Tensor &bound,
+                        const int64_t cacheData0Len,
+                        const int64_t cacheData1Len,
+                        const int64_t edgesLen,
+                        const int64_t boundLen,
+                        const int64_t graphEdgeNUM,
+                        const int64_t gpuDeviceIndex) {
+      lanch_loading_halo((int*) cacheData0.data_ptr(),
+                        (int*) cacheData1.data_ptr(),
+                        (const int*) edges.data_ptr(),
+                        (const int*) bound.data_ptr(),
+                        cacheData0Len,
+                        cacheData1Len,
+                        edgesLen,
+                        boundLen,
+                        graphEdgeNUM,
+                        gpuDeviceIndex);
+}
+
+void torch_launch_loading_halo0(torch::Tensor &cacheData0,
+                        torch::Tensor &cacheData1,
+                        const torch::Tensor &edges,
+                        const int64_t cacheData0Len,
+                        const int64_t cacheData1Len,
+                        const int64_t edgesLen,
+                        const int64_t graphEdgeNUM,
+                        const int64_t gpuDeviceIndex) {
+      lanch_loading_halo0((int*) cacheData0.data_ptr(),
+                        (int*) cacheData1.data_ptr(),
+                        (const int*) edges.data_ptr(),
+                        cacheData0Len,
+                        cacheData1Len,
+                        edgesLen,
+                        graphEdgeNUM,
+                        gpuDeviceIndex);
+}
 
 void readTensorFile(std::string output_file,torch::Tensor &output,int len) {
     FILE * fp = fopen64(output_file.c_str(),"r");
@@ -120,6 +163,12 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
     m.def("torch_launch_sample_3hop",
           &torch_launch_sample_3hop,
           "sample for 3 hop");
+    m.def("torch_launch_loading_halo",
+            &torch_launch_loading_halo,
+            "loading halo");
+    m.def("torch_launch_loading_halo0",
+            &torch_launch_loading_halo0,
+            "loading halo");
 }
 
 // TORCH_LIBRARY(add2, m) {

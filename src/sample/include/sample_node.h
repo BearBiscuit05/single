@@ -37,3 +37,23 @@ void launch_sample_3hop(int* outputSRC1,int* outputDST1,
                         int sampleNUM1,int sampleNUM2,int sampleNUM3,
                         int nodeNUM,
                         const int gpuDeviceIndex) ;
+
+void lanch_loading_halo(int* cacheData0,
+                        int* cacheData1,
+                        const int* edges,
+                        const int* bound,
+                        const int cacheData0Len,
+                        const int cacheData1Len,
+                        const int edgesLen,
+                        const int boundLen,
+                        const int graphEdgeNUM,
+                        const int gpuDeviceIndex);
+
+void lanch_loading_halo0(int* cacheData0,
+                        int* cacheData1,
+                        const int* edges,
+                        const int cacheData0Len,
+                        const int cacheData1Len,
+                        const int edgesLen,
+                        const int graphEdgeNUM,
+                        const int gpuDeviceIndex);
