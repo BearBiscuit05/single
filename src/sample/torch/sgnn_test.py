@@ -67,7 +67,7 @@ def sgnn_train_test(datasetPath,partID,batch,layer,fan,cudaDeviceIndex = 0):
             graphEdge, boundList, trainlist,
             fan[0],fan[1],fan[2],batch,cudaDeviceIndex)
     elif layer == 2:
-        sample_hop.torch_launch_sample_2hop(
+        sample_hop.torch_launch_sample_2hop_new(
             outputSRC[0],outputDST[0],outputSRC[1],outputDST[1],
             graphEdge, boundList, trainlist,
             fan[0],fan[1],batch,cudaDeviceIndex)

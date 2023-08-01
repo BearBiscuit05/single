@@ -33,21 +33,20 @@ void torch_launch_sample_1hop(torch::Tensor &outputSRC1,
                        int64_t sampleNUM1,
                        int64_t nodeNUM,
                        const int64_t gpuDeviceIndex) {
-    launch_sample_1hop((int *)outputSRC1.data_ptr(),
-                    (int *)outputDST1.data_ptr(), 
+    launch_sample_1hop(static_cast<int*>(outputSRC1.data_ptr()),
+                    static_cast<int*>(outputDST1.data_ptr()), 
                     (const int *)graphEdge.data_ptr(),
                     (const int *)boundList.data_ptr(),
                     (const int *)trainNode.data_ptr(),
                     sampleNUM1,
                     nodeNUM,gpuDeviceIndex);
-    
 }
 
 
 void torch_launch_sample_2hop(torch::Tensor &outputSRC1,
-                        torch::Tensor &outputDST1,
-                        torch::Tensor &outputSRC2,
-                        torch::Tensor &outputDST2,
+                              torch::Tensor &outputDST1,
+                              torch::Tensor &outputSRC2,
+                              torch::Tensor &outputDST2,
                        const torch::Tensor &graphEdge,
                        const torch::Tensor &boundList,
                        const torch::Tensor &trainNode,
@@ -56,10 +55,10 @@ void torch_launch_sample_2hop(torch::Tensor &outputSRC1,
                        int64_t nodeNUM,
                        const int64_t gpuDeviceIndex) {
     //auto t_beg = std::chrono::high_resolution_clock::now();
-    launch_sample_2hop((int*) outputSRC1.data_ptr(),
-                        (int*) outputDST1.data_ptr(),
-                        (int* )outputSRC2.data_ptr(),
-                        (int*) outputDST2.data_ptr(),
+    launch_sample_2hop( static_cast<int*>(outputSRC1.data_ptr()),
+                        static_cast<int*>(outputDST1.data_ptr()),
+                        static_cast<int*>(outputSRC2.data_ptr()),
+                        static_cast<int*>(outputDST2.data_ptr()),
                         (const int*) graphEdge.data_ptr(),
                         (const int*) boundList.data_ptr(),
                         (const int*) trainNode.data_ptr(),
@@ -83,12 +82,12 @@ void torch_launch_sample_3hop(torch::Tensor &outputSRC1,
                        int64_t sampleNUM3,
                        int64_t nodeNUM,
                        const int64_t gpuDeviceIndex) {
-    launch_sample_3hop((int*) outputSRC1.data_ptr(),
-                        (int*) outputDST1.data_ptr(),
-                        (int* )outputSRC2.data_ptr(),
-                        (int*) outputDST2.data_ptr(),
-                        (int*) outputSRC3.data_ptr(),
-                        (int*) outputDST3.data_ptr(),
+    launch_sample_3hop( static_cast<int*>(outputSRC1.data_ptr()),
+                        static_cast<int*>(outputDST1.data_ptr()),
+                        static_cast<int*>(outputSRC2.data_ptr()),
+                        static_cast<int*>(outputDST2.data_ptr()),
+                        static_cast<int*>(outputSRC3.data_ptr()),
+                        static_cast<int*>(outputDST3.data_ptr()),
                         (const int*) graphEdge.data_ptr(),
                         (const int*) boundList.data_ptr(),
                         (const int*) trainNode.data_ptr(),
@@ -105,8 +104,8 @@ void torch_launch_loading_halo(torch::Tensor &cacheData0,
                         const int64_t boundLen,
                         const int64_t graphEdgeNUM,
                         const int64_t gpuDeviceIndex) {
-      lanch_loading_halo((int*) cacheData0.data_ptr(),
-                        (int*) cacheData1.data_ptr(),
+      lanch_loading_halo(static_cast<int*>(cacheData0.data_ptr()),
+                        static_cast<int*>(cacheData1.data_ptr()),
                         (const int*) edges.data_ptr(),
                         (const int*) bound.data_ptr(),
                         cacheData0Len,
@@ -169,6 +168,19 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
     m.def("torch_launch_loading_halo0",
             &torch_launch_loading_halo0,
             "loading halo");
+    
+    m.def("torch_launch_sample_1hop_new",
+          &torch_launch_sample_1hop_new,
+          "sample for 1 hop new");
+    m.def("torch_launch_sample_2hop_new",
+          &torch_launch_sample_2hop_new,
+          "sample for 2 hop new");
+    m.def("torch_launch_sample_3hop_new",
+          &torch_launch_sample_3hop_new,
+          "sample for 3 hop new");
+    m.def("torch_launch_loading_halo_new",
+            &torch_launch_loading_halo_new,
+            "loading halo new");
 }
 
 // TORCH_LIBRARY(add2, m) {

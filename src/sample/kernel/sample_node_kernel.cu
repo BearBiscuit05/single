@@ -10,6 +10,15 @@
 #include <curand_mtgp32_host.h>
 #include <curand_mtgp32dc_p_11213.h>
 
+#include <torch/extension.h>
+#include <vector>
+#include <iostream>
+#include <fstream>
+#include <algorithm>
+#include <map>
+#include <sstream>
+#include <pybind11/pybind11.h>
+
 __global__ void sample_full_kernel(
                             int* outputSRC,
                             int* outputDST,
@@ -242,6 +251,51 @@ void launch_sample_full(int* outputSRC1,
     sample_full_kernel<<<grid, block>>>(outputSRC1, outputDST1, graphEdge, boundList, trainNode, n);
 }
 
+void torch_launch_sample_1hop_new(torch::Tensor &outputSRC1,
+                        torch::Tensor &outputDST1,
+                       const torch::Tensor &graphEdge,
+                       const torch::Tensor &boundList,
+                       const torch::Tensor &trainNode,
+                       int64_t sampleNUM1,
+                       int64_t nodeNUM,
+                       const int64_t gpuDeviceIndex)
+{
+    dim3 grid((nodeNUM + 1023) / 1024);
+    dim3 block(1024);
+    unsigned long long seed = std::chrono::system_clock::now().time_since_epoch().count();
+    
+    /* 指定使用的GPU序号 [0,torch.cuda.device_count()) */
+    int deviceCount;
+    cudaGetDeviceCount(&deviceCount);
+    if (deviceCount == 0) {
+        //printf("No GPU devices found.\n");
+        return;
+    }
+    else if(gpuDeviceIndex >= deviceCount || gpuDeviceIndex < 0){
+        //printf("Wrong GPU Device Index:%d , Select Default Device Index:0 cuda:0.\n",gpuDeviceIndex);
+        cudaSetDevice(0);
+    }
+    else{
+        //printf("Select GPU Device Index:%d , Please Prepare Pytorch Data tensor.to(device='cuda:%d')\n",gpuDeviceIndex,gpuDeviceIndex);
+        cudaSetDevice(gpuDeviceIndex);
+    }
+
+    
+
+    //auto t_beg = std::chrono::high_resolution_clock::now();
+    sample1Hop<<<grid, block>>>(
+        static_cast<int*>(outputSRC1.data_ptr()),
+        static_cast<int*>(outputDST1.data_ptr()),
+        (const int*)graphEdge.data_ptr(),
+        (const int*)boundList.data_ptr(),
+        (const int*)trainNode.data_ptr(),
+        int(sampleNUM1),
+        int(nodeNUM),
+        seed);
+    //auto t_end = std::chrono::high_resolution_clock::now();
+    //printf("sample1Hop time in function`launch_sample_1hop` : %lf ms\n",std::chrono::duration<double, std::milli>(t_end-t_beg).count());
+}
+
 void launch_sample_1hop(int* outputSRC1,
                         int* outputDST1, 
                         const int* graphEdge,
@@ -280,6 +334,52 @@ void launch_sample_1hop(int* outputSRC1,
         nodeNUM,seed);
     //auto t_end = std::chrono::high_resolution_clock::now();
     //printf("sample1Hop time in function`launch_sample_1hop` : %lf ms\n",std::chrono::duration<double, std::milli>(t_end-t_beg).count());
+}
+
+void torch_launch_sample_2hop_new(torch::Tensor &outputSRC1,
+                              torch::Tensor &outputDST1,
+                              torch::Tensor &outputSRC2,
+                              torch::Tensor &outputDST2,
+                       const torch::Tensor &graphEdge,
+                       const torch::Tensor &boundList,
+                       const torch::Tensor &trainNode,
+                       int64_t sampleNUM1,
+                       int64_t sampleNUM2,
+                       int64_t nodeNUM,
+                       const int64_t gpuDeviceIndex)
+{
+    dim3 grid((nodeNUM + 1023) / 1024);
+    dim3 block(1024);
+    unsigned long long seed = std::chrono::system_clock::now().time_since_epoch().count();
+
+    /* 指定使用的GPU序号 [0,torch.cuda.device_count()) */
+    int deviceCount;
+    cudaGetDeviceCount(&deviceCount);
+    if (deviceCount == 0) {
+        //printf("No GPU devices found.\n");
+        return;
+    }
+    else if(gpuDeviceIndex >= deviceCount || gpuDeviceIndex < 0){
+        //printf("Wrong GPU Device Index:%d , Select Default Device Index:0 cuda:0.\n",gpuDeviceIndex);
+        cudaSetDevice(0);
+    }
+    else{
+        //printf("Select GPU Device Index:%d , Please Prepare Pytorch Data tensor.to(device='cuda:%d')\n",gpuDeviceIndex,gpuDeviceIndex);
+        cudaSetDevice(gpuDeviceIndex);
+    }
+
+    //auto t_beg = std::chrono::high_resolution_clock::now();
+    sample2Hop<<<grid, block>>>(
+                        static_cast<int*>(outputSRC1.data_ptr()),
+                        static_cast<int*>(outputDST1.data_ptr()),
+                        static_cast<int*>(outputSRC2.data_ptr()),
+                        static_cast<int*>(outputDST2.data_ptr()),
+                        (const int*) graphEdge.data_ptr(),
+                        (const int*) boundList.data_ptr(),
+                        (const int*) trainNode.data_ptr(),
+                        int(sampleNUM1),int(sampleNUM2),int(nodeNUM),seed);
+    //auto t_end = std::chrono::high_resolution_clock::now();
+    //printf("sample2Hop time in function`launch_sample_2hop` : %lf ms\n",std::chrono::duration<double, std::milli>(t_end-t_beg).count());
 }
 
 void launch_sample_2hop(int* outputSRC1,
@@ -321,6 +421,57 @@ void launch_sample_2hop(int* outputSRC1,
         trainNode,sampleNUM1,sampleNUM2,nodeNUM,seed);
     //auto t_end = std::chrono::high_resolution_clock::now();
     //printf("sample2Hop time in function`launch_sample_2hop` : %lf ms\n",std::chrono::duration<double, std::milli>(t_end-t_beg).count());
+}
+
+void torch_launch_sample_3hop_new(torch::Tensor &outputSRC1,
+                        torch::Tensor &outputDST1,
+                        torch::Tensor &outputSRC2,
+                        torch::Tensor &outputDST2,
+                        torch::Tensor &outputSRC3,
+                        torch::Tensor &outputDST3,
+                       const torch::Tensor &graphEdge,
+                       const torch::Tensor &boundList,
+                       const torch::Tensor &trainNode,
+                       int64_t sampleNUM1,
+                       int64_t sampleNUM2,
+                       int64_t sampleNUM3,
+                       int64_t nodeNUM,
+                       const int64_t gpuDeviceIndex)
+{
+    dim3 grid((nodeNUM + 1023) / 1024);
+    dim3 block(1024);
+    unsigned long long seed = std::chrono::system_clock::now().time_since_epoch().count();
+
+    /* 指定使用的GPU序号 [0,torch.cuda.device_count()) */
+    int deviceCount;
+    cudaGetDeviceCount(&deviceCount);
+    if (deviceCount == 0) {
+        //printf("No GPU devices found.\n");
+        return;
+    }
+    else if(gpuDeviceIndex >= deviceCount || gpuDeviceIndex < 0){
+        //printf("Wrong GPU Device Index:%d , Select Default Device Index:0 cuda:0.\n",gpuDeviceIndex);
+        cudaSetDevice(0);
+    }
+    else{
+        //printf("Select GPU Device Index:%d , Please Prepare Pytorch Data tensor.to(device='cuda:%d')\n",gpuDeviceIndex,gpuDeviceIndex);
+        cudaSetDevice(gpuDeviceIndex);
+    }
+
+    //auto t_beg = std::chrono::high_resolution_clock::now();
+    sample3Hop<<<grid, block>>>(
+        static_cast<int*>(outputSRC1.data_ptr()),
+        static_cast<int*>(outputDST1.data_ptr()),
+        static_cast<int*>(outputSRC2.data_ptr()),
+        static_cast<int*>(outputDST2.data_ptr()),
+        static_cast<int*>(outputSRC3.data_ptr()),
+        static_cast<int*>(outputDST3.data_ptr()),
+        (const int*)graphEdge.data_ptr(),
+        (const int*)boundList.data_ptr(),
+        (const int*)trainNode.data_ptr(),
+        int(sampleNUM1),int(sampleNUM2),int(sampleNUM3),int(nodeNUM),seed);
+    //auto t_end = std::chrono::high_resolution_clock::now();
+    //printf("sample3Hop time in function`launch_sample_3hop` : %lf ms\n",std::chrono::duration<double, std::milli>(t_end-t_beg).count());
 }
 
 void launch_sample_3hop(int* outputSRC1,int* outputDST1,
@@ -475,6 +626,47 @@ __global__ void func2(int* cacheData0,
     for(int i = threadIdx.x;(lowerBound+2*i)<upperBound;i+=1024)
         if((endidx+i) < nextidx && (endidx+i) < cacheData0Len)
             cacheData0[endidx+i] = edges[lowerBound+2*i];
+}
+
+void torch_launch_loading_halo_new(torch::Tensor &cacheData0,
+                        torch::Tensor &cacheData1,
+                        const torch::Tensor &edges,
+                        const torch::Tensor &bound,
+                        const int64_t cacheData0Len,
+                        const int64_t cacheData1Len,
+                        const int64_t edgesLen,
+                        const int64_t boundLen,
+                        const int64_t graphEdgeNUM,
+                        const int64_t gpuDeviceIndex)
+{   
+    /* 指定使用的GPU序号 [0,torch.cuda.device_count()) */
+    int deviceCount;
+    cudaGetDeviceCount(&deviceCount);
+    if (deviceCount == 0) {
+        //printf("No GPU devices found.\n");
+        return;
+    }
+    else if(gpuDeviceIndex >= deviceCount || gpuDeviceIndex < 0){
+        //printf("Wrong GPU Device Index:%d , Select Default Device Index:0 cuda:0.\n",gpuDeviceIndex);
+        cudaSetDevice(0);
+    }
+    else{
+        //printf("Select GPU Device Index:%d , Please Prepare Pytorch Data tensor.to(device='cuda:%d')\n",gpuDeviceIndex,gpuDeviceIndex);
+        cudaSetDevice(gpuDeviceIndex);
+    }
+
+    dim3 grid((boundLen+1023)/1024);
+    dim3 block(1024);
+    func2<<<grid,block>>>(
+        static_cast<int*>(cacheData0.data_ptr()),
+        static_cast<int*>(cacheData1.data_ptr()),
+        (const int*)(edges.data_ptr()),
+        (const int*)(bound.data_ptr()),
+        int(cacheData0Len),
+        int(cacheData1Len),
+        int(edgesLen),
+        int(boundLen),
+        int(graphEdgeNUM));
 }
 
 void lanch_loading_halo(int* cacheData0,
