@@ -188,8 +188,8 @@ class CustomDataset(Dataset):
         haloend = time.time()
         logger.info("loadingHalo time: %g"%(haloend-halostart))
         self.loadingMemFeat(self.nextGID)
-        #self.cacheData[0] = self.cacheData[0].to(device='cuda:3')
-        #self.cacheData[1] = self.cacheData[1].to(device='cuda:3')
+        #self.cacheData[0] = self.cacheData[0].to(device='cuda:0')
+        #self.cacheData[1] = self.cacheData[1].to(device='cuda:0')
         logger.info("当前加载图为:{},下一个图:{},图训练集规模:{},图节点数目:{},图边数目:{},加载耗时:{}s"\
                         .format(self.trainingGID,self.nextGID,self.subGtrainNodesNUM,\
                         self.graphNodeNUM,self.graphEdgeNUM,time.time()-start))
@@ -255,9 +255,9 @@ class CustomDataset(Dataset):
         subGID = self.trainSubGTrack[self.subGptr//self.partNUM][self.subGptr%self.partNUM]
         filePath = self.dataPath + "/part" + str(subGID)
         srcdata = np.fromfile(filePath+"/srcList.bin", dtype=np.int32)
-        srcdata = torch.tensor(srcdata).to(device='cuda:3')
+        srcdata = torch.tensor(srcdata).to(device='cuda:0')
         rangedata = np.fromfile(filePath+"/range.bin", dtype=np.int32)
-        rangedata = torch.tensor(rangedata).to(device='cuda:3')
+        rangedata = torch.tensor(rangedata).to(device='cuda:0')
         
         #print(type(srcdata))
         #print(type(rangedata))
@@ -291,15 +291,15 @@ class CustomDataset(Dataset):
         # 要先加载下一个子图，然后再加载halo( 当前<->下一个 )
         filePath = self.dataPath + "/part" + str(self.trainingGID) 
         edges = np.fromfile(filePath+"/halo"+str(self.nextGID)+".bin", dtype=np.int32)
-        edges = torch.tensor(edges).to(torch.int32).to(device='cuda:3').contiguous()
+        edges = torch.tensor(edges).to(torch.int32).to(device='cuda:0').contiguous()
         bound = np.fromfile(filePath+"/halo"+str(self.nextGID)+"_bound.bin", dtype=np.int32)
-        bound = torch.tensor(bound).to(torch.int32).to(device='cuda:3').contiguous()
-        self.cacheData[0] = self.cacheData[0]#.contiguous()
-        self.cacheData[1] = self.cacheData[1]#.contiguous()
-        # lastid = torch.tensor(-1).to(device='cuda:3')
-        # startidx = torch.tensor(-1).to(device='cuda:3')
-        # endidx = torch.tensor(-1).to(device='cuda:3')
-        # nextidx = torch.tensor(-1).to(device='cuda:3')
+        bound = torch.tensor(bound).to(torch.int32).to(device='cuda:0').contiguous()
+        self.cacheData[0] = self.cacheData[0].contiguous()
+        self.cacheData[1] = self.cacheData[1].contiguous()
+        # lastid = torch.tensor(-1).to(device='cuda:0')
+        # startidx = torch.tensor(-1).to(device='cuda:0')
+        # endidx = torch.tensor(-1).to(device='cuda:0')
+        # nextidx = torch.tensor(-1).to(device='cuda:0')
         # #srcList = self.cacheData[0]
         # #bound = self.cacheData[1]
         # for index in range(int(len(edges) / 2)):
@@ -313,7 +313,7 @@ class CustomDataset(Dataset):
         #         try:
         #             next = self.cacheData[1][dst*2+2]
         #         except:
-        #             next = torch.tensor(self.graphEdgeNUM).to(device='cuda:3')
+        #             next = torch.tensor(self.graphEdgeNUM).to(device='cuda:0')
         #         lastid = dst
         #         if endidx < next:
         #             self.cacheData[0][endidx] = src
@@ -322,7 +322,7 @@ class CustomDataset(Dataset):
         #         if endidx < next:
         #             self.cacheData[0][endidx] = src
         #             endidx += 1
-        sample_hop.torch_launch_loading_halo(self.cacheData[0],self.cacheData[1],edges,bound,len(self.cacheData[0]),len(self.cacheData[1]),len(edges),len(bound),self.graphEdgeNUM,3)
+        sample_hop.torch_launch_loading_halo_new(self.cacheData[0],self.cacheData[1],edges,bound,len(self.cacheData[0]),len(self.cacheData[1]),len(edges),len(bound),self.graphEdgeNUM,3)
         #sample_hop.torch_launch_loading_halo0(self.cacheData[0],self.cacheData[1],edges,len(self.cacheData[0]),len(self.cacheData[1]),len(edges),self.graphEdgeNUM,3)
 
 ########################## 采样图结构 ##########################
@@ -390,22 +390,22 @@ class CustomDataset(Dataset):
         trainlist = torch.Tensor(sampleIDs[0:batchlen]).to(torch.int32).to(device=deviceName)
 
         for info in cacheGraph:
-            info[0] = torch.tensor(info[0]).to(torch.int32).to(device=deviceName)#.contiguous()
-            info[1] = torch.tensor(info[1]).to(torch.int32).to(device=deviceName)#.contiguous()
+            info[0] = torch.tensor(info[0]).to(torch.int32).to(device=deviceName).contiguous()
+            info[1] = torch.tensor(info[1]).to(torch.int32).to(device=deviceName).contiguous()
         
         #sample_start = time.time()
         if layer == 3:
-            sample_hop.torch_launch_sample_3hop(
+            sample_hop.torch_launch_sample_3hop_new(
                 cacheGraph[0][0],cacheGraph[0][1],cacheGraph[1][0],cacheGraph[1][1],cacheGraph[2][0],cacheGraph[2][1],
                 srcdata, rangedata, trainlist,
                 self.fanout[0],self.fanout[1],self.fanout[2],batchlen,cudaDeviceIndex)
         elif layer == 2:
-                sample_hop.torch_launch_sample_2hop(
+                sample_hop.torch_launch_sample_2hop_new(
                 cacheGraph[0][0],cacheGraph[0][1],cacheGraph[1][0],cacheGraph[1][1],
                 srcdata, rangedata, trainlist,
                 self.fanout[0],self.fanout[1],batchlen,cudaDeviceIndex)
         elif layer == 1:
-            sample_hop.torch_launch_sample_1hop(
+            sample_hop.torch_launch_sample_1hop_new(
                 cacheGraph[0][0],cacheGraph[0][1],
                 srcdata, rangedata, trainlist,
                 self.fanout[0],batchlen,cudaDeviceIndex)
@@ -622,8 +622,8 @@ class CustomDataset(Dataset):
 
         for index,mask in enumerate(masks):
             src,dst = template[index]
-            src = src.to(device='cuda:3')
-            dst = dst.to(device='cuda:3')
+            src = src.to(device='cuda:0')
+            dst = dst.to(device='cuda:0')
             src *= mask
             dst *= mask
         
@@ -704,9 +704,9 @@ if __name__ == "__main__":
         batchsize = config['batchsize']
         epoch = config['epoch']
     train_loader = DataLoader(dataset=dataset, batch_size=batchsize, collate_fn=collate_fn,pin_memory=True)
-    time.sleep(2)
+    #time.sleep(2)
     for index in range(epoch):
         #start = time.time()
         for graph,feat,label,number in train_loader:
-            print("block:",graph)
-            #pass
+            #print("block:",graph)
+            pass
