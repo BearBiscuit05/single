@@ -369,7 +369,7 @@ class CustomDataset(Dataset):
             print('No GPU Device')
             return self.sampleNeig(sampleIDs,cacheGraph)
         elif cudaDeviceIndex < 0 or cudaDeviceIndex >= torch.cuda.device_count():
-            print('Wrong GPU Index Argument %d, Select default 0'%cudaDeviceIndex)
+            #print('Wrong GPU Index Argument %d, Select default 0'%cudaDeviceIndex)
             cudaDeviceIndex = 0
         deviceName = 'cuda:%d' % cudaDeviceIndex
 
@@ -686,7 +686,16 @@ class CustomDataset(Dataset):
         masks = torch.cat(masks)
         template = copy.deepcopy(self.templateBlock)
         template = template * masks
-        return template      
+        return template
+
+    def get_test_idx(self,testSize):
+        #import random
+        #part = random.randint(0,self.partNUM-1)
+        #bound = self.idbound[part]
+        np.random.seed()  # 设置随机种子，保证每次运行结果相同
+        matrix = np.random.choice(range(0,self.idbound[self.partNUM-1][1]), size=testSize, replace=False)
+        matrix = matrix.reshape(1,testSize)
+        return torch.tensor(matrix).to(device='cpu')
 
 
 def collate_fn(data):
