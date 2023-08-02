@@ -103,7 +103,7 @@ def collate_fn(data):
 def train(args, device, dataset, model):
     opt = torch.optim.Adam(model.parameters(), lr=1e-3, weight_decay=5e-4)
     train_loader = torch.utils.data.DataLoader(dataset=dataset, batch_size=1024, collate_fn=collate_fn,pin_memory=True)
-    for epoch in range(20):
+    for epoch in range(10):
         start = time.time()
         total_loss = 0
         model.train()
