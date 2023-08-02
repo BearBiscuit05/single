@@ -76,20 +76,20 @@ def run(rank, world_size, dataset):
                                   num_neighbors=[25, 10], shuffle=True,
                                   drop_last=True, **kwargs)
 
-    # if rank == 0:  # Create single-hop evaluation neighbor loader:
-    #     subgraph_loader = NeighborLoader(copy.copy(data), num_neighbors=[-1],
-    #                                      shuffle=False, **kwargs)
-    #     # No need to maintain these features during evaluation:
-    #     del subgraph_loader.data.x, subgraph_loader.data.y
-    #     # Add global node index information:
-    #     subgraph_loader.data.node_id = torch.arange(data.num_nodes)
+    if rank == 0:  # Create single-hop evaluation neighbor loader:
+        subgraph_loader = NeighborLoader(copy.copy(data), num_neighbors=[-1],
+                                         shuffle=False, **kwargs)
+        # No need to maintain these features during evaluation:
+        del subgraph_loader.data.x, subgraph_loader.data.y
+        # Add global node index information:
+        subgraph_loader.data.node_id = torch.arange(data.num_nodes)
 
     torch.manual_seed(12345)
     model = SAGE(dataset.num_features, 256, dataset.num_classes).to('cuda:0')
     #model = DistributedDataParallel(model, device_ids=[rank])
     optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
 
-    for epoch in range(1, 2):
+    for epoch in range(1, 21):
         model.train()    
         for batch in train_loader:        
             optimizer.zero_grad()     
@@ -103,15 +103,15 @@ def run(rank, world_size, dataset):
         # if rank == 0:
         print(f'Epoch: {epoch:02d}, Loss: {loss:.4f}')
 
-        # if rank == 0 and epoch % 5 == 0:  # We evaluate on a single GPU for now
-        #     model.eval()
-        #     with torch.no_grad():
-        #         out = model.module.inference(data.x, rank, subgraph_loader)
-        #     res = out.argmax(dim=-1) == data.y.to(out.device)
-        #     acc1 = int(res[data.train_mask].sum()) / int(data.train_mask.sum())
-        #     acc2 = int(res[data.val_mask].sum()) / int(data.val_mask.sum())
-        #     acc3 = int(res[data.test_mask].sum()) / int(data.test_mask.sum())
-        #     print(f'Train: {acc1:.4f}, Val: {acc2:.4f}, Test: {acc3:.4f}')
+        if rank == 0 and epoch % 5 == 0:  # We evaluate on a single GPU for now
+            model.eval()
+            with torch.no_grad():
+                out = model.inference(data.x, rank, subgraph_loader)
+            res = out.argmax(dim=-1) == data.y.to(out.device)
+            acc1 = int(res[data.train_mask].sum()) / int(data.train_mask.sum())
+            acc2 = int(res[data.val_mask].sum()) / int(data.val_mask.sum())
+            acc3 = int(res[data.test_mask].sum()) / int(data.test_mask.sum())
+            print(f'Train: {acc1:.4f}, Val: {acc2:.4f}, Test: {acc3:.4f}')
 
     #     dist.barrier()
 
