@@ -180,7 +180,7 @@ if __name__ == '__main__':
     train(args, device, g, dataset, model,data=data)
 
     # test the model
-    # print('Testing...')
-    #acc = layerwise_infer(device, g, dataset.test_idx, model, batch_size=4096)
+    print('Testing...')
+    acc = layerwise_infer(device, g, dataset.test_idx, model, batch_size=4096)
     # acc = layerwise_infer(device, g, test_idx, model, batch_size=4096)
-    # print("Test Accuracy {:.4f}".format(acc.item()))
+    print("Test Accuracy {:.4f}".format(acc.item()))
