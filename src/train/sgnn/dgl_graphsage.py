@@ -4,7 +4,7 @@ import torch.nn.functional as F
 import torchmetrics.functional as MF
 import dgl
 import dgl.nn as dglnn
-from torch.utils.data import Dataset, DataLoader
+#from torch.utils.data import Dataset, DataLoader
 import random
 import copy
 import tqdm
@@ -14,6 +14,11 @@ import numpy as np
 import time
 import sys
 import os
+import json
+from dgl.data import AsNodePredDataset
+from ogb.nodeproppred import DglNodePropPredDataset
+from dgl.dataloading import NeighborSampler, MultiLayerFullNeighborSampler
+
 current_folder = os.path.abspath(os.path.dirname(__file__))
 sys.path.append(current_folder+"/../../"+"load")
 #from loader_dgl import CustomDataset
@@ -42,7 +47,7 @@ class SAGE(nn.Module):
         """Conduct layer-wise inference to get all the node embeddings."""
         feat = g.ndata['feat']
         sampler = MultiLayerFullNeighborSampler(1, prefetch_node_feats=['feat'])
-        dataloader = DataLoader(
+        dataloader = dgl.dataloading.DataLoader(
                 g, torch.arange(g.num_nodes()).to(g.device), sampler, device=device,
                 batch_size=batch_size, shuffle=False, drop_last=False,
                 num_workers=0)
@@ -84,7 +89,9 @@ def layerwise_infer(device, graph, nid, model, batch_size):
         pred = model.inference(graph, device, batch_size) # pred in buffer_device
         pred = pred[nid]
         label = graph.ndata['label'][nid].to(pred.device)
-    return sklearn.metrics.accuracy_score(label.cpu().numpy(), pred.argmax(1).cpu().numpy())
+    label = label.squeeze()
+    pred = pred.squeeze()
+    return sklearn.metrics.classification_report(label.cpu().numpy(), pred.argmax(1).cpu().numpy(),zero_division=1)
 
 def collate_fn(data):
     """
@@ -95,7 +102,7 @@ def collate_fn(data):
 
 def train(args, device, dataset, model):
     opt = torch.optim.Adam(model.parameters(), lr=1e-3, weight_decay=5e-4)
-    train_loader = DataLoader(dataset=dataset, batch_size=1024, collate_fn=collate_fn,pin_memory=True)
+    train_loader = torch.utils.data.DataLoader(dataset=dataset, batch_size=1024, collate_fn=collate_fn,pin_memory=True)
     for epoch in range(20):
         start = time.time()
         total_loss = 0
@@ -116,7 +123,7 @@ def train(args, device, dataset, model):
               .format(epoch, total_loss / (it+1)))
 
     dataset.changeMode("test")    
-    test_loader = DataLoader(dataset=dataset, batch_size=1024, collate_fn=collate_fn,pin_memory=True)
+    test_loader = torch.utils.data.DataLoader(dataset=dataset, batch_size=1024, collate_fn=collate_fn,pin_memory=True)
     model.train()
     for graph,feat,label,number in test_loader:
         model.eval()
@@ -127,11 +134,12 @@ def train(args, device, dataset, model):
             pred = model(graph, feat.to('cuda:1')) # pred in buffer_device
             preds.extend(pred[1:number+1])
             labels.extend(label[:number])
-    preds = torch.Tensor(preds)
-    labels = torch.Tensor(labels)
-    acc = sklearn.metrics.accuracy_score(labels.cpu().numpy(), preds.argmax(1).cpu().numpy())
-    print("computing acc is :{}".format(acc))
-
+    newpreds = torch.zeros((len(preds),47),dtype=torch.float32)
+    for index,pred in enumerate(preds):
+        newpreds[index] = pred
+    labels = torch.Tensor(labels).to(torch.int64).cpu().numpy()
+    newpreds = newpreds.argmax(1).cpu().numpy()
+    print(sklearn.metrics.classification_report(labels,newpreds,zero_division=1))
         # acc = evaluate(model, g, val_dataloader)
         # print("Epoch {:05d} | Loss {:.4f} | Accuracy {:.4f} "
         #       .format(epoch, total_loss / (it+1), acc.item()))
@@ -148,7 +156,13 @@ if __name__ == '__main__':
     print(f'Training in {args.mode} mode.')
     print('Loading data')
     
-    #g = g.to('cuda' if args.mode == 'puregpu' else 'cpu')
+    test_dataset = AsNodePredDataset(DglNodePropPredDataset('ogbn-products'))
+    g = test_dataset[0]
+    
+    # g, dataset,train_idx,val_idx,test_idx= load_reddit()
+    # data = (train_idx,val_idx,test_idx)
+    g = g.to('cuda' if args.mode == 'puregpu' else 'cpu')
+
     device = torch.device('cpu' if args.mode == 'cpu' else 'cuda')
     # create GraphSAGE model
     # in_size = g.ndata['feat'].shape[1]
@@ -159,7 +173,5 @@ if __name__ == '__main__':
     train(args, device, dataset, model)
 
     # test the model
-    # print('Testing...')
-    # acc = layerwise_infer(device, g, dataset.test_idx, model, batch_size=4096)
-    # acc = layerwise_infer(device, g, test_idx, model, batch_size=4096)
-    # print("Test Accuracy {:.4f}".format(acc.item()))
+    print('Testing...')
+    print("Test Accuracy :\n",layerwise_infer(device, g, dataset.get_test_idx(2213091), model, batch_size=4096))
