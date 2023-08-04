@@ -84,8 +84,8 @@ class CustomDataset(Dataset):
         self.feats = []
         self.loadingFeatFileHead()      # 读取特征文件
         
-        #### 测试，临时规定用哪张卡单独跑 ####
-        self.cudaDevice = 0
+        #### 规定用哪张卡单独跑 ####
+        self.cudaDevice = 2
 
         #### dgl.block ####
         if self.framework == "dgl":
@@ -256,9 +256,9 @@ class CustomDataset(Dataset):
         subGID = self.trainSubGTrack[self.subGptr//self.partNUM][self.subGptr%self.partNUM]
         filePath = self.dataPath + "/part" + str(subGID)
         srcdata = np.fromfile(filePath+"/srcList.bin", dtype=np.int32)
-        srcdata = torch.tensor(srcdata).to(device=('cuda:%d'%self.cudaDevice))
+        srcdata = torch.tensor(srcdata,device=('cuda:%d'%self.cudaDevice))#.to(device=('cuda:%d'%self.cudaDevice))
         rangedata = np.fromfile(filePath+"/range.bin", dtype=np.int32)
-        rangedata = torch.tensor(rangedata).to(device=('cuda:%d'%self.cudaDevice))
+        rangedata = torch.tensor(rangedata,device=('cuda:%d'%self.cudaDevice))#.to(device=('cuda:%d'%self.cudaDevice))
         
         #print(type(srcdata))
         #print(type(rangedata))
@@ -290,13 +290,14 @@ class CustomDataset(Dataset):
 
     def loadingHalo(self):
         # 要先加载下一个子图，然后再加载halo( 当前<->下一个 )
-        filePath = self.dataPath + "/part" + str(self.trainingGID) 
+        filePath = self.dataPath + "/part" + str(self.trainingGID)
+        deviceName = 'cuda:%d'%self.cudaDevice
         edges = np.fromfile(filePath+"/halo"+str(self.nextGID)+".bin", dtype=np.int32)
-        edges = torch.tensor(edges).to(torch.int32).to(device=('cuda:%d'%self.cudaDevice))#.contiguous()
+        edges = torch.tensor(edges,device=deviceName,dtype=torch.int32).contiguous()
         bound = np.fromfile(filePath+"/halo"+str(self.nextGID)+"_bound.bin", dtype=np.int32)
-        bound = torch.tensor(bound).to(torch.int32).to(device=('cuda:%d'%self.cudaDevice))#.contiguous()
-        self.cacheData[0] = self.cacheData[0]#.contiguous()
-        self.cacheData[1] = self.cacheData[1]#.contiguous()
+        bound = torch.tensor(bound,device=deviceName,dtype=torch.int32).contiguous()
+        self.cacheData[0] = self.cacheData[0].contiguous()
+        self.cacheData[1] = self.cacheData[1].contiguous()
         # lastid = torch.tensor(-1).to(device=('cuda:%d'%self.cudaDevice))
         # startidx = torch.tensor(-1).to(device=('cuda:%d'%self.cudaDevice))
         # endidx = torch.tensor(-1).to(device=('cuda:%d'%self.cudaDevice))
@@ -323,8 +324,8 @@ class CustomDataset(Dataset):
         #         if endidx < next:
         #             self.cacheData[0][endidx] = src
         #             endidx += 1
-        sample_hop.torch_launch_loading_halo_new(self.cacheData[0],self.cacheData[1],edges,bound,len(self.cacheData[0]),len(self.cacheData[1]),len(edges),len(bound),self.graphEdgeNUM,3)
-        #sample_hop.torch_launch_loading_halo0(self.cacheData[0],self.cacheData[1],edges,len(self.cacheData[0]),len(self.cacheData[1]),len(edges),self.graphEdgeNUM,3)
+        sample_hop.torch_launch_loading_halo_new(self.cacheData[0],self.cacheData[1],edges,bound,len(self.cacheData[0]),len(self.cacheData[1]),len(edges),len(bound),self.graphEdgeNUM,self.cudaDevice)
+        #sample_hop.torch_launch_loading_halo0(self.cacheData[0],self.cacheData[1],edges,len(self.cacheData[0]),len(self.cacheData[1]),len(edges),self.graphEdgeNUM,self.cudaDevice)
 
 ########################## 采样图结构 ##########################
     def sampleNeig(self,sampleIDs,cacheGraph): 
@@ -376,8 +377,8 @@ class CustomDataset(Dataset):
 
         layer = len(self.fanout)
 
-        srcdata   = self.cacheData[0]#.to(torch.int32).to(device=deviceName)
-        rangedata = self.cacheData[1]#.to(torch.int32).to(device=deviceName)
+        #srcdata   = self.cacheData[0]#.to(torch.int32).to(device=deviceName)
+        #rangedata = self.cacheData[1]#.to(torch.int32).to(device=deviceName)
 
         batchlen = 0
         if self.trainptr < self.trainLoop - 1:
@@ -388,27 +389,36 @@ class CustomDataset(Dataset):
             offset = self.trainptr*self.batchsize
             batchlen = self.subGtrainNodesNUM - offset
         
-        trainlist = torch.Tensor(sampleIDs[0:batchlen]).to(torch.int32).to(device=deviceName)
+        # 注意！此处sampleIDS可能是tensor也可能是list
+        if torch.is_tensor(sampleIDs):
+            #trainlist = sampleIDs[0:batchlen]
+            #trainlist = trainlist.to(device=deviceName).to(torch.int32).contiguous()
+            trainlist = sampleIDs[0:batchlen].clone().to(device=deviceName).to(torch.int32).contiguous()
+        else:
+            trainlist = torch.tensor(sampleIDs[0:batchlen],device=deviceName,dtype=torch.int32).contiguous()
 
         for info in cacheGraph:
-            info[0] = torch.tensor(info[0]).to(torch.int32).to(device=deviceName)#.contiguous()
-            info[1] = torch.tensor(info[1]).to(torch.int32).to(device=deviceName)#.contiguous()
+            info[0] = torch.tensor(info[0],device=deviceName,dtype=torch.int32).contiguous()
+            info[1] = torch.tensor(info[1],device=deviceName,dtype=torch.int32).contiguous()
         
         #sample_start = time.time()
         if layer == 3:
             sample_hop.torch_launch_sample_3hop_new(
                 cacheGraph[0][0],cacheGraph[0][1],cacheGraph[1][0],cacheGraph[1][1],cacheGraph[2][0],cacheGraph[2][1],
-                srcdata, rangedata, trainlist,
+                self.cacheData[0],self.cacheData[1],#srcdata, rangedata, 
+                trainlist,
                 self.fanout[0],self.fanout[1],self.fanout[2],batchlen,cudaDeviceIndex)
         elif layer == 2:
                 sample_hop.torch_launch_sample_2hop_new(
                 cacheGraph[0][0],cacheGraph[0][1],cacheGraph[1][0],cacheGraph[1][1],
-                srcdata, rangedata, trainlist,
+                self.cacheData[0],self.cacheData[1],#srcdata, rangedata, 
+                trainlist,
                 self.fanout[0],self.fanout[1],batchlen,cudaDeviceIndex)
         elif layer == 1:
             sample_hop.torch_launch_sample_1hop_new(
                 cacheGraph[0][0],cacheGraph[0][1],
-                srcdata, rangedata, trainlist,
+                self.cacheData[0],self.cacheData[1],#srcdata, rangedata, 
+                trainlist,
                 self.fanout[0],batchlen,cudaDeviceIndex)
         #sample_end = time.time()
         #print("sample%dHop time in Python:%g s"%(layer,sample_end-sample_start))
@@ -513,6 +523,7 @@ class CustomDataset(Dataset):
     
     def featMerge(self,cacheGraph):    
         nodeids = cacheGraph[0][0]
+        #print("cacheGraph[0][0] =",cacheGraph[0][0])
         nodeids = torch.cat([torch.tensor([0]),nodeids.to(device='cpu')])
         return self.feats[nodeids]
 
@@ -713,7 +724,7 @@ if __name__ == "__main__":
         config = json.load(f)
         batchsize = config['batchsize']
         epoch = config['epoch']
-    train_loader = DataLoader(dataset=dataset, batch_size=batchsize, collate_fn=collate_fn,pin_memory=True)
+    train_loader = DataLoader(dataset=dataset, batch_size=batchsize,collate_fn=collate_fn,pin_memory=True)
     #time.sleep(2)
     for index in range(20):
         #start = time.time()

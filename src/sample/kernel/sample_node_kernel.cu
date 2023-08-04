@@ -135,6 +135,79 @@ __global__ void sample2Hop(
     }
 }
 
+__global__ void sample2HopNew(
+                        int* outputSRC1,
+                        int* outputDST1,
+                        int* outputSRC2,
+                        int* outputDST2,
+                        const int* graphEdge,
+                        const int* boundList,
+                        const int* trainNode,
+                        int sampleNUM1,
+                        int sampleNUM2,
+                        int nodeNUM,
+                        //curandStateXORWOW_t* state
+                        unsigned long long seed
+                            ) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    __shared__ curandStateXORWOW_t state;
+    if(threadIdx.x == blockDim.x-1)
+        curand_init(seed,0,0,&state);
+    __syncthreads();
+
+    // curandStateXORWOW_t state;
+    // curand_init(seed+idx,0,0,&state);
+
+
+    unsigned int random_value = 0;
+    int i = blockIdx.x;
+    int writeIdx = i * sampleNUM1 + 2 * threadIdx.x;
+    int id = trainNode[i];
+    int idxStart = boundList[id];
+    int idxEnd = boundList[id+1];
+    int neirNUM = idxEnd - idxStart;
+    if(threadIdx.x < neirNUM && threadIdx.x < sampleNUM1)
+    {
+        random_value = curand(&state) % neirNUM;
+        outputSRC1[writeIdx] = graphEdge[idxStart + random_value];
+        outputDST1[writeIdx++] = id;
+    }
+    else if(threadIdx.x >= neirNUM && threadIdx.x < sampleNUM1)
+    {
+        outputSRC1[writeIdx] = -1;
+        outputDST1[writeIdx++] = id;
+    }
+    else if(threadIdx.x < (sampleNUM1 + sampleNUM2))
+    {
+        int l = threadIdx.x - sampleNUM1;
+        int l1 = threadIdx.x - 1;
+        int l2_id = outputSRC1[i * sampleNUM1 + l1];
+        if (l2_id > 0) {
+            int l2_writeIdx = i*sampleNUM1*sampleNUM2 + l1*sampleNUM2 + l * 2;
+            int l2_idStart = boundList[l2_id];
+            int l2_idEnd = boundList[l2_id+1];
+            int l2_neirNUM = l2_idEnd - l2_idStart;
+            //for (int l = 0 ; l < l2_neirNUM && l < sampleNUM2 ; l++) {
+            if(l < l2_neirNUM){
+                random_value = curand(&state) % l2_neirNUM;
+                outputSRC2[l2_writeIdx] = graphEdge[l2_idStart + random_value];
+                outputDST2[l2_writeIdx++] = l2_id;
+             }
+            //for (int l = l2_neirNUM; l < sampleNUM2 ; l++) {
+            else{
+                outputSRC2[l2_writeIdx] = -1;
+                outputDST2[l2_writeIdx++] = l2_id;
+            }
+        } else {
+            int l2_writeIdx = i*sampleNUM1*sampleNUM2 + l1*sampleNUM2 + l * 2;
+            //for (int l = 0 ; l < sampleNUM2 ; l++) {
+            outputSRC2[l2_writeIdx] = -1;
+            outputDST2[l2_writeIdx++] = l2_id;
+            //}
+        }
+    }
+}
+
 __global__ void sample3Hop(
                         int* outputSRC1,int* outputDST1,
                         int* outputSRC2,int* outputDST2,
@@ -229,9 +302,9 @@ void launch_sample_full(int* outputSRC1,
                  int n,
                  const int gpuDeviceIndex
                  ) {
-    dim3 grid((n + 1023) / 1024);
-    dim3 block(1024);
-    
+    const int threads = 65536;
+    dim3 grid((n + threads-1) / threads);
+    dim3 block(threads);
     /* 指定使用的GPU序号 [0,torch.cuda.device_count()) */
     int deviceCount;
     cudaGetDeviceCount(&deviceCount);
@@ -260,8 +333,9 @@ void torch_launch_sample_1hop_new(torch::Tensor &outputSRC1,
                        int64_t nodeNUM,
                        const int64_t gpuDeviceIndex)
 {
-    dim3 grid((nodeNUM + 1023) / 1024);
-    dim3 block(1024);
+    const int threads = 65536;
+    dim3 grid((nodeNUM + threads-1) / threads);
+    dim3 block(threads);
     unsigned long long seed = std::chrono::system_clock::now().time_since_epoch().count();
     
     /* 指定使用的GPU序号 [0,torch.cuda.device_count()) */
@@ -279,8 +353,6 @@ void torch_launch_sample_1hop_new(torch::Tensor &outputSRC1,
         //printf("Select GPU Device Index:%d , Please Prepare Pytorch Data tensor.to(device='cuda:%d')\n",gpuDeviceIndex,gpuDeviceIndex);
         cudaSetDevice(gpuDeviceIndex);
     }
-
-    
 
     //auto t_beg = std::chrono::high_resolution_clock::now();
     sample1Hop<<<grid, block>>>(
@@ -305,8 +377,9 @@ void launch_sample_1hop(int* outputSRC1,
                         int nodeNUM,
                         const int gpuDeviceIndex
                         ) {
-    dim3 grid((nodeNUM + 1023) / 1024);
-    dim3 block(1024);
+    const int threads = 65536;
+    dim3 grid((nodeNUM + threads-1) / threads);
+    dim3 block(threads);
     unsigned long long seed = std::chrono::system_clock::now().time_since_epoch().count();
     
     /* 指定使用的GPU序号 [0,torch.cuda.device_count()) */
@@ -348,8 +421,11 @@ void torch_launch_sample_2hop_new(torch::Tensor &outputSRC1,
                        int64_t nodeNUM,
                        const int64_t gpuDeviceIndex)
 {
-    dim3 grid((nodeNUM + 1023) / 1024);
-    dim3 block(1024);
+    //const int threads = 32768;
+    //dim3 grid((nodeNUM + threads-1) / threads);
+    //dim3 block(threads);
+
+    
     unsigned long long seed = std::chrono::system_clock::now().time_since_epoch().count();
 
     /* 指定使用的GPU序号 [0,torch.cuda.device_count()) */
@@ -368,8 +444,16 @@ void torch_launch_sample_2hop_new(torch::Tensor &outputSRC1,
         cudaSetDevice(gpuDeviceIndex);
     }
 
+    // dim3 grid_1(1);
+    // dim3 block_1(1);
+    // curandStateXORWOW_t* state = NULL;
+    // getcurandState<<<grid_1,block_1>>>(&state,seed);
+    // cudaDeviceSynchronize();
+
+    dim3 grid(nodeNUM);
+    dim3 block(64);
     //auto t_beg = std::chrono::high_resolution_clock::now();
-    sample2Hop<<<grid, block>>>(
+    sample2HopNew<<<grid, block>>>(
                         static_cast<int*>(outputSRC1.data_ptr()),
                         static_cast<int*>(outputDST1.data_ptr()),
                         static_cast<int*>(outputSRC2.data_ptr()),
@@ -378,6 +462,7 @@ void torch_launch_sample_2hop_new(torch::Tensor &outputSRC1,
                         (const int*) boundList.data_ptr(),
                         (const int*) trainNode.data_ptr(),
                         int(sampleNUM1),int(sampleNUM2),int(nodeNUM),seed);
+    //cudaDeviceSynchronize();
     //auto t_end = std::chrono::high_resolution_clock::now();
     //printf("sample2Hop time in function`launch_sample_2hop` : %lf ms\n",std::chrono::duration<double, std::milli>(t_end-t_beg).count());
 }
@@ -394,8 +479,9 @@ void launch_sample_2hop(int* outputSRC1,
                         int nodeNUM,
                         const int gpuDeviceIndex
                         ) {
-    dim3 grid((nodeNUM + 1023) / 1024);
-    dim3 block(1024);
+    const int threads = 65536;
+    dim3 grid((nodeNUM + threads-1) / threads);
+    dim3 block(threads);
     unsigned long long seed = std::chrono::system_clock::now().time_since_epoch().count();
 
     /* 指定使用的GPU序号 [0,torch.cuda.device_count()) */
@@ -438,8 +524,9 @@ void torch_launch_sample_3hop_new(torch::Tensor &outputSRC1,
                        int64_t nodeNUM,
                        const int64_t gpuDeviceIndex)
 {
-    dim3 grid((nodeNUM + 1023) / 1024);
-    dim3 block(1024);
+    const int threads = 65536;
+    dim3 grid((nodeNUM + threads-1) / threads);
+    dim3 block(threads);
     unsigned long long seed = std::chrono::system_clock::now().time_since_epoch().count();
 
     /* 指定使用的GPU序号 [0,torch.cuda.device_count()) */
@@ -483,9 +570,11 @@ void launch_sample_3hop(int* outputSRC1,int* outputDST1,
                         int sampleNUM1,int sampleNUM2,int sampleNUM3,
                         int nodeNUM,
                         const int gpuDeviceIndex
-                        ) {
-    dim3 grid((nodeNUM + 1023) / 1024);
-    dim3 block(1024);
+                        )
+{
+    const int threads = 65536;
+    dim3 grid((nodeNUM + threads-1) / threads);
+    dim3 block(threads);
     unsigned long long seed = std::chrono::system_clock::now().time_since_epoch().count();
 
     /* 指定使用的GPU序号 [0,torch.cuda.device_count()) */
@@ -623,7 +712,7 @@ __global__ void func2(int* cacheData0,
     //     cacheData0[endidx+threadIdx.x] = edges[lowerBound+2*threadIdx.x];
     
 
-    for(int i = threadIdx.x;(lowerBound+2*i)<upperBound;i+=1024)
+    for(int i = threadIdx.x;(lowerBound+2*i)<upperBound;i+=1024*1024)
         if((endidx+i) < nextidx && (endidx+i) < cacheData0Len)
             cacheData0[endidx+i] = edges[lowerBound+2*i];
 }
@@ -654,9 +743,10 @@ void torch_launch_loading_halo_new(torch::Tensor &cacheData0,
         //printf("Select GPU Device Index:%d , Please Prepare Pytorch Data tensor.to(device='cuda:%d')\n",gpuDeviceIndex,gpuDeviceIndex);
         cudaSetDevice(gpuDeviceIndex);
     }
-
-    dim3 grid((boundLen+1023)/1024);
-    dim3 block(1024);
+    
+    const int threads = 1024*1024;
+    dim3 grid((boundLen + threads-1) / threads);
+    dim3 block(threads);
     func2<<<grid,block>>>(
         static_cast<int*>(cacheData0.data_ptr()),
         static_cast<int*>(cacheData1.data_ptr()),
@@ -696,8 +786,9 @@ void lanch_loading_halo(int* cacheData0,
         cudaSetDevice(gpuDeviceIndex);
     }
 
-    dim3 grid((boundLen+1023)/1024);
-    dim3 block(1024);
+    const int threads = 65536;
+    dim3 grid((boundLen+threads-1)/threads);
+    dim3 block(threads);
     func2<<<grid,block>>>(cacheData0,
                         cacheData1,
                         edges,
