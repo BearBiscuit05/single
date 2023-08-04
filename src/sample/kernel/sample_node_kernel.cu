@@ -150,14 +150,10 @@ __global__ void sample2HopNew(
                         unsigned long long seed
                             ) {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
-    __shared__ curandStateXORWOW_t state;
-    if(threadIdx.x == blockDim.x-1)
-        curand_init(seed,0,0,&state);
-    __syncthreads();
-
-    // curandStateXORWOW_t state;
-    // curand_init(seed+idx,0,0,&state);
-
+    if(idx >= (sampleNUM1 + sampleNUM1 * sampleNUM2))
+        return;
+    curandStateXORWOW_t state;
+    curand_init(seed+idx,0,0,&state);
 
     unsigned int random_value = 0;
     int i = blockIdx.x;
@@ -166,6 +162,14 @@ __global__ void sample2HopNew(
     int idxStart = boundList[id];
     int idxEnd = boundList[id+1];
     int neirNUM = idxEnd - idxStart;
+    /*
+        新的并行采样方法：一个grid处理一个nodeid
+        grid内，按照threadIdx.x处理采样
+        [0,sample1) : 采样1跳
+        [sample1,sample1+sample1*sample2)：采样2跳
+    */
+    
+    /* 采样[0,sample1) */
     if(threadIdx.x < neirNUM && threadIdx.x < sampleNUM1)
     {
         random_value = curand(&state) % neirNUM;
@@ -177,33 +181,30 @@ __global__ void sample2HopNew(
         outputSRC1[writeIdx] = -1;
         outputDST1[writeIdx++] = id;
     }
-    else if(threadIdx.x < (sampleNUM1 + sampleNUM2))
+    /* 采样[sample1,sample1+sample1*sample2) */
+    else if(threadIdx.x < (sampleNUM1 + sampleNUM1 * sampleNUM2))
     {
-        int l = threadIdx.x - sampleNUM1;
-        int l1 = threadIdx.x - 1;
+        int l = (threadIdx.x - sampleNUM1) % sampleNUM2;
+        int l1 = (threadIdx.x - sampleNUM1) / sampleNUM2;
         int l2_id = outputSRC1[i * sampleNUM1 + l1];
         if (l2_id > 0) {
             int l2_writeIdx = i*sampleNUM1*sampleNUM2 + l1*sampleNUM2 + l * 2;
             int l2_idStart = boundList[l2_id];
             int l2_idEnd = boundList[l2_id+1];
             int l2_neirNUM = l2_idEnd - l2_idStart;
-            //for (int l = 0 ; l < l2_neirNUM && l < sampleNUM2 ; l++) {
             if(l < l2_neirNUM){
                 random_value = curand(&state) % l2_neirNUM;
                 outputSRC2[l2_writeIdx] = graphEdge[l2_idStart + random_value];
                 outputDST2[l2_writeIdx++] = l2_id;
              }
-            //for (int l = l2_neirNUM; l < sampleNUM2 ; l++) {
             else{
                 outputSRC2[l2_writeIdx] = -1;
                 outputDST2[l2_writeIdx++] = l2_id;
             }
         } else {
             int l2_writeIdx = i*sampleNUM1*sampleNUM2 + l1*sampleNUM2 + l * 2;
-            //for (int l = 0 ; l < sampleNUM2 ; l++) {
             outputSRC2[l2_writeIdx] = -1;
             outputDST2[l2_writeIdx++] = l2_id;
-            //}
         }
     }
 }
@@ -451,7 +452,7 @@ void torch_launch_sample_2hop_new(torch::Tensor &outputSRC1,
     // cudaDeviceSynchronize();
 
     dim3 grid(nodeNUM);
-    dim3 block(64);
+    dim3 block(512);
     //auto t_beg = std::chrono::high_resolution_clock::now();
     sample2HopNew<<<grid, block>>>(
                         static_cast<int*>(outputSRC1.data_ptr()),
