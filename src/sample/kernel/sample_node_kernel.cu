@@ -150,7 +150,7 @@ __global__ void sample2HopNew(
                         unsigned long long seed
                             ) {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
-    if(idx >= (sampleNUM1 + sampleNUM1 * sampleNUM2))
+    if(threadIdx.x >= (sampleNUM1 + sampleNUM1 * sampleNUM2))
         return;
     curandStateXORWOW_t state;
     curand_init(seed+idx,0,0,&state);
