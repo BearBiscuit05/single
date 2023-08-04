@@ -522,7 +522,8 @@ class CustomDataset(Dataset):
             self.feats = torch.cat([self.feats,tmp_feat])
     
     def featMerge(self,cacheGraph):
-        nodeids = torch.cat([torch.tensor([0],device='cuda:%d'%self.cudaDevice),cacheGraph[0][0]]).to(device='cpu')
+        nodeids = cacheGraph[0][0]
+        nodeids = torch.cat([torch.tensor([0]),nodeids.to(device='cpu')])
         return self.feats[nodeids]
 
 ########################## 数据调整 ##########################
