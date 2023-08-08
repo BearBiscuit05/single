@@ -107,7 +107,7 @@ def train(args, device, g, dataset, model,data=None):
 
     opt = torch.optim.Adam(model.parameters(), lr=1e-3, weight_decay=5e-4)
     
-    for epoch in range(3):
+    for epoch in range(50):
         start = time.time()
         model.train()
         total_loss = 0

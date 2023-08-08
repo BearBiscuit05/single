@@ -111,7 +111,7 @@ def train(args, device, g, train_idx,val_idx, model):
     #                             drop_last=False, num_workers=0,
     #                             use_uva=use_uva)
     opt = torch.optim.Adam(model.parameters(), lr=1e-3, weight_decay=5e-4)
-    for epoch in range(10):
+    for epoch in range(50):
         model.train()
         total_loss = 0
         for i in range(4):

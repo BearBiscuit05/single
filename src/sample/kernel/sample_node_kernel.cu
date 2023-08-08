@@ -713,7 +713,7 @@ __global__ void func2(int* cacheData0,
     //     cacheData0[endidx+threadIdx.x] = edges[lowerBound+2*threadIdx.x];
     
 
-    for(int i = threadIdx.x;(lowerBound+2*i)<upperBound;i+=1024*1024)
+    for(int i = threadIdx.x;(lowerBound+2*i)<upperBound;i+=1024)
         if((endidx+i) < nextidx && (endidx+i) < cacheData0Len)
             cacheData0[endidx+i] = edges[lowerBound+2*i];
 }
@@ -745,7 +745,7 @@ void torch_launch_loading_halo_new(torch::Tensor &cacheData0,
         cudaSetDevice(gpuDeviceIndex);
     }
     
-    const int threads = 1024*1024;
+    const int threads = 1024;
     dim3 grid((boundLen + threads-1) / threads);
     dim3 block(threads);
     func2<<<grid,block>>>(
