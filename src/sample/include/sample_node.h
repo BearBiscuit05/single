@@ -3,7 +3,8 @@ void launch_sample_full(int* outputSRC1,
                  const int* graphEdge,
                  const int* boundList,
                  const int* trainNode,
-                 int n);
+                 int n,
+                 const int gpuDeviceIndex);
 
 void launch_sample_1hop(int* outputSRC1,
                         int* outputDST1, 
@@ -11,9 +12,11 @@ void launch_sample_1hop(int* outputSRC1,
                         const int* boundList,
                         const int* trainNode,
                         int sampleNUM1,
-                        int nodeNUM) ;
+                        int nodeNUM,
+                        const int gpuDeviceIndex) ;
 
-void launch_sample_2hop(int* outputSRC1,
+void launch_sample_2hop(
+                        int* outputSRC1,
                         int* outputDST1,
                         int* outputSRC2,
                         int* outputDST2,
@@ -22,7 +25,8 @@ void launch_sample_2hop(int* outputSRC1,
                         const int* trainNode,
                         int sampleNUM1,
                         int sampleNUM2,
-                        int nodeNUM) ;
+                        int nodeNUM,
+                        const int gpuDeviceIndex) ;
 
 void launch_sample_3hop(int* outputSRC1,int* outputDST1,
                         int* outputSRC2,int* outputDST2,
@@ -31,4 +35,72 @@ void launch_sample_3hop(int* outputSRC1,int* outputDST1,
                         const int* boundList,
                         const int* trainNode,
                         int sampleNUM1,int sampleNUM2,int sampleNUM3,
-                        int nodeNUM) ;
+                        int nodeNUM,
+                        const int gpuDeviceIndex) ;
+
+void lanch_loading_halo(int* cacheData0,
+                        int* cacheData1,
+                        const int* edges,
+                        const int* bound,
+                        const int cacheData0Len,
+                        const int cacheData1Len,
+                        const int edgesLen,
+                        const int boundLen,
+                        const int graphEdgeNUM,
+                        const int gpuDeviceIndex);
+
+void lanch_loading_halo0(int* cacheData0,
+                        int* cacheData1,
+                        const int* edges,
+                        const int cacheData0Len,
+                        const int cacheData1Len,
+                        const int edgesLen,
+                        const int graphEdgeNUM,
+                        const int gpuDeviceIndex);
+
+void torch_launch_sample_2hop_new(torch::Tensor &outputSRC1,
+                              torch::Tensor &outputDST1,
+                              torch::Tensor &outputSRC2,
+                              torch::Tensor &outputDST2,
+                       const torch::Tensor &graphEdge,
+                       const torch::Tensor &boundList,
+                       const torch::Tensor &trainNode,
+                       int64_t sampleNUM1,
+                       int64_t sampleNUM2,
+                       int64_t nodeNUM,
+                       const int64_t gpuDeviceIndex);
+
+void torch_launch_sample_1hop_new(torch::Tensor &outputSRC1,
+                        torch::Tensor &outputDST1,
+                       const torch::Tensor &graphEdge,
+                       const torch::Tensor &boundList,
+                       const torch::Tensor &trainNode,
+                       int64_t sampleNUM1,
+                       int64_t nodeNUM,
+                       const int64_t gpuDeviceIndex);
+
+void torch_launch_sample_3hop_new(torch::Tensor &outputSRC1,
+                        torch::Tensor &outputDST1,
+                        torch::Tensor &outputSRC2,
+                        torch::Tensor &outputDST2,
+                        torch::Tensor &outputSRC3,
+                        torch::Tensor &outputDST3,
+                       const torch::Tensor &graphEdge,
+                       const torch::Tensor &boundList,
+                       const torch::Tensor &trainNode,
+                       int64_t sampleNUM1,
+                       int64_t sampleNUM2,
+                       int64_t sampleNUM3,
+                       int64_t nodeNUM,
+                       const int64_t gpuDeviceIndex);
+
+void torch_launch_loading_halo_new(torch::Tensor &cacheData0,
+                        torch::Tensor &cacheData1,
+                        const torch::Tensor &edges,
+                        const torch::Tensor &bound,
+                        const int64_t cacheData0Len,
+                        const int64_t cacheData1Len,
+                        const int64_t edgesLen,
+                        const int64_t boundLen,
+                        const int64_t graphEdgeNUM,
+                        const int64_t gpuDeviceIndex);

@@ -108,11 +108,12 @@ def train(args, device, g, dataset, model,data=None):
 
     opt = torch.optim.Adam(model.parameters(), lr=1e-3, weight_decay=5e-4)
     
-    for epoch in range(3):
+    for epoch in range(50):
         start = time.time()
         model.train()
         total_loss = 0
         startTime = time.time()
+        count = 0
         for it, (input_nodes, output_nodes, blocks) in enumerate(train_dataloader):
             x = blocks[0].srcdata['feat']
             y = blocks[-1].dstdata['label']
@@ -122,7 +123,9 @@ def train(args, device, g, dataset, model,data=None):
             loss.backward()
             opt.step()
             total_loss += loss.item()
-            startTime = time.time()
+            count = it
+        print("count=",count)
+        print("time=",time.time()-startTime)
         acc = evaluate(model, g, val_dataloader)
         print("Epoch {:05d} | Loss {:.4f} | Accuracy {:.4f} "
               .format(epoch, total_loss / (it+1), acc.item()))
@@ -177,7 +180,7 @@ if __name__ == '__main__':
     train(args, device, g, dataset, model,data=data)
 
     # test the model
-    # print('Testing...')
-    #acc = layerwise_infer(device, g, dataset.test_idx, model, batch_size=4096)
+    print('Testing...')
+    acc = layerwise_infer(device, g, dataset.test_idx, model, batch_size=4096)
     # acc = layerwise_infer(device, g, test_idx, model, batch_size=4096)
-    # print("Test Accuracy {:.4f}".format(acc.item()))
+    print("Test Accuracy {:.4f}".format(acc.item()))
