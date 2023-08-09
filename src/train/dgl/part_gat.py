@@ -107,7 +107,6 @@ def train(args, device, g, train_idx,val_idx, model):
                                 use_uva=use_uva)
         )
     opt = torch.optim.Adam(model.parameters(), lr=1e-3, weight_decay=5e-4)
-    
     for epoch in range(1):
         model.train()
         total_loss = 0
@@ -139,11 +138,11 @@ if __name__ == '__main__':
     
     # load and preprocess dataset
     print('Loading data')
-    graph_dir = 'data_4/'
+    graph_dir = '../../../data/raw-products_4/'
     part_config = graph_dir + 'ogb-product.json'
     print('loading partitions')
     
-    device = torch.device('cpu' if args.mode == 'cpu' else 'cuda')
+    device = torch.device('cpu' if args.mode == 'cpu' else 'cuda:2')
     model = GAT(100, 256, 47,heads=[8,1]).to(device)
     g_list = []
     train_list = []
@@ -155,14 +154,19 @@ if __name__ == '__main__':
         in_graph.edata.clear()
         in_graph.ndata['feat'] = node_feat['_N/features']
         in_graph.ndata['label'] = node_feat['_N/labels']
+        if args.mode == 'puregpu':
+            in_graph = in_graph.to(device)
+        #print(in_graph.device)
         train_mask = node_feat['_N/train_mask']
         train_idx = [index for index, value in enumerate(train_mask) if value == 1]
         train_idx = torch.Tensor(train_idx).to(torch.int64).to(device)
+        #print(train_idx.device)
         val_mask = node_feat['_N/val_mask']
         val_idx = [index for index, value in enumerate(val_mask) if value == 1]
         val_idx = torch.Tensor(val_idx).to(torch.int64).to(device)
-        subg = subg.to('cuda' if args.mode == 'puregpu' else 'cpu')
-        device = torch.device('cpu' if args.mode == 'cpu' else 'cuda')
+        #print(val_idx.device)
+        subg = subg.to('cuda:2' if args.mode == 'puregpu' else 'cpu')
+        device = torch.device('cpu' if args.mode == 'cpu' else 'cuda:2')
         g_list.append(in_graph)
         train_list.append(train_idx)
         val_list.append(val_idx)
@@ -172,8 +176,8 @@ if __name__ == '__main__':
 
     dataset = AsNodePredDataset(DglNodePropPredDataset('ogbn-products'))
     g = dataset[0]
-    g = g.to('cuda' if args.mode == 'puregpu' else 'cpu')
-    device = torch.device('cpu' if args.mode == 'cpu' else 'cuda')
+    g = g.to('cuda:2' if args.mode == 'puregpu' else 'cpu')
+    device = torch.device('cpu' if args.mode == 'cpu' else 'cuda:2')
     # test the model
     print('Testing...')
     acc = layerwise_infer(device, g, dataset.test_idx, model, batch_size=1)

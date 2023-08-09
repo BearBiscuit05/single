@@ -17,3 +17,7 @@
 **/**.npy
 **/**.npz
 **/**.json
+**/models/
+**/**.pkl
+**/**.pt
+**/build/

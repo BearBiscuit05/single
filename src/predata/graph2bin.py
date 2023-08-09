@@ -167,8 +167,10 @@ def gen_ids_file(data,rank,savePath):
     subg, node_feat, node_type = data
     nt = node_type[0]
     train_mask = node_feat[nt + '/train_mask']
-    val_mask = node_feat[node_type + '/val_mask']
-    test_mask = node_feat[node_type + '/test_mask']
+    # val_mask = node_feat[node_type + '/val_mask']
+    # test_mask = node_feat[node_type + '/test_mask']
+    val_mask = node_feat[nt + '/val_mask']
+    test_mask = node_feat[nt + '/test_mask']
     torch.save(train_mask, savePath + "/trainID.bin")
     torch.save(train_mask, savePath + "/valID.bin")
     torch.save(train_mask, savePath + "/testID.bin")
@@ -185,10 +187,10 @@ def gen_feat_file(data,rank,savePath):
 
 
 if __name__ == '__main__':
-    dataPath = "./../../data/raw-reddit_8"
-    dataName = "reddit"
-    savePath = "./../../data/reddit_8"
-    index=8
+    dataPath = "./../../data/raw-products_4"
+    dataName = "ogb-product"
+    savePath = "./../../data/products_4"
+    index=4
     for rank in range(index):
         subg, node_feat, node_type = readGraph(rank,dataPath,dataName)
         data = (subg, node_feat, node_type)

@@ -49,7 +49,7 @@ if __name__ == '__main__':
     block = dgl.create_block((src , dst), num_src_nodes=12, num_dst_nodes=3)    
     print(block)
 
-    #============[TEST]=================
+    #============[TEST]============
     src = th.tensor([i for i in range(10000)])
     dst = th.tensor([i for i in range(10000)])
     

@@ -1,0 +1,6 @@
+# ninja log v5
+9	16499	1691074385935696604	/home/bear/workspace/singleGNN/src/sample/build/temp.linux-x86_64-cpython-310/torch/sample_node_ops.o	310478d2d3a4653d
+21	48304	1691412022718335948	/home/bear/workspace/singleGNN/src/sample/build/temp.linux-x86_64-cpython-310/kernel/sample_node_kernel.o	792205ba22e7f045
+36	16962	1691478053576896861	/home/bear/workspace/singleGNN/src/sample/build/temp.linux-x86_64-cpython-310/torch/sample_node_ops.o	2e46bec831f3a159
+36	40162	1691478076769751059	/home/bear/workspace/singleGNN/src/sample/build/temp.linux-x86_64-cpython-310/kernel/sample_node_kernel.o	4814931d68d8d890
+9	39892	1691499919431228870	/home/bear/workspace/singleGNN/src/sample/build/temp.linux-x86_64-cpython-310/kernel/sample_node_kernel.o	4814931d68d8d890
