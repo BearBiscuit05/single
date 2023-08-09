@@ -85,7 +85,7 @@ class CustomDataset(Dataset):
         self.loadingFeatFileHead()      # 读取特征文件
         
         #### 规定用哪张卡单独跑 ####
-        self.cudaDevice = 2
+        self.cudaDevice = 0
 
         #### dgl.block ####
         if self.framework == "dgl":
@@ -725,7 +725,7 @@ if __name__ == "__main__":
         epoch = config['epoch']
     train_loader = DataLoader(dataset=dataset, batch_size=batchsize,collate_fn=collate_fn,pin_memory=True)
     #time.sleep(2)
-    for index in range(20):
+    for index in range(50):
         #start = time.time()
         for graph,feat,label,number in train_loader:
             #print("block:",graph)

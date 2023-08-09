@@ -8,10 +8,12 @@ setup(
         CUDAExtension(
         "sample_hop",  # 扩展模块的名称
         sources = ["torch/sample_node_ops.cpp", "kernel/sample_node_kernel.cu"],
-        # extra_compile_args = {
-        #         'cxx': ['-DDEFAULT_ARG_VALUE=0'],  # 设置默认参数的值
-        #         'nvcc': ['-DDEFAULT_ARG_VALUE=0'],  # 设置默认参数的值
-        #     },
+        extra_compile_args = {
+                # 'cxx': ['-DDEFAULT_ARG_VALUE=0'],  # 设置默认参数的值
+                # 'nvcc': ['-DDEFAULT_ARG_VALUE=0'],  # 设置默认参数的值
+                'cxx': ['-O3'],  # 设置编译优化
+                'nvcc': ['-O3'],  # 设置编译优化
+            },
         ),
     ],
     cmdclass={

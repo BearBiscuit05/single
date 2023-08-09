@@ -188,23 +188,94 @@ __global__ void sample2HopNew(
         int l1 = (threadIdx.x - sampleNUM1) / sampleNUM2;
         int l2_id = outputSRC1[i * sampleNUM1 + l1];
         if (l2_id > 0) {
-            int l2_writeIdx = i*sampleNUM1*sampleNUM2 + l1*sampleNUM2 + l * 2;
+            int l2_writeIdx = i*sampleNUM1*sampleNUM2 + l1*sampleNUM2 + l;
             int l2_idStart = boundList[l2_id];
             int l2_idEnd = boundList[l2_id+1];
             int l2_neirNUM = l2_idEnd - l2_idStart;
             if(l < l2_neirNUM){
                 random_value = curand(&state) % l2_neirNUM;
                 outputSRC2[l2_writeIdx] = graphEdge[l2_idStart + random_value];
-                outputDST2[l2_writeIdx++] = l2_id;
+                outputDST2[l2_writeIdx] = l2_id;
              }
             else{
                 outputSRC2[l2_writeIdx] = -1;
-                outputDST2[l2_writeIdx++] = l2_id;
+                outputDST2[l2_writeIdx] = l2_id;
             }
         } else {
-            int l2_writeIdx = i*sampleNUM1*sampleNUM2 + l1*sampleNUM2 + l * 2;
+            int l2_writeIdx = i*sampleNUM1*sampleNUM2 + l1*sampleNUM2 + l;
             outputSRC2[l2_writeIdx] = -1;
-            outputDST2[l2_writeIdx++] = l2_id;
+            outputDST2[l2_writeIdx] = l2_id;
+        }
+    }
+}
+
+__global__ void sample3HopNew(
+                        int* outputSRC1,int* outputDST1,
+                        int* outputSRC2,int* outputDST2,
+                        int* outputSRC3,int* outputDST3,
+                        const int* graphEdge,
+                        const int* boundList,
+                        const int* trainNode,
+                        int sampleNUM1,int sampleNUM2,int sampleNUM3,
+                        int nodeNUM,
+                        unsigned long long seed
+                            ) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if(threadIdx.x >= (sampleNUM1 + sampleNUM1 * sampleNUM2 + sampleNUM2 * sampleNUM3))
+        return;
+    curandStateXORWOW_t state;
+    curand_init(seed+idx,0,0,&state);
+
+    unsigned int random_value = 0;
+    int i = blockIdx.x;
+    int writeIdx = i * sampleNUM1 + 2 * threadIdx.x;
+    int id = trainNode[i];
+    int idxStart = boundList[id];
+    int idxEnd = boundList[id+1];
+    int neirNUM = idxEnd - idxStart;
+    /*
+        新的并行采样方法：一个grid处理一个nodeid
+        grid内，按照threadIdx.x处理采样
+        [0,sample1) : 采样1跳
+        [sample1,sample1+sample1*sample2)：采样2跳
+    */
+    
+    /* 采样[0,sample1) */
+    if(threadIdx.x < neirNUM && threadIdx.x < sampleNUM1)
+    {
+        random_value = curand(&state) % neirNUM;
+        outputSRC1[writeIdx] = graphEdge[idxStart + random_value];
+        outputDST1[writeIdx++] = id;
+    }
+    else if(threadIdx.x >= neirNUM && threadIdx.x < sampleNUM1)
+    {
+        outputSRC1[writeIdx] = -1;
+        outputDST1[writeIdx++] = id;
+    }
+    /* 采样[sample1,sample1+sample1*sample2) */
+    else if(threadIdx.x < (sampleNUM1 + sampleNUM1 * sampleNUM2))
+    {
+        int l = (threadIdx.x - sampleNUM1) % sampleNUM2;
+        int l1 = (threadIdx.x - sampleNUM1) / sampleNUM2;
+        int l2_id = outputSRC1[i * sampleNUM1 + l1];
+        if (l2_id > 0) {
+            int l2_writeIdx = i*sampleNUM1*sampleNUM2 + l1*sampleNUM2 + l;
+            int l2_idStart = boundList[l2_id];
+            int l2_idEnd = boundList[l2_id+1];
+            int l2_neirNUM = l2_idEnd - l2_idStart;
+            if(l < l2_neirNUM){
+                random_value = curand(&state) % l2_neirNUM;
+                outputSRC2[l2_writeIdx] = graphEdge[l2_idStart + random_value];
+                outputDST2[l2_writeIdx] = l2_id;
+             }
+            else{
+                outputSRC2[l2_writeIdx] = -1;
+                outputDST2[l2_writeIdx] = l2_id;
+            }
+        } else {
+            int l2_writeIdx = i*sampleNUM1*sampleNUM2 + l1*sampleNUM2 + l;
+            outputSRC2[l2_writeIdx] = -1;
+            outputDST2[l2_writeIdx] = l2_id;
         }
     }
 }
