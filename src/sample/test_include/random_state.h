@@ -3,7 +3,9 @@
 #include <iostream>
 #include <curand_kernel.h>
 #include <vector>
-
+#include <cassert>
+#include <chrono>
+#include <numeric>
 // #define CHECK(x) \
 //   if (!(x))      \
 //   LogMessageFatal(__FILE__, __LINE__) << "Check failed: " #x << ' '

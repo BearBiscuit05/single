@@ -8,6 +8,10 @@ void sample_2hop(
     int seed_num,int fanout,int* out_src,
     int* out_dst);
 
+void graph_halo_merge(
+    int* edge,int* bound,
+    int* halos,int* halo_bound,int nodeNUM);
+
 //void test_random();
 
 #endif
