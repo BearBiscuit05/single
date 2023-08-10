@@ -100,8 +100,6 @@ class CustomDataset(Dataset):
         self.initNextGraphData()
         self.sampleFlagQueue.put(self.executor.submit(self.preGraphBatch)) #发送采样命令
         
-        
-
     def __len__(self):  
         return self.NodeLen
     
@@ -141,7 +139,7 @@ class CustomDataset(Dataset):
         self.framework = config['framework']
         self.mode = config['mode']
         formatted_data = json.dumps(config, indent=4)
-        print(formatted_data)
+        #print(formatted_data)
 
     def randomTrainList(self): 
         epochList = []
@@ -161,7 +159,6 @@ class CustomDataset(Dataset):
 
 ########################## 加载/释放 图结构数据 ##########################
     def initNextGraphData(self):
-
         start = time.time()
         # 查看是否需要释放
         if self.subGptr > 0:
@@ -708,7 +705,6 @@ class CustomDataset(Dataset):
         matrix = matrix.reshape(1,testSize)
         return torch.tensor(matrix).to(device='cpu')
 
-
 def collate_fn(data):
     """
     data 输入结构介绍：
@@ -725,8 +721,9 @@ if __name__ == "__main__":
         epoch = config['epoch']
     train_loader = DataLoader(dataset=dataset, batch_size=batchsize,collate_fn=collate_fn,pin_memory=True)
     #time.sleep(2)
-    for index in range(50):
+    for index in range(1):
         #start = time.time()
         for graph,feat,label,number in train_loader:
-            #print("block:",graph)
-            pass
+            print("block:",graph[0].nodes('_N'))
+            exit()
+            #pass

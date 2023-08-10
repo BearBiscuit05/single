@@ -5,7 +5,7 @@
     "partNUM":4,
     "cacheNUM":4,
     "batchsize":1024,
-    "epoch":50,
+    "epoch":10,
     "preRating":2,
     "featlen":100,
     "fanout":[25,10],
