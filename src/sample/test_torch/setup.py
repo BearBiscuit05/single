@@ -7,8 +7,11 @@ setup(
     ext_modules = [
         CUDAExtension(
         "signn",  # 扩展模块的名称
-        sources = ["test_torch/sample_node.cpp",
-            "test_kernel/sample_kernel.cu"],
+        sources = [
+            "test_torch/sample_node.cpp",
+            "test_kernel/sample_kernel.cu",
+            "test_kernel/random_state_kernel.cu",
+        ],
         )
     ],
     cmdclass={
