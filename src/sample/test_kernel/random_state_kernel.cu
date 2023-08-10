@@ -27,5 +27,7 @@ GPURandomStates::GPURandomStates(
     unsigned long seed =
         std::chrono::system_clock::now().time_since_epoch().count();
     init_random_states<<<grid, block>>>(_states.data(), _num_states, seed);
+    std::cout << "get in random..." << std::endl;
+    cudaDeviceSynchronize();
 }
 

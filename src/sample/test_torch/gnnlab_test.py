@@ -15,7 +15,7 @@ def val_test(graphEdge,boundList,nodeID,valArray):
 if __name__ == "__main__":
     graphEdge = []
     boundList = []
-    # os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
+    os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
 
     file_path = './../../data/products_4/part0/srcList.bin'
     graphEdge = np.fromfile(file_path, dtype=np.int32)
@@ -35,14 +35,13 @@ if __name__ == "__main__":
     out_src = torch.Tensor(out_src).to(torch.int).to('cuda:0')
     out_dst = [-1 for i in range(seed_num*fanout)]
     out_dst = torch.Tensor(out_dst).to(torch.int).to('cuda:0')
-    print(out_src)
-    print(out_dst)
+    # print(out_src)
+    # print(out_dst)
 
     start = time.time()
     signn.torch_sample_2hop(boundList,graphEdge,seed,seed_num,fanout,out_src,out_dst)
     print("comput time:",time.time()-start)
-    time.sleep(2)
-    out_src.to('cpu')
-    out_dst.to('cpu')
+    out_src = out_src.to('cpu')
+    out_dst = out_dst.to('cpu')
     print(out_src)
     print(out_dst)

@@ -2,6 +2,9 @@
 #include "sample.h"
 #include <cassert>
 #include <iostream>
+
+
+
 template <int BLOCK_SIZE, int TILE_SIZE>
 __global__ void sample_2hop_kernel(
     int* bound,int* graphEdge,int* seed,
@@ -53,6 +56,9 @@ inline int RoundUpDiv(int target, int unit) {
   return (target + unit - 1) / unit;
 }
 
+
+using StreamHandle = void*;
+
 void sample_2hop(
     int* bound,int* graphEdge,int* seed,
     int seed_num,int fanout,int* out_src,
@@ -61,18 +67,26 @@ void sample_2hop(
 
     const int slice = 1024;
     const int blockSize = 256;
-    int batchsize = 1024;
+    // int batchsize = 1024;
     int steps = RoundUpDiv(seed_num,slice);
     GPURandomStates randomStates(steps*blockSize);
     
-    dim3 grid(steps);
-    dim3 block(blockSize);
-    for (int i = 0 ; i < 10 ; i++)
-        std::cout << "out_src:" << out_src[i] << " out_dst:" << out_dst[i] << std::endl;
+    // dim3 grid(steps);
+    // dim3 block(blockSize);
+
+    // cudaStream_t stream;
+    // StreamHandle stream; 
+    //CUDA_CALL(cudaStreamCreateWithFlags(&stream, cudaStreamNonBlocking));
+    // cudaStreamCreateWithFlags(&stream, cudaStreamNonBlocking);
+    // auto stream_copy = static_cast<StreamHandle>(stream);
+    // auto cu_stream = static_cast<cudaStream_t>(stream);
+    
     // std::cout << "============hello world=================" << std::endl;
-    sample_2hop_kernel<blockSize, slice>
-    <<<grid,block>>>(bound,graphEdge,seed,
-    seed_num,fanout,out_src,out_dst,randomStates.GetStates());
-    // for (int i = 0 ; i < 10 ; i++)
-    //     std::cout << "out_src:" << out_src[i] << " out_dst:" << out_dst[i] << std::endl;
+    
+    // sample_2hop_kernel<blockSize, slice>
+    // <<<grid,block,0,cu_stream>>>(bound,graphEdge,seed,
+    // seed_num,fanout,out_src,out_dst,randomStates.GetStates());
+    // cudaDeviceSynchronize();
+    // CUDA_CALL(cudaStreamSynchronize(static_cast<cudaStream_t>(stream)));
+    // cudaStreamSynchronize(static_cast<cudaStream_t>(stream));
 }
