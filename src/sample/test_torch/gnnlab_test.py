@@ -35,7 +35,7 @@ if __name__ == "__main__":
     out_dst = [-1 for i in range(seed_num*fanout)]
     out_dst = torch.Tensor(out_dst).to(torch.int).to('cuda:0')
     start = time.time()
-    signn.torch_sample_2hop(boundList,graphEdge,seed,seed_num,fanout,out_src,out_dst)
+    signn.torch_sample_2hop(graphEdge,boundList,seed,seed_num,fanout,out_src,out_dst)
     print("comput time:",time.time()-start)
 
     #halo测试

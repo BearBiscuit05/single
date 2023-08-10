@@ -11,12 +11,12 @@
 
 
 void torch_sample_2hop(
-    torch::Tensor &bound,torch::Tensor &graphEdge,
+    torch::Tensor &graphEdge,torch::Tensor &bound,
     torch::Tensor &seed,int seed_num,int fanout,
     torch::Tensor &out_src,torch::Tensor &out_dst
     ) {
     sample_2hop(
-        (int*) bound.data_ptr(),(int*) graphEdge.data_ptr(),(int*) seed.data_ptr(),
+        (int*) graphEdge.data_ptr(),(int*) bound.data_ptr(),(int*) seed.data_ptr(),
         seed_num,fanout,(int*) out_src.data_ptr(),
         (int*) out_dst.data_ptr());
 }

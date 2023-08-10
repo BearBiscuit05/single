@@ -7,7 +7,7 @@
 
 template <int BLOCK_SIZE, int TILE_SIZE>
 __global__ void sample_2hop_kernel(
-    int* bound,int* graphEdge,int* seed,
+    int* graphEdge,int* bound,int* seed,
     int seed_num,int fanout,
     int* out_src,int* out_dst,unsigned long random_states) {
     
@@ -104,7 +104,7 @@ inline int RoundUpDiv(int target, int unit) {
 using StreamHandle = void*;
 
 void sample_2hop(
-    int* bound,int* graphEdge,int* seed,
+    int* graphEdge,int* bound,int* seed,
     int seed_num,int fanout,int* out_src,
     int* out_dst)
 {   
@@ -129,7 +129,7 @@ void sample_2hop(
     unsigned long timeseed =
         std::chrono::system_clock::now().time_since_epoch().count();
     sample_2hop_kernel<blockSize, slice>
-    <<<grid,block>>>(bound,graphEdge,seed,
+    <<<grid,block>>>(graphEdge,bound,seed,
     seed_num,fanout,out_src,out_dst,timeseed);
     cudaDeviceSynchronize();
     // CUDA_CALL(cudaStreamSynchronize(static_cast<cudaStream_t>(stream)));
