@@ -1,4 +1,22 @@
-# 测试文件
+# 测试情况汇总
 
-## 已知错误：
-1. valID.bin和testID.bin错误地保存了原始特征中train_mask的数据，位置在predata/graph2bin.py的函数gen_ids_file三个torch.save
+## 测试已发现错误
+### 数据转换测试
+1.valID.bin和testID.bin错误地保存了原始特征中train_mask的数据，位置在predata/graph2bin.py的函数gen_ids_file三个torch.save
+
+## 已完成的测试项
+### 数据转换测试
+dgl<->bin file的数据转换，实现在data2binTest.py中
+期望是可以使得我们的二进制数据可以从新加载到dgl中，与dgl原本的图+特征完全一致
+1.测试图数据从dgl数据集(边集)转换到srclist与bound时是否有问题
+2.测试特征的转换是否存在问题
+3.测试数据标签的转换是否存在问题
+4.测试训练集，验证集，测试集是否有问题
+5.测试halo部分的输出是否可以还原至原来
+
+## 未完成的测试项
+### 运行流程测试
+1.halo加载后，id的变化是否可以还原
+2.特征提取部分是否可以与nodeid对应
+3.采样函数是否可以正确采样结果
+4.子图+子图之间的切换是否会影响数据
