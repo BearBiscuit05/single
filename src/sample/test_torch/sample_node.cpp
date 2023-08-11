@@ -10,15 +10,15 @@
 #include "sample.h"
 
 
-void torch_sample_2hop(
+void torch_sample_hop(
     torch::Tensor &graphEdge,torch::Tensor &bound,
     torch::Tensor &seed,int seed_num,int fanout,
-    torch::Tensor &out_src,torch::Tensor &out_dst
+    torch::Tensor &out_src,torch::Tensor &out_dst,int gapNUM
     ) {
-    sample_2hop(
+    sample_hop(
         (int*) graphEdge.data_ptr(),(int*) bound.data_ptr(),(int*) seed.data_ptr(),
         seed_num,fanout,(int*) out_src.data_ptr(),
-        (int*) out_dst.data_ptr());
+        (int*) out_dst.data_ptr(),gapNUM);
 }
 
 
@@ -33,14 +33,14 @@ void torch_graph_halo_merge(
 }
 
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
-    m.def("torch_sample_2hop",
-          &torch_sample_2hop,
-          "2 hop sample");
+    m.def("torch_sample_hop",
+          &torch_sample_hop,
+          "sample neri");
     m.def("torch_graph_halo_merge",
           &torch_graph_halo_merge,
           "graph halo merge");
 }
 
 // TORCH_LIBRARY(sample_hop_new, m) {
-//     m.def("torch_sample_2hop", torch_sample_2hop);
+//     m.def("torch_sample_hop", torch_sample_hop);
 // }

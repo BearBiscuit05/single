@@ -3,10 +3,10 @@
 
 #include "random_state.h"
 
-void sample_2hop(
+void sample_hop(
     int* graphEdge,int* bound,int* seed,
     int seed_num,int fanout,int* out_src,
-    int* out_dst);
+    int* out_dst,int gapNUM);
 
 void graph_halo_merge(
     int* edge,int* bound,
