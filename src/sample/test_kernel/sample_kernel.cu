@@ -12,7 +12,7 @@ __global__ void sample_hop_kernel(
     int* out_src,int* out_dst,
     unsigned long random_states,int gapNUM) {
     // assert(BLOCK_SIZE == blockDim.x);
-    
+    fanout = fanout - 1;
     const size_t block_start = TILE_SIZE * blockIdx.x;
     const size_t block_end = TILE_SIZE * (blockIdx.x + 1);
     int idx = blockIdx.x * blockDim.x + threadIdx.x;   
@@ -28,21 +28,27 @@ __global__ void sample_hop_kernel(
         if (index < seed_num && rid >= 0) {
             int off = bound[rid*2] + gapNUM;
             int len = bound[rid*2+1] - bound[rid*2] - gapNUM;
+            out_src[index] = rid;
+            out_dst[index] = rid;
             // printf("node gap: %d\n",gapNUM);
             // printf("node off: %d\n",off);
             // printf("neri len: %d\n",len);
             if (len <= fanout) {
                 size_t j = 0;
                 for (; j < len; ++j) {
-                    out_dst[index * fanout + j] = rid;
-                    out_src[index * fanout + j] = graphEdge[off + j];
+                    out_dst[seed_num + index * fanout + j] = rid;
+                    out_src[seed_num + index * fanout + j] = graphEdge[off + j];
+                }
+                for (; j < fanout; ++j) {
+                    out_dst[seed_num + index * fanout + j] = -1;
+                    out_src[seed_num + index * fanout + j] = -1;
                 }
             } else {
                 for (int j = 0; j < fanout; j++) {
                     int selected_j = curand(&local_state) % (len - j);
                     int selected_node_id = graphEdge[off + selected_j];
-                    out_dst[index * fanout + j] = rid;
-                    out_src[index * fanout + j] = selected_node_id;
+                    out_dst[seed_num + index * fanout + j] = rid;
+                    out_src[seed_num + index * fanout + j] = selected_node_id;
                     graphEdge[off + selected_j] = graphEdge[off+len-j-1];
                     graphEdge[off+len-j-1] = selected_node_id;
                 }

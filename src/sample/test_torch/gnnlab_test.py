@@ -59,24 +59,24 @@ def right_Test(graphEdge,boundList):
     # print(graphEdge.device)
     # print(boundList.device)
     print(boundList)
-    seed_num = 2
-    seed = [0,1]
+    seed_num = 1024 * 25
+    seed = [i for i in range(seed_num)]
     seed = torch.Tensor(seed).to(torch.int).to('cuda:0')
     
-    fanout = 4
+    fanout = 10
     out_src = [-1 for i in range(seed_num*fanout)]
     out_src = torch.Tensor(out_src).to(torch.int).to('cuda:0')
     out_dst = [-1 for i in range(seed_num*fanout)]
     out_dst = torch.Tensor(out_dst).to(torch.int).to('cuda:0')
-    print("graphEdge=",graphEdge)
-    print("out_src=",out_src)
-    print("out_dst=",out_dst)
+    # print("graphEdge=",graphEdge)
+    # print("out_src=",out_src)
+    # print("out_dst=",out_dst)
     start = time.time()
     signn.torch_sample_hop(graphEdge,boundList,seed,seed_num,fanout,out_src,out_dst,0)
     print("comput time:",time.time()-start)
-    print("graphEdge=",graphEdge)
-    print("out_src=",out_src)
-    print("out_dst=",out_dst)
+    # print("graphEdge=",graphEdge)
+    # print("out_src=",out_src)
+    # print("out_dst=",out_dst)
 
 if __name__ == "__main__":
     graphEdge = []

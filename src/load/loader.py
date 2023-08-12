@@ -16,8 +16,12 @@ import logging
 import signn
 import os
 
+# logging.basicConfig(level=logging.INFO,filename='./log/loader.log',filemode='w',
+#                     format='%(asctime)s-%(levelname)s-%(message)s',datefmt='%H:%M:%S')
+                    #format='%(message)s')
+
 logging.basicConfig(level=logging.INFO,filename='./log/loader.log',filemode='w',
-                    format='%(asctime)s-%(levelname)s-%(message)s',datefmt='%H:%M:%S')
+                    format='%(message)s',datefmt='%H:%M:%S')
                     #format='%(message)s')
 logger = logging.getLogger(__name__)
 
@@ -95,6 +99,9 @@ class CustomDataset(Dataset):
             self.templateBlock = self.genPYGBatchTemplate()
 
         #### 数据预取 ####
+        self.template_cache_graph,self.template_cache_label = self.initCacheData()
+        self.temp_merge_id = torch.zeros(len(self.template_cache_graph[0][0])+1, dtype=torch.int64)
+
         self.loadingGraph(merge=False)
         self.loadingMemFeat(self.trainSubGTrack[self.subGptr//self.partNUM][self.subGptr%self.partNUM])
         self.initNextGraphData()
@@ -199,6 +206,7 @@ class CustomDataset(Dataset):
         for index in range(self.partNUM):
             filePath = self.dataPath + "/part" + str(index)   
             trainIDs = torch.load(filePath+"/trainID.bin")
+            # trainIDs = trainIDs.to(torch.uint8).nonzero().squeeze()[:TESTNODE]
             trainIDs = trainIDs.to(torch.uint8).nonzero().squeeze()
             _,idDict[index] = torch.sort(trainIDs)
             idDict[index] = idDict[index]
@@ -334,105 +342,50 @@ class CustomDataset(Dataset):
             info[0] = torch.tensor(info[0])
             info[1] = torch.tensor(info[1])
 
-    # def sampleNeigGPU(self,sampleIDs,cacheGraph,cudaDeviceIndex):
-    #     os.environ['CUDA_LAUNCH_BLOCKING'] = '1' #调试用
-    #     if torch.cuda.is_available() == False:
-    #         print('No GPU Device')
-    #         return self.sampleNeig(sampleIDs,cacheGraph)
-    #     elif cudaDeviceIndex < 0 or cudaDeviceIndex >= torch.cuda.device_count():
-    #         #print('Wrong GPU Index Argument %d, Select default 0'%cudaDeviceIndex)
-    #         cudaDeviceIndex = 0
-    #     deviceName = 'cuda:%d' % cudaDeviceIndex
-
-    #     layer = len(self.fanout)
-
-    #     batchlen = 0
-    #     if self.trainptr < self.trainLoop - 1:
-    #         # 完整batch
-    #         batchlen = self.batchsize
-    #     else:
-    #         # 最后一个batch
-    #         offset = self.trainptr*self.batchsize
-    #         batchlen = self.subGtrainNodesNUM - offset
-        
-    #     if torch.is_tensor(sampleIDs):
-    #         trainlist = sampleIDs[0:batchlen].clone().to(device=deviceName).to(torch.int32).contiguous()
-    #     else:
-    #         trainlist = torch.tensor(sampleIDs[0:batchlen],device=deviceName,dtype=torch.int32).contiguous()
-
-    #     for info in cacheGraph:
-    #         info[0] = torch.tensor(info[0],device=deviceName,dtype=torch.int32).contiguous()
-    #         info[1] = torch.tensor(info[1],device=deviceName,dtype=torch.int32).contiguous()
-        
-    #     if layer == 3:
-    #         sample_hop.torch_launch_sample_3hop_new(
-    #             cacheGraph[0][0],cacheGraph[0][1],cacheGraph[1][0],cacheGraph[1][1],cacheGraph[2][0],cacheGraph[2][1],
-    #             self.cacheData[0],self.cacheData[1],#srcdata, rangedata, 
-    #             trainlist,
-    #             self.fanout[0],self.fanout[1],self.fanout[2],batchlen,cudaDeviceIndex)
-    #     elif layer == 2:
-    #             sample_hop.torch_launch_sample_2hop_new(
-    #             cacheGraph[0][0],cacheGraph[0][1],cacheGraph[1][0],cacheGraph[1][1],
-    #             self.cacheData[0],self.cacheData[1],#srcdata, rangedata, 
-    #             trainlist,
-    #             self.fanout[0],self.fanout[1],batchlen,cudaDeviceIndex)
-    #     elif layer == 1:
-    #         sample_hop.torch_launch_sample_1hop_new(
-    #             cacheGraph[0][0],cacheGraph[0][1],
-    #             self.cacheData[0],self.cacheData[1],#srcdata, rangedata, 
-    #             trainlist,
-    #             self.fanout[0],batchlen,cudaDeviceIndex)
-    #     sample_end = time.time()
-    #     print("sample%dHop time in Python:%g s"%(layer,sample_end-sample_start))
-
     def sampleNeigGPU_bear(self,sampleIDs,cacheGraph):
-        # start = time.time()
-        gapNUM = 1
-        for info in cacheGraph:
-            info[0] = torch.tensor(info[0],dtype=torch.int32).to('cuda:0')#.contiguous()
-            info[1] = torch.tensor(info[1],dtype=torch.int32).to('cuda:0')#.contiguous()
-        # print("cacheGraph[0][0]=",cacheGraph[0][0])
-        # print("cacheGraph[1][0]=",cacheGraph[1][0])
-        # print("sampleIDs=",sampleIDs)
-        
-        
+        #logger.info("----------------------------------------------------")
+        #start = time.time()
+        # gapNUM = 1
+        # for info in cacheGraph:
+        #     info[0] = info[0].to('cuda:0')#.contiguous()
+        #     info[1] = info[1].to('cuda:0')#.contiguous()
+        #logger.info("cacheGraph turn to GPU cost time: {}s".format(time.time()-start))
+               
         sampleIDs = sampleIDs.to(torch.int32).to('cuda:0')
         layer = len(self.fanout)
+        loop_start = time.time()
         for l, fan_num in enumerate(self.fanout):
             fan_num = fan_num - 1
             seed_num = len(sampleIDs)
-            cacheGraph[layer-l-1][0][:seed_num] = sampleIDs
-            cacheGraph[layer-l-1][1][:seed_num] = sampleIDs
-            out_src = cacheGraph[layer-l-1][0][seed_num:]
-            out_dst = cacheGraph[layer-l-1][0][seed_num:]
-            
+            out_src = cacheGraph[layer-l-1][0]
+            out_dst = cacheGraph[layer-l-1][0]
+            sample_start = time.time()
             signn.torch_sample_hop(
                 self.cacheData[0],self.cacheData[1],
                 sampleIDs,seed_num,fan_num,
                 out_src,out_dst,gapNUM)
-            # print("out_src=",out_src)
-            # print("out_dst=",out_dst)
             sampleIDs = cacheGraph[layer-l-1][0]
-        #print("comput time:",time.time()-start)
-        # print("cacheGraph[0][0]=",cacheGraph[0][0])
-        # print("cacheGraph[1][0]=",cacheGraph[1][0])
-        # exit()
-
+            #logger.debug("sample layer-{} func cost time: {}s".format(l,time.time()-sample_start))
+        #logger.info("sampleNeigGPU_bear func cost time: {}s".format(time.time()-loop_start))
+        #logger.info("----------------------------------------------------")
+        #exit()
 
     def initCacheData(self):
         number = self.batchsize
         tmp = self.batchsize
         cacheGraph = []
         for layer, fan in enumerate(self.fanout):
-            dst = [-1] * tmp * fan
-            src = [-1] * tmp * fan
-            cacheGraph.insert(0,[src,dst])
+            dst = torch.full((tmp * fan,), -1, dtype=torch.int32).to("cuda:0")  # 使用PyTorch张量，指定dtype
+            src = torch.full((tmp * fan,), -1, dtype=torch.int32).to("cuda:0")  # 使用PyTorch张量，指定dtype
+            cacheGraph.insert(0, [src, dst])
             tmp = tmp * fan
         cacheLabel = torch.zeros(self.batchsize)
-        return cacheGraph,cacheLabel
+        return cacheGraph, cacheLabel
 
     def preGraphBatch(self):
         # 如果当前管道已经被充满，则不采样，该函数直接返回
+        logger.debug("===============================================")
+        preBatchTime = time.time()
         if self.graphPipe.qsize() >= self.cacheNUM:
             return 0
 
@@ -442,9 +395,14 @@ class CustomDataset(Dataset):
             self.trainptr = 0           
             self.initNextGraphData()
                    
-        cacheGraph,cacheLabel = self.initCacheData()
+        #cacheTime = time.time()
+        cacheGraph = copy.deepcopy(self.template_cache_graph)
+        cacheLabel = copy.deepcopy(self.template_cache_label)
         sampleIDs = -1 * torch.ones(self.batchsize,dtype=torch.int64)
-        #sampleIDs = [-1] * self.batchsize
+        #logger.debug("cache copy graph and label cost {}s".format(time.time()-cacheTime))
+        
+        ##
+        #createDataTime = time.time()
         batchlen = 0
         if self.trainptr < self.trainLoop - 1:
             # 完整batch
@@ -460,30 +418,42 @@ class CustomDataset(Dataset):
             batchlen = self.subGtrainNodesNUM - offset
             #sliceIDs = sampleIDs[0:self.subGtrainNodesNUM - offset].to(torch.long)
             cacheLabel = self.nodeLabels[sampleIDs[0:self.subGtrainNodesNUM - offset]]
-            
-        
-        sampleTime = time.time()
+        #logger.info("createDataTime cost {}s".format(time.time()-createDataTime))    
+        ##
+
+        ##
+        #sampleTime = time.time()
         logger.debug("sampleIDs shape:{}".format(len(sampleIDs)))
         #self.sampleNeig(sampleIDs,cacheGraph)
         self.sampleNeigGPU_bear(sampleIDs,cacheGraph)
         logger.debug("cacheGraph shape:{}, first graph shape:{}".format(len(cacheGraph),len(cacheGraph[0][0])))
-        logger.info("sample subG cost {}s".format(time.time()-sampleTime))
+        #logger.info("sample subG all cost {}s".format(time.time()-sampleTime))
+        ##
 
-        featTime = time.time()
+        ##
+        #featTime = time.time()
         cacheFeat = self.featMerge(cacheGraph)
         logger.debug("featLen shape:{}".format(cacheFeat.shape))
-        logger.info("subG feat merge cost {}s".format(time.time()-featTime))
+        #logger.info("subG feat merge cost {}s".format(time.time()-featTime))
+        ##
 
-        transTime = time.time()
+        ##
+        #transTime = time.time()
         if self.framework == "dgl":
             cacheGraph = self.transGraph2DGLBlock(cacheGraph)
         elif self.framework == "pyg":
             cacheGraph = self.transGraph2PYGBatch(cacheGraph)
-        logger.debug("subG trans cost {}s".format(time.time()-transTime))
-
+        #logger.info("subG trans cost {}s".format(time.time()-transTime))
+        
+        ##
+        #putinTime = time.time()
         cacheData = [cacheGraph,cacheFeat,cacheLabel,batchlen]
         self.graphPipe.put(cacheData)
+        #logger.info("putin pipe time {}s".format(time.time()-putinTime))
+        ##
+        
         self.trainptr += 1
+        logger.info("pre graph sample cost {}s".format(time.time()-preBatchTime))
         return 0
     
     def preGPUBatch(self):
@@ -520,10 +490,22 @@ class CustomDataset(Dataset):
             tmp_feat = torch.from_numpy(tmp_feat).reshape(-1,100)
             self.feats = torch.cat([self.feats,tmp_feat])
     
-    def featMerge(self,cacheGraph):
-        nodeids = cacheGraph[0][0]
-        nodeids = torch.cat([torch.tensor([0]),nodeids.to(device='cpu')])
-        return self.feats[nodeids]
+    def featMerge(self,cacheGraph):    
+        print("===========================================")
+        toCPUTime = time.time()
+        nodeids = cacheGraph[0][0]       
+        nodeids = nodeids.to(device='cpu')
+        print("to CPU time {}s".format(time.time()-toCPUTime))
+        catTime = time.time()
+        self.temp_merge_id[1:] = nodeids
+        print("cat time {}s".format(time.time()-catTime))
+        featTime = time.time()
+        test = self.feats[self.temp_merge_id]       
+        print("feat merge {}s".format(time.time()-featTime))
+        print("all merge {}s".format(time.time()-toCPUTime))
+        return test
+
+        
 
 ########################## 数据调整 ##########################
     def cleanPipe(self):
@@ -615,9 +597,17 @@ class CustomDataset(Dataset):
                     ptr += 1
             seeds = copy.deepcopy(src)
             template.insert(0,[torch.tensor(src),torch.tensor(dst)])
+        # print(template)
+        # print(len(template[0][0]))
+        # print(len(template[1][0]))
+        # exit()
         return template
         
     def transGraph2DGLBlock(self,graphdata):
+        # print(len(graphdata[0][0]))
+        # print(len(graphdata[1][0]))
+        # print(graphdata)
+        # exit()
         # 先生成掩码
         # exit()
         masks = []
@@ -626,7 +616,6 @@ class CustomDataset(Dataset):
             layer_mask = torch.ge(src, 0)
             masks.append(layer_mask)
             logger.debug("masks shape:{}".format(layer_mask.shape))
-            #layer_mask = torch.cat((layer_mask, torch.tensor([True])))            
         template = copy.deepcopy(self.templateBlock)
 
         for index,mask in enumerate(masks):
@@ -682,8 +671,6 @@ class CustomDataset(Dataset):
             seeds = copy.deepcopy(src)
             template_src = torch.cat([template_src,torch.tensor(src,dtype=torch.int64)])
             template_dst = torch.cat([template_dst,torch.tensor(dst,dtype=torch.int64)])
-        # template_src = torch.cat([template_src,zeros])
-        # template_dst = torch.cat([template_dst,zeros])
         PYGTemplate = torch.stack([template_src,template_dst])
         return PYGTemplate
 
@@ -692,8 +679,7 @@ class CustomDataset(Dataset):
         masks = []
         for src, dst in graphdata:
             layer_mask = torch.ge(src, 0)
-            masks.append(layer_mask)
-        
+            masks.append(layer_mask)        
         masks = torch.cat(masks)
         template = copy.deepcopy(self.templateBlock)
         template = template * masks
@@ -725,9 +711,17 @@ if __name__ == "__main__":
     train_loader = DataLoader(dataset=dataset, batch_size=batchsize,collate_fn=collate_fn,pin_memory=True)
     #dataset.preGraphBatch()
     #time.sleep(2)
+    count = 0
     for index in range(1):
-        #start = time.time()
+        start = time.time()
         for graph,feat,label,number in train_loader:
+            # print("graph=",graph)
+            # print("feat=",len(feat))
+            # print("label=",len(label))
+            count = count + 1
+            if count > 20:
+                break
             #print("block:",graph[0].nodes('_N'))
             # exit()
-            pass
+            #pass
+        #print("compute time:{}".format(time.time()-start))
