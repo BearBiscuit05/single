@@ -343,17 +343,10 @@ class CustomDataset(Dataset):
             info[1] = torch.tensor(info[1])
 
     def sampleNeigGPU_bear(self,sampleIDs,cacheGraph):
-        #logger.info("----------------------------------------------------")
-        #start = time.time()
-        # gapNUM = 1
-        # for info in cacheGraph:
-        #     info[0] = info[0].to('cuda:0')#.contiguous()
-        #     info[1] = info[1].to('cuda:0')#.contiguous()
-        #logger.info("cacheGraph turn to GPU cost time: {}s".format(time.time()-start))
-               
+        gapNUM = 1      
         sampleIDs = sampleIDs.to(torch.int32).to('cuda:0')
         layer = len(self.fanout)
-        loop_start = time.time()
+        #loop_start = time.time()
         for l, fan_num in enumerate(self.fanout):
             fan_num = fan_num - 1
             seed_num = len(sampleIDs)
@@ -384,25 +377,27 @@ class CustomDataset(Dataset):
 
     def preGraphBatch(self):
         # 如果当前管道已经被充满，则不采样，该函数直接返回
-        logger.debug("===============================================")
+        logger.info("===============================================")
         preBatchTime = time.time()
         if self.graphPipe.qsize() >= self.cacheNUM:
             return 0
 
+        nextLoadingTime = time.time()
         if self.trainptr == self.trainLoop:
             # 当前cache已经失效，则需要reload新图
             logger.debug("触发cache reload ,ptr:{}".format(self.trainptr))
             self.trainptr = 0           
             self.initNextGraphData()
-                   
-        #cacheTime = time.time()
+        logger.info("next loading cost {}s".format(time.time()-nextLoadingTime))
+
+        cacheTime = time.time()
         cacheGraph = copy.deepcopy(self.template_cache_graph)
         cacheLabel = copy.deepcopy(self.template_cache_label)
         sampleIDs = -1 * torch.ones(self.batchsize,dtype=torch.int64)
-        #logger.debug("cache copy graph and label cost {}s".format(time.time()-cacheTime))
+        logger.info("cache copy graph and label cost {}s".format(time.time()-cacheTime))
         
         ##
-        #createDataTime = time.time()
+        createDataTime = time.time()
         batchlen = 0
         if self.trainptr < self.trainLoop - 1:
             # 完整batch
@@ -418,16 +413,16 @@ class CustomDataset(Dataset):
             batchlen = self.subGtrainNodesNUM - offset
             #sliceIDs = sampleIDs[0:self.subGtrainNodesNUM - offset].to(torch.long)
             cacheLabel = self.nodeLabels[sampleIDs[0:self.subGtrainNodesNUM - offset]]
-        #logger.info("createDataTime cost {}s".format(time.time()-createDataTime))    
+        logger.info("create Data Time cost {}s".format(time.time()-createDataTime))    
         ##
 
         ##
-        #sampleTime = time.time()
+        sampleTime = time.time()
         logger.debug("sampleIDs shape:{}".format(len(sampleIDs)))
         #self.sampleNeig(sampleIDs,cacheGraph)
         self.sampleNeigGPU_bear(sampleIDs,cacheGraph)
         logger.debug("cacheGraph shape:{}, first graph shape:{}".format(len(cacheGraph),len(cacheGraph[0][0])))
-        #logger.info("sample subG all cost {}s".format(time.time()-sampleTime))
+        logger.info("sample subG all cost {}s".format(time.time()-sampleTime))
         ##
 
         ##
@@ -454,6 +449,7 @@ class CustomDataset(Dataset):
         
         self.trainptr += 1
         logger.info("pre graph sample cost {}s".format(time.time()-preBatchTime))
+        logger.info("===============================================")
         return 0
     
     def preGPUBatch(self):
@@ -491,22 +487,24 @@ class CustomDataset(Dataset):
             self.feats = torch.cat([self.feats,tmp_feat])
     
     def featMerge(self,cacheGraph):    
-        print("===========================================")
+        logger.info("-------------------------------------------------")
         toCPUTime = time.time()
         nodeids = cacheGraph[0][0]       
         nodeids = nodeids.to(device='cpu')
-        print("to CPU time {}s".format(time.time()-toCPUTime))
+        logger.info("to CPU time {}s".format(time.time()-toCPUTime))
+        
         catTime = time.time()
         self.temp_merge_id[1:] = nodeids
-        print("cat time {}s".format(time.time()-catTime))
+        logger.info("cat time {}s".format(time.time()-catTime))
+        
         featTime = time.time()
         test = self.feats[self.temp_merge_id]       
-        print("feat merge {}s".format(time.time()-featTime))
-        print("all merge {}s".format(time.time()-toCPUTime))
+        logger.info("feat merge {}s".format(time.time()-featTime))
+        logger.info("all merge {}s".format(time.time()-toCPUTime))
+        logger.info("-------------------------------------------------")
         return test
 
         
-
 ########################## 数据调整 ##########################
     def cleanPipe(self):
         # 清理数据管道及信号
@@ -712,16 +710,17 @@ if __name__ == "__main__":
     #dataset.preGraphBatch()
     #time.sleep(2)
     count = 0
-    for index in range(1):
+    for index in range(3):
         start = time.time()
+        loopTime = time.time()
         for graph,feat,label,number in train_loader:
             # print("graph=",graph)
             # print("feat=",len(feat))
             # print("label=",len(label))
             count = count + 1
-            if count > 20:
-                break
+            if count % 20 == 0:
+                print("loop time:{}".format(time.time()-loopTime))
             #print("block:",graph[0].nodes('_N'))
             # exit()
-            #pass
-        #print("compute time:{}".format(time.time()-start))
+            loopTime = time.time()
+        print("compute time:{}".format(time.time()-start))
