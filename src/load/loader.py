@@ -395,14 +395,14 @@ class CustomDataset(Dataset):
             self.trainptr = 0           
             self.initNextGraphData()
                    
-        #cacheTime = time.time()
+        cacheTime = time.time()
         cacheGraph = copy.deepcopy(self.template_cache_graph)
         cacheLabel = copy.deepcopy(self.template_cache_label)
         sampleIDs = -1 * torch.ones(self.batchsize,dtype=torch.int64)
-        #logger.debug("cache copy graph and label cost {}s".format(time.time()-cacheTime))
+        logger.info("cache copy graph and label cost {}s".format(time.time()-cacheTime))
         
         ##
-        #createDataTime = time.time()
+        createDataTime = time.time()
         batchlen = 0
         if self.trainptr < self.trainLoop - 1:
             # 完整batch
@@ -418,38 +418,38 @@ class CustomDataset(Dataset):
             batchlen = self.subGtrainNodesNUM - offset
             #sliceIDs = sampleIDs[0:self.subGtrainNodesNUM - offset].to(torch.long)
             cacheLabel = self.nodeLabels[sampleIDs[0:self.subGtrainNodesNUM - offset]]
-        #logger.info("createDataTime cost {}s".format(time.time()-createDataTime))    
+        logger.info("createDataTime cost {}s".format(time.time()-createDataTime))    
         ##
 
         ##
-        #sampleTime = time.time()
+        sampleTime = time.time()
         logger.debug("sampleIDs shape:{}".format(len(sampleIDs)))
         #self.sampleNeig(sampleIDs,cacheGraph)
         self.sampleNeigGPU_bear(sampleIDs,cacheGraph)
         logger.debug("cacheGraph shape:{}, first graph shape:{}".format(len(cacheGraph),len(cacheGraph[0][0])))
-        #logger.info("sample subG all cost {}s".format(time.time()-sampleTime))
+        logger.info("sample subG all cost {}s".format(time.time()-sampleTime))
         ##
 
         ##
-        #featTime = time.time()
+        featTime = time.time()
         cacheFeat = self.featMerge(cacheGraph)
         logger.debug("featLen shape:{}".format(cacheFeat.shape))
-        #logger.info("subG feat merge cost {}s".format(time.time()-featTime))
+        logger.info("subG feat merge cost {}s".format(time.time()-featTime))
         ##
 
         ##
-        #transTime = time.time()
+        transTime = time.time()
         if self.framework == "dgl":
             cacheGraph = self.transGraph2DGLBlock(cacheGraph)
         elif self.framework == "pyg":
             cacheGraph = self.transGraph2PYGBatch(cacheGraph)
-        #logger.info("subG trans cost {}s".format(time.time()-transTime))
+        logger.info("subG trans cost {}s".format(time.time()-transTime))
         
         ##
-        #putinTime = time.time()
+        putinTime = time.time()
         cacheData = [cacheGraph,cacheFeat,cacheLabel,batchlen]
         self.graphPipe.put(cacheData)
-        #logger.info("putin pipe time {}s".format(time.time()-putinTime))
+        logger.info("putin pipe time {}s".format(time.time()-putinTime))
         ##
         
         self.trainptr += 1
@@ -491,18 +491,19 @@ class CustomDataset(Dataset):
             self.feats = torch.cat([self.feats,tmp_feat])
     
     def featMerge(self,cacheGraph):    
-        print("===========================================")
+        logger.info("-----------------------------------------------")
         toCPUTime = time.time()
         nodeids = cacheGraph[0][0]       
         nodeids = nodeids.to(device='cpu')
-        print("to CPU time {}s".format(time.time()-toCPUTime))
+        logger.info("to CPU time {}s".format(time.time()-toCPUTime))
         catTime = time.time()
         self.temp_merge_id[1:] = nodeids
-        print("cat time {}s".format(time.time()-catTime))
+        logger.info("cat time {}s".format(time.time()-catTime))
         featTime = time.time()
         test = self.feats[self.temp_merge_id]       
-        print("feat merge {}s".format(time.time()-featTime))
-        print("all merge {}s".format(time.time()-toCPUTime))
+        logger.info("feat merge {}s".format(time.time()-featTime))
+        logger.info("all merge {}s".format(time.time()-toCPUTime))
+        logger.info("-----------------------------------------------")
         return test
 
         
