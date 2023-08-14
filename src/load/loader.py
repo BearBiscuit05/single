@@ -690,7 +690,6 @@ if __name__ == "__main__":
         start = time.time()
         loopTime = time.time()
         for graph,feat,label,number in train_loader:
-            print(graph[0].device)
             # print("graph=",graph)
             # print("feat=",len(feat))
             # print("label=",len(label))
