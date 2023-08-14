@@ -170,6 +170,7 @@ def train(args, device, g, reverse_eids, seed_edges, model):
         for it, (input_nodes, pair_graph, neg_pair_graph, blocks) in enumerate(
             dataloader
         ):
+            print(blocks)
             x = blocks[0].srcdata["feat"]
             pos_score, neg_score = model(pair_graph, neg_pair_graph, blocks, x)
             score = torch.cat([pos_score, neg_score])

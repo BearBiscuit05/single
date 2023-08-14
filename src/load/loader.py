@@ -426,41 +426,32 @@ class CustomDataset(Dataset):
         ##
 
         ##
-        #featTime = time.time()
+        featTime = time.time()
         cacheFeat = self.featMerge(cacheGraph)
         logger.debug("featLen shape:{}".format(cacheFeat.shape))
-        #logger.info("subG feat merge cost {}s".format(time.time()-featTime))
+        logger.info("subG feat merge cost {}s".format(time.time()-featTime))
         ##
 
         ##
-        #transTime = time.time()
+        transTime = time.time()
         if self.framework == "dgl":
             cacheGraph = self.transGraph2DGLBlock(cacheGraph)
         elif self.framework == "pyg":
             cacheGraph = self.transGraph2PYGBatch(cacheGraph)
-        #logger.info("subG trans cost {}s".format(time.time()-transTime))
+        logger.info("subG trans cost {}s".format(time.time()-transTime))
         
         ##
-        #putinTime = time.time()
+        putinTime = time.time()
         cacheData = [cacheGraph,cacheFeat,cacheLabel,batchlen]
         self.graphPipe.put(cacheData)
-        #logger.info("putin pipe time {}s".format(time.time()-putinTime))
+        logger.info("putin pipe time {}s".format(time.time()-putinTime))
         ##
         
         self.trainptr += 1
         logger.info("pre graph sample cost {}s".format(time.time()-preBatchTime))
         logger.info("===============================================")
         return 0
-    
-    def preGPUBatch(self):
-        # 迁移到GPU中
-        # 1-hop 采样
-        
-        # 2-hop 采样
 
-        # 3-hop 采样
-        
-        pass
 
 ########################## 特征提取 ##########################
     def loadingFeatFileHead(self):
@@ -567,8 +558,6 @@ class CustomDataset(Dataset):
         logger.info("reset mode {}...".format(self.mode))
         # 清空管道与信号量
         self.cleanPipe()
-        
-        # 重置并初始化数据
         self.cacheData = [] 
         self.feats == []
         self.trainSubGTrack = self.randomTrainList()    
@@ -595,19 +584,9 @@ class CustomDataset(Dataset):
                     ptr += 1
             seeds = copy.deepcopy(src)
             template.insert(0,[torch.tensor(src),torch.tensor(dst)])
-        # print(template)
-        # print(len(template[0][0]))
-        # print(len(template[1][0]))
-        # exit()
         return template
         
     def transGraph2DGLBlock(self,graphdata):
-        # print(len(graphdata[0][0]))
-        # print(len(graphdata[1][0]))
-        # print(graphdata)
-        # exit()
-        # 先生成掩码
-        # exit()
         masks = []
         blocks = []
         for src, dst in graphdata:
@@ -617,19 +596,16 @@ class CustomDataset(Dataset):
         template = copy.deepcopy(self.templateBlock)
 
         for index,mask in enumerate(masks):
-            src,dst = template[index]
-            src = src.to(device=('cuda:%d'%self.cudaDevice))
-            dst = dst.to(device=('cuda:%d'%self.cudaDevice))
-            src *= mask
-            dst *= mask
-        
+            template[index][0] = template[index][0].to(device=('cuda:%d'%self.cudaDevice))
+            template[index][1] = template[index][1].to(device=('cuda:%d'%self.cudaDevice))
+            template[index][0] *= mask
+            template[index][1] *= mask
+
         ## 修改部分
         for index,(src,dst) in enumerate(template):
             data = (src,dst)
             block = self.create_dgl_block(data,len(self.templateBlock[index][0])+1,(len(self.templateBlock[index][0])//self.fanout[-(index+1)])+1)
             blocks.append(block)
-        # print("cacheGraph[0]=",graphdata[0][0])
-        # print("cacheGraph[0]=",graphdata[1])
         return blocks
 
     def create_dgl_block(self, data, num_src_nodes, num_dst_nodes):
@@ -714,6 +690,7 @@ if __name__ == "__main__":
         start = time.time()
         loopTime = time.time()
         for graph,feat,label,number in train_loader:
+            print(graph[0].device)
             # print("graph=",graph)
             # print("feat=",len(feat))
             # print("label=",len(label))

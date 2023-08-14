@@ -17,9 +17,7 @@ import mmap
 def create_dgl_block(data, num_src_nodes, num_dst_nodes):
     row, col = data
     gidx = dgl.heterograph_index.create_unitgraph_from_coo(2, num_src_nodes, num_dst_nodes, row, col, 'coo')
-    print(gidx)
     g = DGLBlock(gidx, (['_N'], ['_N']), ['_E'])
-    #g = DGLBlock(gidx)
     return g
 
 class SAGE(nn.Module):
@@ -43,18 +41,6 @@ class SAGE(nn.Module):
 
 
 if __name__ == '__main__':
-    # filePath = "../../data/products_4/part0"
-    # file = open(filePath+"/feat.bin", "r+b")
-    # head = mmap.mmap(file.fileno(), 0, access=mmap.ACCESS_DEFAULT)
-    # float_size = np.dtype(float).itemsize
-    # nodeIDs = [i for i in range(12)]
-    # feats = torch.zeros((len(nodeIDs), 10), dtype=torch.float32)
-    # for index, nodeID in enumerate(nodeIDs):
-    #     feat = torch.frombuffer(head, dtype=torch.float32, offset=nodeID*10*float_size, count=10)
-    #     feats[index] = feat
-    # print(feats.size())
-    
-    # feat = torch.rand((12, 10))
     feats = torch.rand((12, 10), dtype=torch.float32)
     blocks = []
     s = time.time()
@@ -63,7 +49,7 @@ if __name__ == '__main__':
     
     data = (src,dst)
     block = create_dgl_block(data, 12, 12)
-    print(block)
+    #print(block)
     # block = dgl.graph((src, dst))
     # block = dgl.to_block(block)
 
@@ -73,16 +59,18 @@ if __name__ == '__main__':
     src = th.tensor([1, 2, 0])
     data = (src,dst)
     block = create_dgl_block(data, 12, 12)
-    blocks.append(block.to('cuda:0'))
-    # print(blocks)
+    #print(block.device)
+    #block = block.to('cuda:0')
+    #blocks.append(block.to('cuda:0'))
+    print(block.device)
     # block = dgl.graph((src, dst))
     # block = dgl.to_block(block)
 
 
     # blocks.append(block.to('cuda:0'))
     # print(blocks[0].device)
-    model = SAGE(10, 16, 3).to('cuda:0')
+    # model = SAGE(10, 16, 3).to('cuda:0')
     # # # print(blocks)
-    model.train()
-    y_hat = model(blocks, feats.to('cuda:0'))
-    print(y_hat)
+    # model.train()
+    # y_hat = model(blocks, feats.to('cuda:0'))
+    # print(y_hat)
