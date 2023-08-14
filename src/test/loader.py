@@ -194,10 +194,11 @@ class CustomDataset(Dataset):
         self.nextGID = self.trainSubGTrack[self.subGptr//self.partNUM][self.subGptr%self.partNUM]
         halostart = time.time()
         self.loadingHalo()
-        self.haloSubG_test('/home/bear/workspace/singleGNN/data/raw-products_4/ogb-product.json')
+        self.haloSubG_test('/home/bear/workspace/singleGNN/data/raw-products_4/ogb-product.json','/home/bear/workspace/singleGNN/data/products_4/')
         haloend = time.time()
         logger.info("loadingHalo time: %g"%(haloend-halostart))
         self.loadingMemFeat(self.nextGID)
+        #self.feat_test('/home/bear/workspace/singleGNN/data/raw-products_4/ogb-product.json')
         logger.info("当前加载图为:{},下一个图:{},图训练集规模:{},图节点数目:{},图边数目:{},加载耗时:{}s"\
                         .format(self.trainingGID,self.nextGID,self.subGtrainNodesNUM,\
                         self.graphNodeNUM,self.graphEdgeNUM,time.time()-start))
@@ -671,8 +672,8 @@ class CustomDataset(Dataset):
         matrix = matrix.reshape(1,testSize)
         return torch.tensor(matrix).to(device='cpu')
 
-    def haloSubG_test(self,partConfigJson):
-        "测试halo部分的准确性"
+    def haloSubG_test(self,partConfigJson,datapath):
+        print("测试halo部分的准确性")
         with open(partConfigJson,'r') as f:
             SUBGconf = json.load(f)
             # 使用读取的数据
@@ -681,44 +682,106 @@ class CustomDataset(Dataset):
         edges = self.cacheData[0]
         nodeNum = len(self.cacheData[1])//2
         edgeNum = len(self.cacheData[0])
-        srcTensor = torch.zeros(edgeNum,dtype=torch.int32,device=('cuda:%d'%self.cudaDevice))
-        dstTensor = torch.zeros(edgeNum,dtype=torch.int32,device=('cuda:%d'%self.cudaDevice))
-        cnt = 0
+
+        srcs = []
+
         # 当前子图
         for dstid in range(self.graphNodeNUM):
             boundl,boundr = self.cacheData[1][2*dstid],self.cacheData[1][2*dstid+1]
-            srcids = self.cacheData[0][boundl:boundr]
-            # (srcid->dstid)是两个子图拼接以后的边，节点id是转换后的，注意需要转换成全局id
-            for index,srcid in enumerate(srcids):
-                local_srcid = srcid
-                local_dstid = dstid
-                global_srcid = local_srcid + boundRange[self.trainingGID][0]
-                global_dstid = local_dstid + boundRange[self.trainingGID][0]
-                srcTensor[cnt] = global_srcid
-                dstTensor[cnt] = global_dstid
-                cnt = cnt + 1
-    
+            srcids,_ = torch.sort(self.cacheData[0][boundl:boundr])
+            srcids = np.unique(srcids.to('cpu').numpy())
+            srcids = torch.tensor(srcids).to('cuda:%d'%self.cudaDevice)
+            #srcids = srcids.to('cuda:%d'%self.cudaDevice)
+            srcids = srcids + boundRange[self.trainingGID][0]
+            srcs.append(srcids)
+            # for s in srcids:
+            #     print(s.item())
+
         # 下一个子图
         for dstid in range(self.graphNodeNUM,nodeNum):
             boundl,boundr = self.cacheData[1][2*dstid],self.cacheData[1][2*dstid+1]
-            srcids = self.cacheData[0][boundl:boundr]
-            # (srcid->dstid)是两个子图拼接以后的边，节点id是转换后的，注意需要转换成全局id
-            for index,srcid in enumerate(srcids):
-                local_srcid = srcid - self.graphNodeNum
-                local_dstid = dstid - self.graphNodeNum
-                global_srcid = local_srcid + boundRange[self.nextGID][0]
-                global_dstid = local_dstid + boundRange[self.nextGID][0]
-                srcTensor[cnt] = global_srcid
-                dstTensor[cnt] = global_dstid
-                cnt = cnt + 1
+            srcids,_ = torch.sort(self.cacheData[0][boundl:boundr])
+            #srcids = srcids.to('cuda:%d'%self.cudaDevice)
+            srcids = np.unique(srcids.to('cpu').numpy())
+            srcids = torch.tensor(srcids).to('cuda:%d'%self.cudaDevice)
+            srcids = srcids - self.graphNodeNUM + boundRange[self.nextGID][0]
+            srcs.append(srcids)
+
+        print('loadingHalo Test Started')
+
+        # 加载转换后二进制数据，包括srcList.bin+range.bin(子图内)和halo.bin+halo_bound.bin(跨子图)
+        srcListBinFile = datapath + 'part' + str(self.trainingGID) + '/srcList.bin'
+        srcListBinData = np.fromfile(srcListBinFile,dtype=np.int32).tolist()
+        rangeBinFile = datapath + 'part' + str(self.trainingGID) + '/range.bin'
+        rangeBinData = np.fromfile(rangeBinFile,dtype=np.int32).tolist()
+
+        halopFile = datapath + 'part' + str(self.trainingGID) + '/halo' + str(self.nextGID) + '.bin'
+        halopData = np.fromfile(halopFile,dtype=np.int32).tolist()
+        halop_boundFile = datapath + 'part' + str(self.trainingGID) + '/halo' + str(self.nextGID) + '_bound.bin'
+        halop_boundData = np.fromfile(halop_boundFile,dtype=np.int32).tolist()
+            
+        # 先存入二进制数据中srcList的部分
+        binsrcs = []
+        for j in range(len(rangeBinData)//2):
+            l,r = rangeBinData[j*2],rangeBinData[j*2+1]
+            if r-l == 1 and srcListBinData[l] == j:
+                binsrcs.append([])
+            else:
+                # 全部按照全局id比较
+                binsrc = srcListBinData[l:r]
+                offset = boundRange[self.trainingGID][0]
+                binsrc = [b + offset for b in binsrc]
+                binsrcs.append(binsrc)
+        
+        for j in range(len(halop_boundData)-1):
+            l,r = halop_boundData[j],halop_boundData[j+1]
+            for i in range(l,r,2):
+                # 此处注意：halo.bin文件里存入的已经是全局id了
+                binsrcs[j].append(halopData[i])
+        
+        for index,binsrc in enumerate(binsrcs):
+            binsrc = torch.tensor(binsrc,device=('cuda:%d'%self.cudaDevice))
+            binsrc,_ = torch.sort(binsrc)
+            src = srcs[index]
+            if binsrc.equal(src) == False:
+                print('binsrc=',binsrc)
+                print('   src=',src)
+                print('error in edges of node id = %d'%(index+boundRange[self.trainingGID][0]))
     
-        # dgl加载全图到GPU，用has_edges_between检测边的存在性
-        dataset = AsNodePredDataset(DglNodePropPredDataset('ogbn-products'))
-        g = dataset[0]
-        g = g.to('cuda:%d'%self.cudaDevice)
-        comp = cuda_subg.has_edges_between(srcTensor,dstTensor)
-        if comp.all() == False:
-            print('loadingHalo Test failed')
+    def feat_test(self,partConfigJson):
+        print("特征提取部分的正确性检查 开始")
+        with open(partConfigJson,'r') as f:
+            SUBGconf = json.load(f)
+            # 使用读取的数据
+        boundRange = SUBGconf['node_map']['_N']
+        nodeNum = len(self.cacheData[1])//2
+        datas = []
+        for partIndex in range(self.partNUM):
+            subg, node_feat, _, _, _, node_type, _ = dgl.distributed.load_partition(partConfigJson,partIndex)
+            data = (subg,node_feat,node_type)
+            datas.append(data)
+        
+        # 当前子图
+        for dstid in range(self.graphNodeNUM):
+            _,node_feat,node_type = datas[self.trainingGID]
+            featRawData = node_feat[node_type[0]+'/features']
+            rawfeat = featRawData[dstid].clone().detach().to(device=('cuda:%d'%self.cudaDevice))
+            nowfeat = self.feats[dstid].to(device=('cuda:%d'%self.cudaDevice))
+            if rawfeat.equal(nowfeat) == False:
+                print('feat of node [%d] in part %d error!'%(dstid,self.trainingGID))
+                #pass
+
+        # 下一个子图
+        for dstid in range(self.graphNodeNUM,nodeNum):
+            _,node_feat,node_type = datas[self.nextGID]
+            featRawData = node_feat[node_type[0]+'/features']
+            rawfeat = featRawData[dstid-self.graphNodeNUM].clone().detach().to(device=('cuda:%d'%self.cudaDevice))
+            nowfeat = self.feats[dstid].to(device=('cuda:%d'%self.cudaDevice))
+            if rawfeat.equal(nowfeat) == False:
+                print('feat of node [%d] in part %d error!'%(dstid,self.nextGID))
+                #pass
+        print("特征提取部分的正确性检查 结束")
+
 
 def collate_fn(data):
     """
