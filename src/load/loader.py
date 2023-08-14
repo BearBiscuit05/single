@@ -345,7 +345,7 @@ class CustomDataset(Dataset):
     def sampleNeigGPU_bear(self,sampleIDs,cacheGraph):
         #logger.info("----------------------------------------------------")
         #start = time.time()
-        # gapNUM = 1
+        gapNUM = 1
         # for info in cacheGraph:
         #     info[0] = info[0].to('cuda:0')#.contiguous()
         #     info[1] = info[1].to('cuda:0')#.contiguous()
@@ -455,16 +455,7 @@ class CustomDataset(Dataset):
         self.trainptr += 1
         logger.info("pre graph sample cost {}s".format(time.time()-preBatchTime))
         return 0
-    
-    def preGPUBatch(self):
-        # 迁移到GPU中
-        # 1-hop 采样
-        
-        # 2-hop 采样
 
-        # 3-hop 采样
-        
-        pass
 
 ########################## 特征提取 ##########################
     def loadingFeatFileHead(self):
@@ -570,8 +561,6 @@ class CustomDataset(Dataset):
         logger.info("reset mode {}...".format(self.mode))
         # 清空管道与信号量
         self.cleanPipe()
-        
-        # 重置并初始化数据
         self.cacheData = [] 
         self.feats == []
         self.trainSubGTrack = self.randomTrainList()    
@@ -598,19 +587,9 @@ class CustomDataset(Dataset):
                     ptr += 1
             seeds = copy.deepcopy(src)
             template.insert(0,[torch.tensor(src),torch.tensor(dst)])
-        # print(template)
-        # print(len(template[0][0]))
-        # print(len(template[1][0]))
-        # exit()
         return template
         
     def transGraph2DGLBlock(self,graphdata):
-        # print(len(graphdata[0][0]))
-        # print(len(graphdata[1][0]))
-        # print(graphdata)
-        # exit()
-        # 先生成掩码
-        # exit()
         masks = []
         blocks = []
         for src, dst in graphdata:
@@ -620,19 +599,16 @@ class CustomDataset(Dataset):
         template = copy.deepcopy(self.templateBlock)
 
         for index,mask in enumerate(masks):
-            src,dst = template[index]
-            src = src.to(device=('cuda:%d'%self.cudaDevice))
-            dst = dst.to(device=('cuda:%d'%self.cudaDevice))
-            src *= mask
-            dst *= mask
-        
+            template[index][0] = template[index][0].to(device=('cuda:%d'%self.cudaDevice))
+            template[index][1] = template[index][1].to(device=('cuda:%d'%self.cudaDevice))
+            template[index][0] *= mask
+            template[index][1] *= mask
+
         ## 修改部分
         for index,(src,dst) in enumerate(template):
             data = (src,dst)
             block = self.create_dgl_block(data,len(self.templateBlock[index][0])+1,(len(self.templateBlock[index][0])//self.fanout[-(index+1)])+1)
             blocks.append(block)
-        # print("cacheGraph[0]=",graphdata[0][0])
-        # print("cacheGraph[0]=",graphdata[1])
         return blocks
 
     def create_dgl_block(self, data, num_src_nodes, num_dst_nodes):
@@ -713,16 +689,17 @@ if __name__ == "__main__":
     #dataset.preGraphBatch()
     #time.sleep(2)
     count = 0
-    for index in range(1):
+    for index in range(10):
         start = time.time()
         for graph,feat,label,number in train_loader:
+            print(graph[0].device)
             # print("graph=",graph)
             # print("feat=",len(feat))
             # print("label=",len(label))
-            count = count + 1
-            if count > 20:
-                break
+            # count = count + 1
+            # if count > 20:
+            #     break
             #print("block:",graph[0].nodes('_N'))
-            # exit()
-            #pass
-        #print("compute time:{}".format(time.time()-start))
+            exit()
+            pass
+        print("compute time:{}".format(time.time()-start))

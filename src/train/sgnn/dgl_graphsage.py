@@ -107,43 +107,23 @@ def collate_fn(data):
 def train(args, device, dataset, model):
     opt = torch.optim.Adam(model.parameters(), lr=1e-3, weight_decay=5e-4)
     train_loader = torch.utils.data.DataLoader(dataset=dataset, batch_size=1024, collate_fn=collate_fn,pin_memory=True)
-    # 修改此处，epoch数必须同步修改json文件里的epoch数
-    for epoch in range(50):
+    for epoch in range(dataset.epoch):
         start = time.time()
         total_loss = 0
         model.train()
         for it,(graph,feat,label,number) in enumerate(train_loader):
-            # print("type(graph)=",type(graph))
-            # print("type(feat)=",type(feat))
-            # print("feat.device=",feat.device)
-            # print("type(label)=",type(label))
-            # print("type(number)=",type(number))
-            #graph = [block.to('cuda') for block in graph]
-            feat = feat.to('cuda:1')
-            tmp = copy.deepcopy(graph)
-            tmp = [block.to('cuda:1') for block in tmp]
-            # print(tmp[0].device)
-            # exit(-1)
-            #print("type(graph)=",type(graph))
-            #print("graph.device=",graph[0].device)
-            #exit(-1)
-            y_hat = model(tmp, feat)
-            #print("y_hat len:{},label len:{},number:{}".format(len(y_hat),len(label),number))
+            feat = feat.to('cuda:0')
+            y_hat = model(graph, feat)
             try:
-                loss = F.cross_entropy(y_hat[1:number+1], label[:number].to(torch.int64).to('cuda:1'))
+                loss = F.cross_entropy(y_hat[1:number+1], label[:number].to(torch.int64).to('cuda:0'))
             except:
                 print("graph:{},featLen:{},labelLen:{},predLen:{},number:{}".format(graph,feat.shape,label.shape,y_hat.shape,number))
-            graph.clear()
-            del graph
-            del feat
-            del label
-            #torch.cuda.empty_cache()
             opt.zero_grad()
             loss.backward()
             opt.step()
             total_loss += loss.item()
-        print("Epoch {:05d} | Loss {:.4f} |"
-              .format(epoch, total_loss / (it+1)))
+        print("Epoch {:05d} | Loss {:.4f} | Time {:.4f}"
+              .format(epoch, total_loss / (it+1), time.time()-start))
 
     dataset.changeMode("test")
     test_loader = torch.utils.data.DataLoader(dataset=dataset, batch_size=1024, collate_fn=collate_fn,pin_memory=True)
@@ -153,8 +133,8 @@ def train(args, device, dataset, model):
         with torch.no_grad():
             labels = []
             preds = []
-            graph = [block.to('cuda:1') for block in graph]
-            pred = model(graph, feat.to('cuda:1')) # pred in buffer_device
+            #graph = [block.to('cuda:0') for block in graph]
+            pred = model(graph, feat.to('cuda:0')) # pred in buffer_device
             preds.extend(pred[1:number+1])
             labels.extend(label[:number])
     newpreds = torch.zeros((len(preds),47),dtype=torch.float32)
@@ -179,11 +159,11 @@ if __name__ == '__main__':
     print(f'Training in {args.mode} mode.')
     print('Loading data')
     
-    device = torch.device('cpu' if args.mode == 'cpu' else 'cuda:1')
+    device = torch.device('cpu' if args.mode == 'cpu' else 'cuda:0')
     # create GraphSAGE model
     # in_size = g.ndata['feat'].shape[1]
     # out_size = dataset.num_classes
-    model = SAGE(100, 256, 47).to('cuda:1')
+    model = SAGE(100, 256, 47).to('cuda:0')
     dataset = CustomDataset("./../../load/graphsage.json")
     print('Training...')
     train(args, device, dataset, model)
@@ -195,6 +175,6 @@ if __name__ == '__main__':
     g = test_dataset[0]
     # g, dataset,train_idx,val_idx,test_idx= load_reddit()
     # data = (train_idx,val_idx,test_idx)
-    g = g.to('cuda:1' if args.mode == 'puregpu' else 'cpu')
+    g = g.to('cuda:0' if args.mode == 'puregpu' else 'cpu')
 
     print("Test Accuracy :\n",layerwise_infer(device, g, dataset.get_test_idx(2213091), model, batch_size=4096))
