@@ -98,10 +98,9 @@ def train(args, device, g, dataset, model,data=None):
         val_idx = dataset.val_idx.to(device)
         # train_idx = dataset.train_idx
         # val_idx = dataset.val_idx
-    # print(g)
-    # print(train_idx)
-    sampler = dgl.dataloading.MultiLayerFullNeighborSampler(2)
-    #use_uva = (args.mode == 'puregpu')
+    sampler = NeighborSampler([25,10],  # fanout for [layer-0, layer-1, layer-2]
+                            prefetch_node_feats=['feat'],
+                            prefetch_labels=['label'])
     use_uva = False
     train_dataloader = DataLoader(g, train_idx, sampler, device=device,
                                   batch_size=256, shuffle=True,

@@ -91,7 +91,7 @@ def train(args, device, g, dataset, model,data=None):
         train_idx = dataset.train_idx.to(device)
         val_idx = dataset.val_idx.to(device)
     # sampler = dgl.dataloading.MultiLayerFullNeighborSampler(2)
-    sampler = NeighborSampler([10,25],  # fanout for [layer-0, layer-1, layer-2]
+    sampler = NeighborSampler([25,10],  # fanout for [layer-0, layer-1, layer-2]
                             prefetch_node_feats=['feat'],
                             prefetch_labels=['label'])
     use_uva = (args.mode == 'mixed')

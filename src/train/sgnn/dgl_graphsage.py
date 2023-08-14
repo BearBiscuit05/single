@@ -93,9 +93,9 @@ def layerwise_infer(device, graph, nid, model, batch_size):
         pred = model.inference(graph, device, batch_size) # pred in buffer_device
         pred = pred[nid]
         label = graph.ndata['label'][nid].to(pred.device)
-    label = label.squeeze()
-    pred = pred.squeeze()
-    return sklearn.metrics.classification_report(label.cpu().numpy(), pred.argmax(1).cpu().numpy(),zero_division=1)
+    #label = label.squeeze()
+    #pred = pred.squeeze()
+    return sklearn.metrics.accuracy_score(label.cpu().numpy(), pred.argmax(1).cpu().numpy())
 
 def collate_fn(data):
     """
@@ -178,10 +178,8 @@ if __name__ == '__main__':
     # test the model
 #    print('Testing...')
 #
-#    test_dataset = AsNodePredDataset(DglNodePropPredDataset('ogbn-products'))
-#    g = test_dataset[0]
-#    # g, dataset,train_idx,val_idx,test_idx= load_reddit()
-#    # data = (train_idx,val_idx,test_idx)
-#    g = g.to('cuda:0' if args.mode == 'puregpu' else 'cpu')
-#
-#    print("Test Accuracy :\n",layerwise_infer(device, g, dataset.get_test_idx(2213091), model, batch_size=4096))
+    test_dataset = AsNodePredDataset(DglNodePropPredDataset('ogbn-products'))
+    g = test_dataset[0]
+    g = g.to('cpu')
+    acc = layerwise_infer(device, g, test_dataset.test_idx, model, batch_size=4096)
+    print("Test Accuracy :{:.4f}",acc)
