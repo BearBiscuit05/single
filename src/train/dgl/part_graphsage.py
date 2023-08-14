@@ -18,7 +18,7 @@ class SAGE(nn.Module):
         self.layers = nn.ModuleList()
         # three-layer GraphSAGE-mean
         self.layers.append(dglnn.SAGEConv(in_size, hid_size, 'mean'))
-        self.layers.append(dglnn.SAGEConv(hid_size, hid_size, 'mean'))
+        #self.layers.append(dglnn.SAGEConv(hid_size, hid_size, 'mean'))
         self.layers.append(dglnn.SAGEConv(hid_size, out_size, 'mean'))
         self.dropout = nn.Dropout(0.5)
         self.hid_size = hid_size
@@ -82,7 +82,7 @@ def layerwise_infer(device, graph, nid, model, batch_size):
     return sklearn.metrics.accuracy_score(label.cpu().numpy(), pred.argmax(1).cpu().numpy())
 
 def train(args, device, g, train_idx,val_idx, model):
-    sampler = NeighborSampler([10, 10, 10],  # fanout for [layer-0, layer-1, layer-2]
+    sampler = NeighborSampler([25, 10],  # fanout for [layer-0, layer-1, layer-2]
                               prefetch_node_feats=['feat'],
                               prefetch_labels=['label'])
     use_uva = (args.mode == 'mixed')
@@ -101,15 +101,6 @@ def train(args, device, g, train_idx,val_idx, model):
                                 drop_last=False, num_workers=0,
                                 use_uva=use_uva)
         )
-    # train_dataloader = DataLoader(g, train_idx, sampler, device=device,
-    #                               batch_size=1024, shuffle=True,
-    #                               drop_last=False, num_workers=0,
-    #                               use_uva=use_uva)
-
-    # val_dataloader = DataLoader(g, val_idx, sampler, device=device,
-    #                             batch_size=1024, shuffle=True,
-    #                             drop_last=False, num_workers=0,
-    #                             use_uva=use_uva)
     opt = torch.optim.Adam(model.parameters(), lr=1e-3, weight_decay=5e-4)
     for epoch in range(50):
         model.train()

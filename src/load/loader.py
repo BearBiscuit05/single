@@ -645,7 +645,7 @@ class CustomDataset(Dataset):
             seeds = copy.deepcopy(src)
             template_src = torch.cat([template_src,torch.tensor(src,dtype=torch.int64)])
             template_dst = torch.cat([template_dst,torch.tensor(dst,dtype=torch.int64)])
-        PYGTemplate = torch.stack([template_src,template_dst])
+        PYGTemplate = torch.stack([template_src,template_dst]).to('cuda:0')
         return PYGTemplate
 
     def transGraph2PYGBatch(self,graphdata):
@@ -690,13 +690,8 @@ if __name__ == "__main__":
         start = time.time()
         loopTime = time.time()
         for graph,feat,label,number in train_loader:
-            # print("graph=",graph)
-            # print("feat=",len(feat))
-            # print("label=",len(label))
             count = count + 1
             if count % 20 == 0:
                 print("loop time:{}".format(time.time()-loopTime))
-            #print("block:",graph[0].nodes('_N'))
-            # exit()
             loopTime = time.time()
         print("compute time:{}".format(time.time()-start))

@@ -13,7 +13,7 @@ from torch_geometric.datasets import Reddit
 from torch_geometric.loader import NeighborLoader
 from torch_geometric.nn import SAGEConv
 import sys
-import os
+import time
 current_folder = os.path.abspath(os.path.dirname(__file__))
 sys.path.append(current_folder+"/../../"+"load")
 from loader import CustomDataset
@@ -31,8 +31,6 @@ class SAGE(torch.nn.Module):
  
     def forward(self, x: Tensor, edge_index: Tensor) -> Tensor:
         for i, conv in enumerate(self.convs):
-            print("x:",x.dtype)
-            print("edge_index:",edge_index.dtype)
             x = conv(x, edge_index)
             if i < len(self.convs) - 1:
                 x = x.relu_()
@@ -45,10 +43,6 @@ class SAGE(torch.nn.Module):
 
         pbar = tqdm(total=len(subgraph_loader) * len(self.convs))
         pbar.set_description('Evaluating')
-
-        # Compute representations of nodes layer by layer, using *all*
-        # available edges. This leads to faster computation in contrast to
-        # immediately computing the final representations of each batch:
         for i, conv in enumerate(self.convs):
             xs = []
             for batch in subgraph_loader:
@@ -66,37 +60,27 @@ class SAGE(torch.nn.Module):
 
 
 def run(rank, world_size, dataset):
-    train_loader = DataLoader(dataset=dataset, batch_size=1024, collate_fn=collate_fn,pin_memory=True)
+    train_loader = DataLoader(dataset=dataset, batch_size=1024, collate_fn=collate_fn)#,pin_memory=True)
     torch.manual_seed(12345)
     model = SAGE(100, 256, 47).to('cuda:0')
     optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
-    count = 0
-    for epoch in range(1, 2):
+    for epoch in range(0, dataset.epoch):
+        startTime = time.time()
         model.train()    
         for graph,feat,label,number in train_loader:        
-            count += 1
-            if count > 5:
-                break
             optimizer.zero_grad()     
-            out = model(feat.to('cuda:0'), graph.to('cuda:0'))[1:number+1]
+            out = model(feat.to('cuda:0'), graph)[1:number+1]
             loss = F.cross_entropy(out, label[:number].to(torch.int64).to('cuda:0'))
             loss.backward()
             optimizer.step()
-        print(f'Epoch: {epoch:02d}, Loss: {loss:.4f}')
+        runTime = time.time() - startTime
+        print(f'Epoch: {epoch:02d}, Loss: {loss:.4f}, Time: {runTime:.3f}s')
 
 def collate_fn(data):
-    """
-    data 输入结构介绍：
-        [graph,feat]
-    """
     return data[0]
 
 if __name__ == '__main__':
-    # dataset = Reddit('.')
-    # world_size = torch.cuda.device_count()
     world_size = 1
     print('Let\'s use', world_size, 'GPUs!')
     dataset = CustomDataset("./../../load/graphsage.json")
     run(0, world_size, dataset)
-    
-    #mp.spawn(run, args=(world_size, dataset), nprocs=world_size, join=True)
