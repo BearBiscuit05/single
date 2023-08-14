@@ -21,7 +21,6 @@ from dgl.dataloading import NeighborSampler, MultiLayerFullNeighborSampler
 
 current_folder = os.path.abspath(os.path.dirname(__file__))
 sys.path.append(current_folder+"/../../"+"load")
-#from loader_dgl import CustomDataset
 from loader import CustomDataset
 
 class SAGE(nn.Module):
@@ -37,14 +36,10 @@ class SAGE(nn.Module):
     def forward(self, blocks, x):
         h = x
         for l, (layer, block) in enumerate(zip(self.layers, blocks)):
-            # print("block=",block)
-            # print("block.device=",block.device)
-            # print(h)
             h = layer(block, h)
             if l != len(self.layers) - 1:
                 h = F.relu(h)
                 h = self.dropout(h)
-        #exit(-1)
         return h
 
     def inference(self, g, device, batch_size):
@@ -113,22 +108,10 @@ def train(args, device, dataset, model):
         total_loss = 0
         model.train()
         for it,(graph,feat,label,number) in enumerate(train_loader):
-            # print("type(graph)=",type(graph))
-            # print("type(feat)=",type(feat))
-            # print("feat.device=",feat.device)
-            # print("type(label)=",type(label))
-            # print("type(number)=",type(number))
-            #graph = [block.to('cuda') for block in graph]
             feat = feat.to('cuda:0')
             tmp = copy.deepcopy(graph)
             tmp = [block.to('cuda:0') for block in tmp]
-            # print(tmp[0].device)
-            # exit(-1)
-            #print("type(graph)=",type(graph))
-            #print("graph.device=",graph[0].device)
-            #exit(-1)
             y_hat = model(tmp, feat)
-            #print("y_hat len:{},label len:{},number:{}".format(len(y_hat),len(label),number))
             try:
                 loss = F.cross_entropy(y_hat[1:number+1], label[:number].to(torch.int64).to('cuda:0'))
             except:
@@ -180,21 +163,13 @@ if __name__ == '__main__':
     print('Loading data')
     
     device = torch.device('cpu' if args.mode == 'cpu' else 'cuda:0')
-    # create GraphSAGE model
-    # in_size = g.ndata['feat'].shape[1]
-    # out_size = dataset.num_classes
     model = SAGE(100, 256, 47).to('cuda:0')
     dataset = CustomDataset("./../../load/graphsage.json")
     print('Training...')
     train(args, device, dataset, model)
 
-    # test the model
     print('Testing...')
-
     test_dataset = AsNodePredDataset(DglNodePropPredDataset('ogbn-products'))
     g = test_dataset[0]
-    # g, dataset,train_idx,val_idx,test_idx= load_reddit()
-    # data = (train_idx,val_idx,test_idx)
     g = g.to('cuda:0' if args.mode == 'puregpu' else 'cpu')
-
     print("Test Accuracy :\n",layerwise_infer(device, g, dataset.get_test_idx(2213091), model, batch_size=4096))
