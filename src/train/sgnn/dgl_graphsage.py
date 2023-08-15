@@ -116,7 +116,7 @@ def train(args, device, dataset, model):
             #print(graph)
             feat = feat.to('cuda:0')
             tmp = copy.deepcopy(graph)
-            #tmp = [block.to('cuda:0') for block in tmp]
+            tmp = [block.to('cuda:0') for block in tmp]
             y_hat = model(tmp, feat)
             #print(y_hat.shape)
             #print(label.shape)

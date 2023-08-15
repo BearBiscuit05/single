@@ -191,7 +191,7 @@ class CustomDataset(Dataset):
         self.loadingGraph()
         self.nextGID = self.trainSubGTrack[self.subGptr//self.partNUM][self.subGptr%self.partNUM]
         halostart = time.time()
-        self.loadingHalo()
+        #self.loadingHalo()
         haloend = time.time()
         logger.info("loadingHalo time: %g"%(haloend-halostart))
         self.loadingMemFeat(self.nextGID)
@@ -384,48 +384,52 @@ class CustomDataset(Dataset):
             block = dgl.graph((src,dst))
             block = dgl.to_block(block)
             ans_blocks.append(block)
-        print("ans_blocks=",ans_blocks)
-        #===============================
-        for index in range(len(cacheGraph)):
-            non_src = cacheGraph[index][0] != -1
-            cacheGraph[index][0] = cacheGraph[index][0][non_src].to('cpu')
-            non_dst = cacheGraph[index][1] != -1
-            cacheGraph[index][1] = cacheGraph[index][1][non_dst].to('cpu')
-        mapping_dict = {} 
-        nodelist = []
-        ptr = 0
-        for i in range(len(cacheGraph[0][0])) :
-            if cacheGraph[0][0][i].item() in mapping_dict:
-                cacheGraph[0][0][i] = mapping_dict[cacheGraph[0][0][i].item()]
-            else:
-                mapping_dict[cacheGraph[0][0][i].item()] = ptr
-                nodelist.append(cacheGraph[0][0][i].item())
-                cacheGraph[0][0][i] = ptr
-                ptr += 1           
-            if cacheGraph[0][1][i].item() in mapping_dict:
-                cacheGraph[0][1][i] = mapping_dict[cacheGraph[0][1][i].item()]
-            else:
-                mapping_dict[cacheGraph[0][1][i].item()] = ptr
-                nodelist.append(cacheGraph[0][1][i])
-                cacheGraph[0][1][i] = ptr
-                ptr += 1
-        layers = len(cacheGraph[1][0])
-        cacheGraph[1][0] = cacheGraph[0][1][:layers]
-        for i in range(len(cacheGraph[1][1])):
-            cacheGraph[1][1][i] = mapping_dict[cacheGraph[1][1][i].item()]
+        
+        # print("ans_blocks=",ans_blocks)
 
-        blocks = []
-        for i in range(2):
-            block = dgl.graph((cacheGraph[i][0], cacheGraph[i][1]))
-            block = dgl.to_block(block)
-            blocks.append(block)
-        print("blocks=",blocks)
-        print("finish")
-        exit()
-        return nodelist,blocks
+        # #===============================
+        # for index in range(len(cacheGraph)):
+        #     non_src = cacheGraph[index][0] != -1
+        #     cacheGraph[index][0] = cacheGraph[index][0][non_src].to('cpu')
+        #     non_dst = cacheGraph[index][1] != -1
+        #     cacheGraph[index][1] = cacheGraph[index][1][non_dst].to('cpu')
+        # mapping_dict = {} 
+        # nodelist = []
+        # ptr = 0
+        # for i in range(len(cacheGraph[0][0])) :
+        #     if cacheGraph[0][0][i].item() in mapping_dict:
+        #         cacheGraph[0][0][i] = mapping_dict[cacheGraph[0][0][i].item()]
+        #     else:
+        #         mapping_dict[cacheGraph[0][0][i].item()] = ptr
+        #         nodelist.append(cacheGraph[0][0][i].item())
+        #         cacheGraph[0][0][i] = ptr
+        #         ptr += 1           
+        #     if cacheGraph[0][1][i].item() in mapping_dict:
+        #         cacheGraph[0][1][i] = mapping_dict[cacheGraph[0][1][i].item()]
+        #     else:
+        #         mapping_dict[cacheGraph[0][1][i].item()] = ptr
+        #         nodelist.append(cacheGraph[0][1][i])
+        #         cacheGraph[0][1][i] = ptr
+        #         ptr += 1
+        # layers = len(cacheGraph[1][0])
+        # cacheGraph[1][0] = cacheGraph[0][1][:layers]
+        # for i in range(len(cacheGraph[1][1])):
+        #     cacheGraph[1][1][i] = mapping_dict[cacheGraph[1][1][i].item()]
+
+        # blocks = []
+        # for i in range(2):
+        #     block = dgl.graph((cacheGraph[i][0], cacheGraph[i][1]))
+        #     block = dgl.to_block(block)
+        #     blocks.append(block)
+
+        # print("nodelist=",nodelist)
+        # print("blocks=",blocks)
+        # print("finish")
+        # exit()
+        # return nodelist,blocks
 
         #===============================
-        return blocks,mapping_tensor
+        return ans_blocks,mapping_tensor
 
 
     def initCacheData(self):
