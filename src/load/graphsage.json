@@ -8,7 +8,7 @@
     "epoch":10,
     "preRating":512,
     "featlen":100,
-    "fanout":[25,10],
+    "fanout":[10,25],
     "framework":"dgl",
     "mode":"train",
     "idbound":[

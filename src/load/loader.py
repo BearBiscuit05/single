@@ -359,6 +359,12 @@ class CustomDataset(Dataset):
                 out_src,out_dst,gapNUM)
             sampleIDs = cacheGraph[layer-l-1][0]
         
+        #ans = copy.deepcopy(cacheGraph)
+        for index in range(len(cacheGraph)):
+            non_src = cacheGraph[index][0] != -1
+            cacheGraph[index][0] = cacheGraph[index][0][non_src]
+            non_dst = cacheGraph[index][1] != -1
+            cacheGraph[index][1] = cacheGraph[index][1][non_dst]
 
         mapping_tensor = torch.unique(cacheGraph[0][0])
         #print(mapping_tensor)
@@ -370,10 +376,12 @@ class CustomDataset(Dataset):
         for index,(src,dst) in enumerate(cacheGraph):
             data = (src,dst)
             #print(data)
-            srcLen = len(torch.unique(src))
-            dstLen = len(torch.unique(dst))
+            # srcLen = len(torch.unique(src))
+            # dstLen = len(torch.unique(dst))
             #print(srcLen,dstLen)
-            block = self.create_dgl_block(data,srcLen,dstLen)
+            block = dgl.graph((src,dst))
+            #block = self.create_dgl_block(data,srcLen,dstLen)
+            block = dgl.to_block(block)
             blocks.append(block)
         
         # exit()

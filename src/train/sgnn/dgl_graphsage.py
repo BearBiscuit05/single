@@ -113,15 +113,15 @@ def train(args, device, dataset, model):
         total_loss = 0
         model.train()
         for it,(graph,feat,label,number) in enumerate(train_loader):
-            print(graph)
+            #print(graph)
             feat = feat.to('cuda:0')
             tmp = copy.deepcopy(graph)
             #tmp = [block.to('cuda:0') for block in tmp]
             y_hat = model(tmp, feat)
-            try:
-                loss = F.cross_entropy(y_hat[1:number+1], label[:number].to(torch.int64).to('cuda:0'))
-            except:
-                print("graph:{},featLen:{},labelLen:{},predLen:{},number:{}".format(graph,feat.shape,label.shape,y_hat.shape,number))
+            #print(y_hat.shape)
+            #print(label.shape)
+            loss = F.cross_entropy(y_hat[:number], label[:number].to(torch.int64).to('cuda:0'))
+            #print("graph:{},featLen:{},labelLen:{},predLen:{},number:{}".format(graph,feat.shape,label.shape,y_hat.shape,number))
             graph.clear()
             del graph
             del feat
