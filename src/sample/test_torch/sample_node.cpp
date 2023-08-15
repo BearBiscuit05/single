@@ -32,6 +32,15 @@ void torch_graph_halo_merge(
     );
 }
 
+
+void torch_graph_mapping(torch::Tensor &nodeList,torch::Tensor &mappingTable
+                        ,int nodeNUM,int mappingNUM) {
+    graph_mapping(
+        (int*) nodeList.data_ptr(),(int*) mappingTable.data_ptr(),nodeNUM,mappingNUM
+    );
+}
+
+
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
     m.def("torch_sample_hop",
           &torch_sample_hop,
@@ -39,6 +48,9 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
     m.def("torch_graph_halo_merge",
           &torch_graph_halo_merge,
           "graph halo merge");
+    m.def("torch_graph_mapping",
+          &torch_graph_mapping,
+          "mapping new graph");
 }
 
 // TORCH_LIBRARY(sample_hop_new, m) {

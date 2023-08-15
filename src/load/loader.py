@@ -351,17 +351,34 @@ class CustomDataset(Dataset):
             fan_num = fan_num - 1
             seed_num = len(sampleIDs)
             out_src = cacheGraph[layer-l-1][0]
-            out_dst = cacheGraph[layer-l-1][0]
+            out_dst = cacheGraph[layer-l-1][1]
             sample_start = time.time()
             signn.torch_sample_hop(
                 self.cacheData[0],self.cacheData[1],
                 sampleIDs,seed_num,fan_num,
                 out_src,out_dst,gapNUM)
             sampleIDs = cacheGraph[layer-l-1][0]
-            #logger.debug("sample layer-{} func cost time: {}s".format(l,time.time()-sample_start))
-        #logger.info("sampleNeigGPU_bear func cost time: {}s".format(time.time()-loop_start))
-        #logger.info("----------------------------------------------------")
-        #exit()
+        
+
+        mapping_tensor = torch.unique(cacheGraph[0][0])
+        #print(mapping_tensor)
+        for i in range(len(self.fanout)):
+            signn.torch_graph_mapping(cacheGraph[i][0],mapping_tensor,len(cacheGraph[i][0]),len(mapping_tensor))
+            signn.torch_graph_mapping(cacheGraph[i][1],mapping_tensor,len(cacheGraph[i][1]),len(mapping_tensor))
+        
+        blocks = []
+        for index,(src,dst) in enumerate(cacheGraph):
+            data = (src,dst)
+            #print(data)
+            srcLen = len(torch.unique(src))
+            dstLen = len(torch.unique(dst))
+            #print(srcLen,dstLen)
+            block = self.create_dgl_block(data,srcLen,dstLen)
+            blocks.append(block)
+        
+        # exit()
+        return blocks,mapping_tensor
+
 
     def initCacheData(self):
         number = self.batchsize
@@ -420,29 +437,29 @@ class CustomDataset(Dataset):
         sampleTime = time.time()
         logger.debug("sampleIDs shape:{}".format(len(sampleIDs)))
         #self.sampleNeig(sampleIDs,cacheGraph)
-        self.sampleNeigGPU_bear(sampleIDs,cacheGraph)
+        blocks,mapping_tensor = self.sampleNeigGPU_bear(sampleIDs,cacheGraph)
         logger.debug("cacheGraph shape:{}, first graph shape:{}".format(len(cacheGraph),len(cacheGraph[0][0])))
         logger.info("sample subG all cost {}s".format(time.time()-sampleTime))
         ##
 
         ##
         featTime = time.time()
-        cacheFeat = self.featMerge(cacheGraph)
+        cacheFeat = self.featMerge(mapping_tensor)
         logger.debug("featLen shape:{}".format(cacheFeat.shape))
         logger.info("subG feat merge cost {}s".format(time.time()-featTime))
         ##
 
         ##
-        transTime = time.time()
-        if self.framework == "dgl":
-            cacheGraph = self.transGraph2DGLBlock(cacheGraph)
-        elif self.framework == "pyg":
-            cacheGraph = self.transGraph2PYGBatch(cacheGraph)
-        logger.info("subG trans cost {}s".format(time.time()-transTime))
+        # transTime = time.time()
+        # if self.framework == "dgl":
+        #     cacheGraph = self.transGraph2DGLBlock(cacheGraph)
+        # elif self.framework == "pyg":
+        #     cacheGraph = self.transGraph2PYGBatch(cacheGraph)
+        # logger.info("subG trans cost {}s".format(time.time()-transTime))
         
         ##
         putinTime = time.time()
-        cacheData = [cacheGraph,cacheFeat,cacheLabel,batchlen]
+        cacheData = [blocks,cacheFeat,cacheLabel,batchlen]
         self.graphPipe.put(cacheData)
         logger.info("putin pipe time {}s".format(time.time()-putinTime))
         ##
@@ -477,22 +494,22 @@ class CustomDataset(Dataset):
             tmp_feat = torch.from_numpy(tmp_feat).reshape(-1,100)
             self.feats = torch.cat([self.feats,tmp_feat])
     
-    def featMerge(self,cacheGraph):    
-        logger.info("-------------------------------------------------")
-        toCPUTime = time.time()
-        nodeids = cacheGraph[0][0]       
-        nodeids = nodeids.to(device='cpu')
-        logger.info("to CPU time {}s".format(time.time()-toCPUTime))
+    def featMerge(self,nodeLists):    
+        # logger.info("-------------------------------------------------")
+        # toCPUTime = time.time()
+        # nodeids = cacheGraph[0][0]       
+        # nodeids = nodeids.to(device='cpu')
+        # logger.info("to CPU time {}s".format(time.time()-toCPUTime))
         
-        catTime = time.time()
-        self.temp_merge_id[1:] = nodeids
-        logger.info("cat time {}s".format(time.time()-catTime))
+        # catTime = time.time()
+        # self.temp_merge_id[1:] = nodeids
+        # logger.info("cat time {}s".format(time.time()-catTime))
         
-        featTime = time.time()
-        test = self.feats[self.temp_merge_id]       
-        logger.info("feat merge {}s".format(time.time()-featTime))
-        logger.info("all merge {}s".format(time.time()-toCPUTime))
-        logger.info("-------------------------------------------------")
+        # featTime = time.time()
+        test = self.feats[nodeLists.to(torch.int64)]       
+        # logger.info("feat merge {}s".format(time.time()-featTime))
+        # logger.info("all merge {}s".format(time.time()-toCPUTime))
+        # logger.info("-------------------------------------------------")
         return test
 
         
@@ -660,9 +677,6 @@ class CustomDataset(Dataset):
         return template
 
     def get_test_idx(self,testSize):
-        #import random
-        #part = random.randint(0,self.partNUM-1)
-        #bound = self.idbound[part]
         np.random.seed()  # 设置随机种子，保证每次运行结果相同
         matrix = np.random.choice(range(0,self.idbound[self.partNUM-1][1]), size=testSize, replace=False)
         matrix = matrix.reshape(1,testSize)
@@ -682,9 +696,7 @@ if __name__ == "__main__":
         config = json.load(f)
         batchsize = config['batchsize']
         epoch = config['epoch']
-    train_loader = DataLoader(dataset=dataset, batch_size=batchsize,collate_fn=collate_fn,pin_memory=True)
-    #dataset.preGraphBatch()
-    #time.sleep(2)
+    train_loader = DataLoader(dataset=dataset, batch_size=batchsize,collate_fn=collate_fn)#pin_memory=True)
     count = 0
     for index in range(3):
         start = time.time()

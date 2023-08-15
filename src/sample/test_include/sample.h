@@ -12,6 +12,9 @@ void graph_halo_merge(
     int* edge,int* bound,
     int* halos,int* halo_bound,int nodeNUM);
 
+void graph_mapping(
+    int* nodeList,int* mappingTable,int nodeNUM,int mappingNUM
+);
 //void test_random();
 
 #endif

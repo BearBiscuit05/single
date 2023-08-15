@@ -23,16 +23,11 @@ __global__ void sample_hop_kernel(
     for (size_t index = threadIdx.x + block_start; index < block_end;
        index += BLOCK_SIZE) {
         int rid = seed[index];
-        // if (index < seed_num)
-        //     printf("node id: %d\n",rid);
         if (index < seed_num && rid >= 0) {
             int off = bound[rid*2] + gapNUM;
             int len = bound[rid*2+1] - bound[rid*2] - gapNUM;
             out_src[index] = rid;
             out_dst[index] = rid;
-            // printf("node gap: %d\n",gapNUM);
-            // printf("node off: %d\n",off);
-            // printf("neri len: %d\n",len);
             if (len <= fanout) {
                 size_t j = 0;
                 for (; j < len; ++j) {
@@ -104,6 +99,37 @@ __global__ void graph_halo_merge_kernel(
 }
 
 
+template <int BLOCK_SIZE, int TILE_SIZE>
+__global__ void graph_mapping_kernel(
+    int* nodeList,int* mappingTable,int nodeNUM,int mappingNUM
+    ) {
+    const size_t block_start = TILE_SIZE * blockIdx.x;
+    const size_t block_end = TILE_SIZE * (blockIdx.x + 1);
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;   
+    for (size_t index = threadIdx.x + block_start; index < block_end;
+       index += BLOCK_SIZE) {
+        if (index < nodeNUM) {
+            int raw_node_id = nodeList[index];
+            int low = 0;
+            int high = mappingNUM-1;
+            while(low <= high){
+                int middle = (low+high)/2;
+                if(raw_node_id == mappingTable[middle]){    //while(rand > degreedis[j])
+                    nodeList[index] = middle;
+                    break;
+                } else{
+                    if(raw_node_id > mappingTable[middle])
+                        low = middle+1;
+                    else
+                        high = middle-1;
+                }
+            } 
+        }
+    }
+
+    // random_states[idx] = local_state;
+}  
+
 inline int RoundUpDiv(int target, int unit) {
   return (target + unit - 1) / unit;
 }
@@ -151,4 +177,20 @@ void graph_halo_merge(
     <<<grid,block>>>(edge,bound,halos,halo_bound,nodeNUM,timeseed);
     cudaDeviceSynchronize();
     
+}
+
+void graph_mapping(
+    int* nodeList,int* mappingTable,int nodeNUM,int mappingNUM
+) {
+    const int slice = 1024;
+    const int blockSize = 256;
+    int steps = RoundUpDiv(nodeNUM,slice);
+
+    dim3 grid(steps);
+    dim3 block(blockSize);
+    unsigned long timeseed =
+        std::chrono::system_clock::now().time_since_epoch().count();
+    graph_mapping_kernel<blockSize, slice>
+    <<<grid,block>>>(nodeList,mappingTable,nodeNUM,mappingNUM);
+    cudaDeviceSynchronize();
 }
