@@ -359,32 +359,72 @@ class CustomDataset(Dataset):
                 out_src,out_dst,gapNUM)
             sampleIDs = cacheGraph[layer-l-1][0]
         
-        #ans = copy.deepcopy(cacheGraph)
         for index in range(len(cacheGraph)):
             non_src = cacheGraph[index][0] != -1
             cacheGraph[index][0] = cacheGraph[index][0][non_src]
             non_dst = cacheGraph[index][1] != -1
             cacheGraph[index][1] = cacheGraph[index][1][non_dst]
 
-        mapping_tensor = torch.unique(cacheGraph[0][0])
-        #print(mapping_tensor)
+        #===============================
+        ans = copy.deepcopy(cacheGraph)
+        for index in range(len(ans)):
+            non_src = ans[index][0] != -1
+            ans[index][0] = ans[index][0][non_src]
+            non_dst = ans[index][1] != -1
+            ans[index][1] = ans[index][1][non_dst]
+
+        mapping_tensor = torch.unique(ans[0][0])
         for i in range(len(self.fanout)):
-            signn.torch_graph_mapping(cacheGraph[i][0],mapping_tensor,len(cacheGraph[i][0]),len(mapping_tensor))
-            signn.torch_graph_mapping(cacheGraph[i][1],mapping_tensor,len(cacheGraph[i][1]),len(mapping_tensor))
+            signn.torch_graph_mapping(ans[i][0],mapping_tensor,len(ans[i][0]),len(mapping_tensor))
+            signn.torch_graph_mapping(ans[i][1],mapping_tensor,len(ans[i][1]),len(mapping_tensor))
         
-        blocks = []
-        for index,(src,dst) in enumerate(cacheGraph):
+        ans_blocks = []
+        for index,(src,dst) in enumerate(ans):
             data = (src,dst)
-            #print(data)
-            # srcLen = len(torch.unique(src))
-            # dstLen = len(torch.unique(dst))
-            #print(srcLen,dstLen)
             block = dgl.graph((src,dst))
-            #block = self.create_dgl_block(data,srcLen,dstLen)
+            block = dgl.to_block(block)
+            ans_blocks.append(block)
+        print("ans_blocks=",ans_blocks)
+        #===============================
+        for index in range(len(cacheGraph)):
+            non_src = cacheGraph[index][0] != -1
+            cacheGraph[index][0] = cacheGraph[index][0][non_src].to('cpu')
+            non_dst = cacheGraph[index][1] != -1
+            cacheGraph[index][1] = cacheGraph[index][1][non_dst].to('cpu')
+        mapping_dict = {} 
+        nodelist = []
+        ptr = 0
+        for i in range(len(cacheGraph[0][0])) :
+            if cacheGraph[0][0][i].item() in mapping_dict:
+                cacheGraph[0][0][i] = mapping_dict[cacheGraph[0][0][i].item()]
+            else:
+                mapping_dict[cacheGraph[0][0][i].item()] = ptr
+                nodelist.append(cacheGraph[0][0][i].item())
+                cacheGraph[0][0][i] = ptr
+                ptr += 1           
+            if cacheGraph[0][1][i].item() in mapping_dict:
+                cacheGraph[0][1][i] = mapping_dict[cacheGraph[0][1][i].item()]
+            else:
+                mapping_dict[cacheGraph[0][1][i].item()] = ptr
+                nodelist.append(cacheGraph[0][1][i])
+                cacheGraph[0][1][i] = ptr
+                ptr += 1
+        layers = len(cacheGraph[1][0])
+        cacheGraph[1][0] = cacheGraph[0][1][:layers]
+        for i in range(len(cacheGraph[1][1])):
+            cacheGraph[1][1][i] = mapping_dict[cacheGraph[1][1][i].item()]
+
+        blocks = []
+        for i in range(2):
+            block = dgl.graph((cacheGraph[i][0], cacheGraph[i][1]))
             block = dgl.to_block(block)
             blocks.append(block)
-        
-        # exit()
+        print("blocks=",blocks)
+        print("finish")
+        exit()
+        return nodelist,blocks
+
+        #===============================
         return blocks,mapping_tensor
 
 
