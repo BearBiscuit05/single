@@ -105,7 +105,7 @@ class CustomDataset(Dataset):
         self.loadingGraph(merge=False)
         self.loadingMemFeat(self.trainSubGTrack[self.subGptr//self.partNUM][self.subGptr%self.partNUM])
         self.initNextGraphData()
-        self.sampleFlagQueue.put(self.executor.submit(self.preGraphBatch)) #发送采样命令
+        #self.sampleFlagQueue.put(self.executor.submit(self.preGraphBatch)) #发送采样命令
         
     def __len__(self):  
         return self.NodeLen
@@ -354,7 +354,7 @@ class CustomDataset(Dataset):
             out_dst = cacheGraph[layer-l-1][1]
             sample_start = time.time()
             signn.torch_sample_hop(
-                self.cacheData[0],self.cacheData[1],
+                self.cacheData[0][:self.graphEdgeNUM],self.cacheData[1][:self.graphNodeNUM*2],
                 sampleIDs,seed_num,fan_num,
                 out_src,out_dst,gapNUM)
             sampleIDs = cacheGraph[layer-l-1][0]
@@ -373,20 +373,29 @@ class CustomDataset(Dataset):
             non_dst = ans[index][1] != -1
             ans[index][1] = ans[index][1][non_dst]
 
-        mapping_tensor = torch.unique(ans[0][0])
-        for i in range(len(self.fanout)):
-            signn.torch_graph_mapping(ans[i][0],mapping_tensor,len(ans[i][0]),len(mapping_tensor))
-            signn.torch_graph_mapping(ans[i][1],mapping_tensor,len(ans[i][1]),len(mapping_tensor))
+        # mapping_tensor = torch.unique(ans[0][0])
+        # for i in range(len(self.fanout)):
+        #     signn.torch_graph_mapping(ans[i][0],mapping_tensor,len(ans[i][0]),len(mapping_tensor))
+        #     signn.torch_graph_mapping(ans[i][1],mapping_tensor,len(ans[i][1]),len(mapping_tensor))
         
         ans_blocks = []
-        for index,(src,dst) in enumerate(ans):
-            data = (src,dst)
-            block = dgl.graph((src,dst))
-            block = dgl.to_block(block)
-            ans_blocks.append(block)
+        #for index,(src,dst) in enumerate(ans):
+        src = ans[0][0]
+        dst = ans[0][1]
+        t,_ = torch.max(src,dim=0)
+        t1,_ = torch.max(dst,dim=0)
+        print("src=",src)
+        print("dst=",dst)
+        print("src max=",t)
+        print("dst max=",t1)
+        data = (src,dst)
+        block = dgl.graph((src,dst))
+        print("dgl graph:",block)
+        block = dgl.to_block(block)
+        ans_blocks.append(block)
         
-        # print("ans_blocks=",ans_blocks)
-
+        print("ans_blocks=",ans_blocks)
+        exit()
         # #===============================
         # for index in range(len(cacheGraph)):
         #     non_src = cacheGraph[index][0] != -1
@@ -421,15 +430,10 @@ class CustomDataset(Dataset):
         #     block = dgl.graph((cacheGraph[i][0], cacheGraph[i][1]))
         #     block = dgl.to_block(block)
         #     blocks.append(block)
-
-        # print("nodelist=",nodelist)
-        # print("blocks=",blocks)
-        # print("finish")
-        # exit()
         # return nodelist,blocks
 
         #===============================
-        return ans_blocks,mapping_tensor
+        #return ans_blocks,mapping_tensor
 
 
     def initCacheData(self):
@@ -489,14 +493,14 @@ class CustomDataset(Dataset):
         sampleTime = time.time()
         logger.debug("sampleIDs shape:{}".format(len(sampleIDs)))
         #self.sampleNeig(sampleIDs,cacheGraph)
-        blocks,mapping_tensor = self.sampleNeigGPU_bear(sampleIDs,cacheGraph)
+        nodelist,blocks = self.sampleNeigGPU_bear(sampleIDs,cacheGraph)
         logger.debug("cacheGraph shape:{}, first graph shape:{}".format(len(cacheGraph),len(cacheGraph[0][0])))
         logger.info("sample subG all cost {}s".format(time.time()-sampleTime))
         ##
 
         ##
         featTime = time.time()
-        cacheFeat = self.featMerge(mapping_tensor)
+        cacheFeat = self.featMerge(nodelist)
         logger.debug("featLen shape:{}".format(cacheFeat.shape))
         logger.info("subG feat merge cost {}s".format(time.time()-featTime))
         ##
@@ -558,7 +562,10 @@ class CustomDataset(Dataset):
         # logger.info("cat time {}s".format(time.time()-catTime))
         
         # featTime = time.time()
-        test = self.feats[nodeLists.to(torch.int64)]       
+
+        #test = self.feats[nodeLists.to(torch.int64)]   
+        test = self.feats[nodeLists]     
+
         # logger.info("feat merge {}s".format(time.time()-featTime))
         # logger.info("all merge {}s".format(time.time()-toCPUTime))
         # logger.info("-------------------------------------------------")

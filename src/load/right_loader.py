@@ -102,11 +102,14 @@ class CustomDataset(Dataset):
         self.template_cache_graph,self.template_cache_label = self.initCacheData()
         self.temp_merge_id = torch.zeros(len(self.template_cache_graph[0][0])+1, dtype=torch.int64)
 
+        self.subg = []
         self.loadingGraph(merge=False)
         self.loadingMemFeat(self.trainSubGTrack[self.subGptr//self.partNUM][self.subGptr%self.partNUM])
         self.initNextGraphData()
         #self.sampleFlagQueue.put(self.executor.submit(self.preGraphBatch)) #发送采样命令
+
         
+
     def __len__(self):  
         return self.NodeLen
     
@@ -172,6 +175,12 @@ class CustomDataset(Dataset):
             self.moveGraph()
         # 对于将要计算的子图(已经加载)，修改相关信息
         self.trainingGID = self.trainSubGTrack[self.subGptr//self.partNUM][self.subGptr%self.partNUM]
+        graph_dir = '/home/bear/workspace/singleGNN/data/raw-products_4/'
+        part_config = graph_dir + 'ogb-product.json'
+        subg, node_feat, _, gpb, _, node_type, _ = dgl.distributed.load_partition(part_config, self.trainingGID)
+        in_graph = dgl.node_subgraph(subg, subg.ndata['inner_node'].bool()).remove_self_loop().add_self_loop().to('cuda:0')
+        self.subg = in_graph
+        print("当前训练图:",self.trainingGID)
         self.graphNodeNUM = int(len(self.cacheData[1]) / 2 )# 获取当前节点数目
         self.graphEdgeNUM = len(self.cacheData[0])
         self.nodeLabels = self.loadingLabels(self.trainingGID)  
@@ -195,7 +204,7 @@ class CustomDataset(Dataset):
         haloend = time.time()
         logger.info("loadingHalo time: %g"%(haloend-halostart))
         self.loadingMemFeat(self.nextGID)
-        logger.info("当前加载图为:{},下一个图:{},图训练集规模:{},图节点数目:{},图边数目:{},加载耗时:{}s"\
+        print("当前加载图为:{},下一个图:{},图训练集规模:{},图节点数目:{},图边数目:{},加载耗时:{}s"\
                         .format(self.trainingGID,self.nextGID,self.subGtrainNodesNUM,\
                         self.graphNodeNUM,self.graphEdgeNUM,time.time()-start))
 
@@ -354,48 +363,59 @@ class CustomDataset(Dataset):
             out_dst = cacheGraph[layer-l-1][1]
             sample_start = time.time()
             signn.torch_sample_hop(
-                self.cacheData[0],self.cacheData[1],
+                self.cacheData[0][:self.graphEdgeNUM],self.cacheData[1][:self.graphNodeNUM*2],
                 sampleIDs,seed_num,fan_num,
                 out_src,out_dst,gapNUM)
             sampleIDs = cacheGraph[layer-l-1][0]
         
-        for index in range(len(cacheGraph)):
-            non_src = cacheGraph[index][0] != -1
-            cacheGraph[index][0] = cacheGraph[index][0][non_src]
-            non_dst = cacheGraph[index][1] != -1
-            cacheGraph[index][1] = cacheGraph[index][1][non_dst]
-
-        #===============================
-        ans = copy.deepcopy(cacheGraph)
-        for index in range(len(ans)):
-            non_src = ans[index][0] != -1
-            ans[index][0] = ans[index][0][non_src]
-            non_dst = ans[index][1] != -1
-            ans[index][1] = ans[index][1][non_dst]
-
-        mapping_tensor = torch.unique(ans[0][0])
-        for i in range(len(self.fanout)):
-            signn.torch_graph_mapping(ans[i][0],mapping_tensor,len(ans[i][0]),len(mapping_tensor))
-            signn.torch_graph_mapping(ans[i][1],mapping_tensor,len(ans[i][1]),len(mapping_tensor))
+        # ans = copy.deepcopy(cacheGraph[0])
+        # tmp_blocks = copy.deepcopy(cacheGraph)
+        # tmp_blocks = self.transGraph2DGLBlock(tmp_blocks)
+        # tmp_src = tmp_blocks[0].edges()[0]
+        # tmp_dst = tmp_blocks[0].edges()[1]
+        # non_src = tmp_src != 0
+        # tmp_src = tmp_src[non_src].to('cpu')
+        # non_dst = tmp_dst != 0
+        # tmp_dst = tmp_dst[non_dst].to('cpu')
         
-        ans_blocks = []
-        for index,(src,dst) in enumerate(ans):
-            data = (src,dst)
-            block = dgl.graph((src,dst))
-            tblock = dgl.to_block(block)
-            src = tblock.ndata[dgl.NID]
-            print(src)
-            print(len(src['_N']))
-            ans_blocks.append(block)
-        print(ans_blocks)
-        # print("ans_blocks=",ans_blocks)
+        # t,_ = torch.min(tmp_src,dim=0)
 
-        # #===============================
+        # print("tmp_src max: ",t)
+        # print("len :",len(tmp_dst))
+        # print("tmp_dst:",tmp_dst)
+        # print("tmp_src:",tmp_src)
+        
+        # for index in range(len(tmp_src)):
+        #     try:
+        #         if ans[0][tmp_src[index].item()-1] == -1 or ans[1][tmp_src[index].item()-1] == -1:
+        #             print("error index :",index,"tmp->src:",tmp_src[index]," ,tmp->dst:",tmp_dst[index])
+        #             exit()
+        #         tmp_dst[index] = ans[1][tmp_src[index].item()-1]
+        #         tmp_src[index] = ans[0][tmp_src[index].item()-1]
+                
+        #     except:
+        #         print(tmp_src[index].item()-1)
+        # print()
+        # t,_ = torch.min(tmp_src,dim=0)
+        # t1,_ = torch.min(tmp_dst,dim=0)
+        # print(t,t1)
+        
         for index in range(len(cacheGraph)):
             non_src = cacheGraph[index][0] != -1
             cacheGraph[index][0] = cacheGraph[index][0][non_src].to('cpu')
             non_dst = cacheGraph[index][1] != -1
             cacheGraph[index][1] = cacheGraph[index][1][non_dst].to('cpu')
+        # graph = dgl.graph((cacheGraph[0][0], cacheGraph[0][1])).to('cuda:0')
+        
+        # comp = graph.has_edges_between(tmp_src.to(torch.int32).to('cuda:0'),tmp_dst.to(torch.int32).to('cuda:0'))
+        # if comp.all() == False:
+        #     false_indices = torch.nonzero(~comp)
+        #     for fi in false_indices:
+        #         print("error edge : ",new_src[fi]," -> " ,new_dst[fi])
+        #         exit()
+        
+
+        # 转换映射
         mapping_dict = {} 
         nodelist = []
         ptr = 0
@@ -422,13 +442,10 @@ class CustomDataset(Dataset):
         blocks = []
         for i in range(2):
             block = dgl.graph((cacheGraph[i][0], cacheGraph[i][1]))
-            #block = dgl.to_block(block)
+            block = dgl.to_block(block)
             blocks.append(block)
-        exit()
-        # return nodelist,blocks
-
-        #===============================
-        return ans_blocks,mapping_tensor
+        return nodelist,blocks
+    
 
 
     def initCacheData(self):
@@ -488,14 +505,17 @@ class CustomDataset(Dataset):
         sampleTime = time.time()
         logger.debug("sampleIDs shape:{}".format(len(sampleIDs)))
         #self.sampleNeig(sampleIDs,cacheGraph)
-        blocks,mapping_tensor = self.sampleNeigGPU_bear(sampleIDs,cacheGraph)
-        logger.debug("cacheGraph shape:{}, first graph shape:{}".format(len(cacheGraph),len(cacheGraph[0][0])))
-        logger.info("sample subG all cost {}s".format(time.time()-sampleTime))
+        nodelist,blocks = self.sampleNeigGPU_bear(sampleIDs,cacheGraph)
+        
+        # print(cacheGraph)
+        # exit()
+        #logger.debug("cacheGraph shape:{}, first graph shape:{}".format(len(cacheGraph),len(cacheGraph[0][0])))
+        #logger.info("sample subG all cost {}s".format(time.time()-sampleTime))
         ##
 
         ##
         featTime = time.time()
-        cacheFeat = self.featMerge(mapping_tensor)
+        cacheFeat = self.featMerge(nodelist)
         logger.debug("featLen shape:{}".format(cacheFeat.shape))
         logger.info("subG feat merge cost {}s".format(time.time()-featTime))
         ##
@@ -545,22 +565,8 @@ class CustomDataset(Dataset):
             tmp_feat = torch.from_numpy(tmp_feat).reshape(-1,100)
             self.feats = torch.cat([self.feats,tmp_feat])
     
-    def featMerge(self,nodeLists):    
-        # logger.info("-------------------------------------------------")
-        # toCPUTime = time.time()
-        # nodeids = cacheGraph[0][0]       
-        # nodeids = nodeids.to(device='cpu')
-        # logger.info("to CPU time {}s".format(time.time()-toCPUTime))
-        
-        # catTime = time.time()
-        # self.temp_merge_id[1:] = nodeids
-        # logger.info("cat time {}s".format(time.time()-catTime))
-        
-        # featTime = time.time()
-        test = self.feats[nodeLists.to(torch.int64)]       
-        # logger.info("feat merge {}s".format(time.time()-featTime))
-        # logger.info("all merge {}s".format(time.time()-toCPUTime))
-        # logger.info("-------------------------------------------------")
+    def featMerge(self,nodelist):    
+        test = self.feats[nodelist]       
         return test
 
         
@@ -660,7 +666,7 @@ class CustomDataset(Dataset):
         for src, dst in graphdata:
             layer_mask = torch.ge(src, 0)
             masks.append(layer_mask)
-            logger.debug("masks shape:{}".format(layer_mask.shape))
+            print("masks shape:{}".format(layer_mask.sum().item()))
         template = copy.deepcopy(self.templateBlock)
 
         for index,mask in enumerate(masks):
@@ -728,6 +734,9 @@ class CustomDataset(Dataset):
         return template
 
     def get_test_idx(self,testSize):
+        #import random
+        #part = random.randint(0,self.partNUM-1)
+        #bound = self.idbound[part]
         np.random.seed()  # 设置随机种子，保证每次运行结果相同
         matrix = np.random.choice(range(0,self.idbound[self.partNUM-1][1]), size=testSize, replace=False)
         matrix = matrix.reshape(1,testSize)
@@ -747,14 +756,18 @@ if __name__ == "__main__":
         config = json.load(f)
         batchsize = config['batchsize']
         epoch = config['epoch']
-    train_loader = DataLoader(dataset=dataset, batch_size=batchsize,collate_fn=collate_fn)#pin_memory=True)
+    train_loader = DataLoader(dataset=dataset, batch_size=batchsize,collate_fn=collate_fn,pin_memory=True)
+    #dataset.preGraphBatch()
+    #time.sleep(2)
     count = 0
-    for index in range(3):
+    for index in range(1):
         start = time.time()
         loopTime = time.time()
         for graph,feat,label,number in train_loader:
-            count = count + 1
-            if count % 20 == 0:
-                print("loop time:{}".format(time.time()-loopTime))
-            loopTime = time.time()
+            pass
+            # max_value_output, max_index = torch.max(output_nodes, dim=0)
+            # count = count + 1
+            # if count % 20 == 0:
+            #     print("loop time:{}".format(time.time()-loopTime))
+            # loopTime = time.time()
         print("compute time:{}".format(time.time()-start))

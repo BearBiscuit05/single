@@ -1,31 +1,10 @@
 import time
 import copy
 import torch
-ll=[i for i in range(256000)]
-l=torch.tensor(ll)
-z = torch.Tensor([0])
-l_z = torch.cat([z,l])
+import dgl
 
-start=time.time()
-l=l.to('cuda:0')
-print(time.time()-start)
-l=l.cpu()
-start=time.time()
-l=l.to('cuda:0')
-print(time.time()-start)
-
-tmp=torch.tensor(ll)
-tmp=tmp.to('cuda:0')
-tmp=tmp.cpu()
-
-start=time.time()
-z = torch.Tensor([0])
-print(time.time()-start)
-
-start=time.time()
-tmp1 = torch.cat([torch.Tensor([0]),tmp])
-print(time.time()-start)
-
-start=time.time()
-l_z[1:]=tmp
-print(time.time()-start)
+dst = [0,0,0,1,1,1,2,2,2]
+src = [4,5,6,7,8,9,10,11,12]
+g = dgl.graph((src,dst))
+frontier = g.sample_neighbors([1], -1)
+print(frontier.edges())
