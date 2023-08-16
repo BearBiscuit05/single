@@ -128,6 +128,20 @@ class DGL2BinTester(object):
 			subg,node_feat,node_type = datas[partIndex]
 			src = subg.edges()[0].tolist()
 			dst = subg.edges()[1].tolist()
+			
+			# 此处测试发现：srcList.bin中一些结点的自循环边存在重复
+			# 不是predata的问题，而是dgl原始图数据中，这些自循环边也重复了
+			# edgeDict = {}
+			# for index in range(len(src)):
+			# 	srcid,dstid = src[index],dst[index]
+			# 	key = str(srcid+boundRange[partIndex][0]) + '->' + str(dstid+boundRange[partIndex][0])
+			# 	if key not in edgeDict:
+			# 		edgeDict[key] = 1
+			# 	else:
+			# 		edgeDict[key] = edgeDict[key] + 1
+			# for key in edgeDict:
+			# 	if edgeDict[key] > 1:
+			# 		print('repeat:',key,edgeDict[key])
 			inner = subg.ndata['inner_node'].tolist()
 			innernode = subg.ndata['inner_node'].sum()
 			nodeDict = {}
