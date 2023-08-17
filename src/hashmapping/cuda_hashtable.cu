@@ -52,7 +52,7 @@ public:
   explicit MutableDeviceOrderedHashTable(
       OrderedHashTable<IdType>* const hostTable)
       : DeviceOrderedHashTable<IdType>(hostTable->DeviceHandle()) {
-        printf("create success hashTable\n");
+        // printf("create success hashTable\n");
       }
 
   inline __device__ Iterator Search(const IdType id) {
@@ -76,7 +76,7 @@ public:
   // size_t real_size=0;
   inline __device__ Iterator Insert(const IdType id, const size_t index) {
     size_t pos = Hash(id);
-    printf("get insert id : %d \n",id);
+    // printf("get insert id : %d \n",id);
     IdType delta = 1;
     while (!AttemptInsertAt(pos, id, index)) {
       pos = Hash(pos + delta);
@@ -127,7 +127,7 @@ __global__ void generate_hashmap_duplicates(
   for (size_t index = threadIdx.x + block_start; index < block_end;
        index += BLOCK_SIZE) {
     if (index < num_items) {
-      printf("gen items: %d \n",items[index]);
+      // printf("gen items: %d \n",items[index]);
       table.Insert(items[index], index);
     }
   }
@@ -187,7 +187,7 @@ __global__ void count_hashmap(
 
   if (threadIdx.x == 0) {
     num_unique[blockIdx.x] = count;
-    printf("num_unique[blockIdx.x] %d \n",num_unique[blockIdx.x]);
+    // printf("num_unique[blockIdx.x] %d \n",num_unique[blockIdx.x]);
     if (blockIdx.x == 0) {
       num_unique[gridDim.x] = 0;
     }
@@ -218,9 +218,8 @@ __global__ void compact_hashmap(
     Mapping* kv;
     if (index < num_items) {
       kv = table.Search(items[index]);
-      printf("kv->index : %d \n",kv->index);
+      // printf("kv->index : %d \n",kv->index);
       flag = kv->index == index;
-      // printf("flag : %d ",flag);
     } else {
       flag = 0;
     }
@@ -237,9 +236,10 @@ __global__ void compact_hashmap(
     }
   }
   if (threadIdx.x == 0 && blockIdx.x == 0) {
-    printf("num_unique_items[0] : %d \n",num_unique_items[0]);
-    num_unique_items[0] = 6;
-    printf("num_unique_items[0] : %d \n",num_unique_items[0]);
+    // printf("num_unique_items[0] : %d \n",num_unique_items[0]);
+    *num_unique_items = num_items_prefix[gridDim.x];
+    // num_unique_items[0] = 6;
+    // printf("num_unique_items[0] : %d \n",num_unique_items[0]);
   }
 }
 
@@ -279,21 +279,21 @@ void OrderedHashTable<IdType>::FillWithDuplicates(
   const dim3 grid(num_tiles);
   const dim3 block(BLOCK_SIZE);
 
-  int64_t *dev_array;
-  int64_t *dev_uni_array;
+  IdType *dev_array;
+  IdType *dev_uni_array;
   size_t dev_num=NUM;
-  int64_t test=-1;
-  cudaMalloc(&dev_array, sizeof(int64_t)*NUM);
-	cudaMemcpy(dev_array, input, sizeof(int64_t)*NUM, cudaMemcpyHostToDevice);
-  cudaMemcpy(input, dev_array, sizeof(int64_t)*NUM, cudaMemcpyDeviceToHost);
-  for(int i = 0 ; i < 8 ; i++){
-    std::cout << "TESTING :" << input[i] << std::endl;}
+  IdType test=-1;
+  cudaMalloc(&dev_array, sizeof(IdType)*NUM);
+	cudaMemcpy(dev_array, input, sizeof(IdType)*NUM, cudaMemcpyHostToDevice);
+  cudaMemcpy(input, dev_array, sizeof(IdType)*NUM, cudaMemcpyDeviceToHost);
+  // for(int i = 0 ; i < 8 ; i++){
+  //   std::cout << "TESTING :" << input[i] << std::endl;}
     
-  cudaMalloc(&dev_uni_array, sizeof(int64_t)*NUM);
-	cudaMemcpy(&dev_uni_array, unique, sizeof(int64_t)*NUM, cudaMemcpyHostToDevice);
+  cudaMalloc(&dev_uni_array, sizeof(IdType)*NUM);
+	cudaMemcpy(&dev_uni_array, unique, sizeof(IdType)*NUM, cudaMemcpyHostToDevice);
   
   auto device_table = MutableDeviceOrderedHashTable<IdType>(this);
-  std::cout << "device_table size :"<< device_table.size_ << std::endl;
+  // std::cout << "device_table size :"<< device_table.size_ << std::endl;
   
   generate_hashmap_duplicates<IdType, BLOCK_SIZE, TILE_SIZE> 
   <<<grid, block>>>(dev_array, dev_num, device_table,test);
@@ -301,17 +301,13 @@ void OrderedHashTable<IdType>::FillWithDuplicates(
   IdType* item_prefix = static_cast<IdType*>(AllocDataSpace(sizeof(IdType) * (num_input + 1)));
   
   std::vector<IdType> dev_item(num_input + 1,0);
-	cudaMemcpy(item_prefix, dev_item.data(), sizeof(int64_t)*NUM, cudaMemcpyHostToDevice);
+	cudaMemcpy(item_prefix, dev_item.data(), sizeof(IdType)*NUM, cudaMemcpyHostToDevice);
   
   
   count_hashmap<IdType, BLOCK_SIZE, TILE_SIZE>
   <<<grid, block>>>(dev_array, num_input, device_table, item_prefix);
   CUDA_CALL(cudaDeviceSynchronize());
-  cudaMemcpy(dev_item.data(), item_prefix, sizeof(int64_t)*NUM, cudaMemcpyDeviceToHost);
-  for (int i = 0 ; i < num_input + 1 ; i++) {
-    std::cout << dev_item[i] << " \t";
-  }
-  std::cout << std::endl;
+  // cudaMemcpy(dev_item.data(), item_prefix, sizeof(IdType)*NUM, cudaMemcpyDeviceToHost);
 
   size_t workspace_bytes=0;
   CUDA_CALL(cub::DeviceScan::ExclusiveSum(
@@ -325,22 +321,16 @@ void OrderedHashTable<IdType>::FillWithDuplicates(
   CUDA_CALL(cudaDeviceSynchronize());
   FreeDataSpace(workspace);
   cudaMemcpy(dev_item.data(), item_prefix, sizeof(int64_t)*NUM, cudaMemcpyDeviceToHost);
-  std::cout << "========================"<< std::endl;
-  for (int i = 0 ; i < num_input + 1 ; i++) {
-    std::cout << dev_item[i] << " \t";
-  }
-  std::cout << std::endl;
 
   int64_t* dev_num_unique;
   cudaMalloc(&dev_num_unique, sizeof(int64_t));
 	cudaMemcpy(dev_num_unique, num_unique, sizeof(int64_t), cudaMemcpyHostToDevice);
-  // cudaMemcpy(input, dev_array, sizeof(int64_t)*NUM, cudaMemcpyDeviceToHost);
   compact_hashmap<IdType, BLOCK_SIZE, TILE_SIZE><<<grid, block>>>
   (dev_array, num_input, device_table, item_prefix, dev_uni_array, dev_num_unique);
   CUDA_CALL(cudaDeviceSynchronize());
   FreeDataSpace(item_prefix);
   cudaMemcpy(num_unique, dev_num_unique, sizeof(int64_t), cudaMemcpyDeviceToHost);
-  printf("num_unique : %d \n",num_unique[0]);
+  printf("num_unique : %zu \n",num_unique[0]);
 }
 
 template <typename IdType>
@@ -357,7 +347,7 @@ void OrderedHashTable<IdType>::FillWithUnique(
   <<<grid, block>>>(input, num_input, device_table);
 }
 
-// template class OrderedHashTable<int32_t>;
+template class OrderedHashTable<int32_t>;
 template class OrderedHashTable<int64_t>;
 
 int main(){
@@ -369,7 +359,6 @@ int main(){
   int64_t inputNUM = NUM;
   int64_t unique = 0;
   table.FillWithDuplicates(myVector.data(),inputNUM,myUnique.data(),&unique);
-  std::cout << std::endl;
   std::cout << "uniqueNUM :"<< unique << std::endl;
   return 0;
 }
