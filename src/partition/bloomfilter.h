@@ -185,6 +185,7 @@ inline int InitBloomFilter(BaseBloomFilter *pstBloomfilter,
     // 初始化BloomFilter的内存
     memset(pstBloomfilter->pstFilter, 0, pstBloomfilter->dwFilterSize);
     pstBloomfilter->cInitFlag = 1;
+    printf("Init completed.\n");
     return 0;
 }
 
@@ -465,6 +466,31 @@ inline int LoadBloomFilterFromFile(BaseBloomFilter *pstBloomfilter, char *szFile
 
     fclose(pFile);
     return 0;
+}
+
+// 在bloomfilter中添加n个点
+FORCE_INLINE int BloomFilter_AddNodes(BaseBloomFilter *pstBloomfilter,const int* nodeids,const int n)
+{
+    int ret = 0;
+    for(int i = 0;i < n;i++)
+    {
+        ret += BloomFilter_Add(pstBloomfilter,(const void *)(nodeids+i),sizeof(int));
+    }
+    return ret;
+}
+
+// 在bloomfilter中查询一条边 srcid->dstid 是否存在
+FORCE_INLINE int BloomFilter_CheckEdge(BaseBloomFilter *pstBloomfilter,const int srcid,const int dstid)
+{
+    int ret1 = BloomFilter_Check(pstBloomfilter,(const void *)&srcid,sizeof(int));
+    int ret2 = BloomFilter_Check(pstBloomfilter,(const void *)&dstid,sizeof(int));
+    return (ret1 + 2*ret2);
+    /*
+        返回0：该边2点都不在bloomfilter中，无需处理
+        返回1：该边的dstid在bloomfilter中，在当前迭代轮次中被选中，需要把srcid加入bloomfilter的点集缓存，更新边权
+        返回2：该边的srcid在bloomfilter中，在当前迭代轮次中被选中，需要把dstid加入bloomfilter的点集缓存，更新边权
+        返回3：该边已经在前面迭代轮次中被加入bloomfilter中，无需处理
+    */
 }
 
 #endif

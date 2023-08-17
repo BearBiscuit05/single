@@ -111,32 +111,6 @@ depend:
 .PHONY : depend
 
 #=============================================================================
-# Target rules for targets named unordered_map_test
-
-# Build rule for target.
-unordered_map_test: cmake_check_build_system
-	$(MAKE) -f CMakeFiles/Makefile2 unordered_map_test
-.PHONY : unordered_map_test
-
-# fast build rule for target.
-unordered_map_test/fast:
-	$(MAKE) -f CMakeFiles/unordered_map_test.dir/build.make CMakeFiles/unordered_map_test.dir/build
-.PHONY : unordered_map_test/fast
-
-#=============================================================================
-# Target rules for targets named map_test
-
-# Build rule for target.
-map_test: cmake_check_build_system
-	$(MAKE) -f CMakeFiles/Makefile2 map_test
-.PHONY : map_test
-
-# fast build rule for target.
-map_test/fast:
-	$(MAKE) -f CMakeFiles/map_test.dir/build.make CMakeFiles/map_test.dir/build
-.PHONY : map_test/fast
-
-#=============================================================================
 # Target rules for targets named bloomfilter
 
 # Build rule for target.
@@ -176,60 +150,6 @@ bloomfilter.cpp.s:
 	$(MAKE) -f CMakeFiles/bloomfilter.dir/build.make CMakeFiles/bloomfilter.dir/bloomfilter.cpp.s
 .PHONY : bloomfilter.cpp.s
 
-map_test.o: map_test.cpp.o
-
-.PHONY : map_test.o
-
-# target to build an object file
-map_test.cpp.o:
-	$(MAKE) -f CMakeFiles/map_test.dir/build.make CMakeFiles/map_test.dir/map_test.cpp.o
-.PHONY : map_test.cpp.o
-
-map_test.i: map_test.cpp.i
-
-.PHONY : map_test.i
-
-# target to preprocess a source file
-map_test.cpp.i:
-	$(MAKE) -f CMakeFiles/map_test.dir/build.make CMakeFiles/map_test.dir/map_test.cpp.i
-.PHONY : map_test.cpp.i
-
-map_test.s: map_test.cpp.s
-
-.PHONY : map_test.s
-
-# target to generate assembly for a file
-map_test.cpp.s:
-	$(MAKE) -f CMakeFiles/map_test.dir/build.make CMakeFiles/map_test.dir/map_test.cpp.s
-.PHONY : map_test.cpp.s
-
-unorder_map_test.o: unorder_map_test.cpp.o
-
-.PHONY : unorder_map_test.o
-
-# target to build an object file
-unorder_map_test.cpp.o:
-	$(MAKE) -f CMakeFiles/unordered_map_test.dir/build.make CMakeFiles/unordered_map_test.dir/unorder_map_test.cpp.o
-.PHONY : unorder_map_test.cpp.o
-
-unorder_map_test.i: unorder_map_test.cpp.i
-
-.PHONY : unorder_map_test.i
-
-# target to preprocess a source file
-unorder_map_test.cpp.i:
-	$(MAKE) -f CMakeFiles/unordered_map_test.dir/build.make CMakeFiles/unordered_map_test.dir/unorder_map_test.cpp.i
-.PHONY : unorder_map_test.cpp.i
-
-unorder_map_test.s: unorder_map_test.cpp.s
-
-.PHONY : unorder_map_test.s
-
-# target to generate assembly for a file
-unorder_map_test.cpp.s:
-	$(MAKE) -f CMakeFiles/unordered_map_test.dir/build.make CMakeFiles/unordered_map_test.dir/unorder_map_test.cpp.s
-.PHONY : unorder_map_test.cpp.s
-
 # Help Target
 help:
 	@echo "The following are some of the valid targets for this Makefile:"
@@ -238,18 +158,10 @@ help:
 	@echo "... depend"
 	@echo "... rebuild_cache"
 	@echo "... edit_cache"
-	@echo "... unordered_map_test"
-	@echo "... map_test"
 	@echo "... bloomfilter"
 	@echo "... bloomfilter.o"
 	@echo "... bloomfilter.i"
 	@echo "... bloomfilter.s"
-	@echo "... map_test.o"
-	@echo "... map_test.i"
-	@echo "... map_test.s"
-	@echo "... unorder_map_test.o"
-	@echo "... unorder_map_test.i"
-	@echo "... unorder_map_test.s"
 .PHONY : help
 
 
