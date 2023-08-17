@@ -1,16 +1,12 @@
+#ifndef CUDA_HASHTABLE
+#define CUDA_HASHTABLE
+
 #include <cuda_runtime.h>
 #include <cassert>
 #include <stdint.h>
 #include <cub/cub.cuh>
 #include <iostream>
-#define CUDA_CALL(func)                                      \
-  {                                                          \
-    cudaError_t e = (func);                                  \
-    if(e!=cudaSuccess) { \
-		std::cout << "Cuda failure " << __FILE__ << ":" << __LINE__ << ", " << cudaGetErrorString(e) << " (" << e << ")" << std::endl; \
-		exit(0); \
-	 }\
-  }
+#include "common.h"
 
 template <typename>
 class OrderedHashTable;
@@ -101,3 +97,4 @@ public:
   
 };
 
+#endif

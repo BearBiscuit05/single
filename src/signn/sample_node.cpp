@@ -1,12 +1,3 @@
-#include <vector>
-#include <iostream>
-#include <fstream>
-#include <algorithm>
-#include <numeric>
-#include <map>
-#include <sstream>
-#include <cassert>
-#include <torch/extension.h>
 #include "sample.h"
 
 

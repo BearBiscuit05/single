@@ -2,15 +2,16 @@ from setuptools import setup, find_packages
 from torch.utils.cpp_extension import BuildExtension, CUDAExtension, CppExtension
 
 setup(
-    name = "signn",
-    include_dirs = ["test_include"],
+    name = "signn_v1",
+    include_dirs = ["."],
     ext_modules = [
         CUDAExtension(
-        "signn",  # 扩展模块的名称
+        "signn_v1",  # 扩展模块的名称
         sources = [
-            "test_torch/sample_node.cpp",
-            "test_kernel/sample_kernel.cu",
-            "test_kernel/random_state_kernel.cu",
+            "cuda_hashtable.cu",
+            "cuda_mapping.cu",
+            "sample_kernel.cu",
+            "sample_node.cpp",
         ],
         )
     ],

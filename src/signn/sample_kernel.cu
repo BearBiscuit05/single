@@ -149,14 +149,11 @@ void sample_hop(
     
     dim3 grid(steps);
     dim3 block(blockSize);
-    // printf("grids:%d \n",steps);
-    // printf("block:%d \n",blockSize);
     unsigned long timeseed =
         std::chrono::system_clock::now().time_since_epoch().count();
     sample_hop_kernel<blockSize, slice>
     <<<grid,block>>>(graphEdge,bound,seed,
     seed_num,fanout,out_src,out_dst,timeseed,gapNUM);
-    // printf("TESTING.....\n");
     cudaDeviceSynchronize();
 }
 
@@ -185,7 +182,6 @@ void graph_mapping(
     const int slice = 1024;
     const int blockSize = 256;
     int steps = RoundUpDiv(nodeNUM,slice);
-
     dim3 grid(steps);
     dim3 block(blockSize);
     unsigned long timeseed =

@@ -1,6 +1,6 @@
 #include <cassert>
 #include <cstdio>
-#include "cuda_hashtable.cuh"
+#include "cuda_hashtable.h"
 
 inline int RoundUpDiv(int target, int unit) {
   return (target + unit - 1) / unit;
@@ -13,7 +13,7 @@ __device__ void map_node_ids(const IdType *const global,
                              const DeviceOrderedHashTable<IdType> &table) {
   assert(BLOCK_SIZE == blockDim.x);
 
-  using Bucket = typename OrderedHashTable::BucketO2N;
+  using Bucket = typename OrderedHashTable<IdType>::Mapping;
 
   const size_t block_start = TILE_SIZE * blockIdx.x;
   const size_t block_end = min(TILE_SIZE * (blockIdx.x + 1), num_input);
@@ -36,10 +36,10 @@ __global__ void map_edge_ids(const IdType *const global_src,
   assert(2 == gridDim.y);
 
   if (blockIdx.y == 0) {
-    map_node_ids<BLOCK_SIZE, TILE_SIZE>(global_src, new_global_src, num_edges,
+    map_node_ids<IdType,BLOCK_SIZE, TILE_SIZE>(global_src, new_global_src, num_edges,
                                         table);
   } else {
-    map_node_ids<BLOCK_SIZE, TILE_SIZE>(global_dst, new_global_dst, num_edges,
+    map_node_ids<IdType,BLOCK_SIZE, TILE_SIZE>(global_dst, new_global_dst, num_edges,
                                         table);
   }
 }
@@ -49,12 +49,13 @@ void GPUMapEdges( IdType * global_src, IdType * new_global_src,
                   IdType * global_dst, IdType * new_global_dst,
                   size_t num_edges, DeviceOrderedHashTable<IdType> table
                 ) {
-  const size_t num_tiles = RoundUpDiv(num_edges, Constant::kCudaTileSize);
+  const int slice = 1024;
+  const int blockSize = 256;
+  const size_t num_tiles = RoundUpDiv(num_edges,slice);
   const dim3 grid(num_tiles, 2);
-  const dim3 block(Constant::kCudaBlockSize);
-  auto cu_stream = static_cast<cudaStream_t>(stream);
+  const dim3 block(blockSize);
 
-  map_edge_ids<Constant::kCudaBlockSize, Constant::kCudaTileSize>
+  map_edge_ids<IdType,blockSize, slice>
       <<<grid, block>>>(global_src, new_global_src, global_dst,
                                       new_global_dst, num_edges, table);
 }

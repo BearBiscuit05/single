@@ -1,7 +1,8 @@
 #ifndef SAMPLE_H
 #define SAMPLE_H
 
-#include "random_state.h"
+#include "common.h"
+
 
 void sample_hop(
     int* graphEdge,int* bound,int* seed,
@@ -15,6 +16,6 @@ void graph_halo_merge(
 void graph_mapping(
     int* nodeList,int* mappingTable,int nodeNUM,int mappingNUM
 );
-//void test_random();
+
 
 #endif

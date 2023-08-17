@@ -1,6 +1,5 @@
 #include <cassert>
-#include "cuda_hashtable.cuh"
-#include <vector>
+#include "cuda_hashtable.h"
 
 #define NUM 64
 
