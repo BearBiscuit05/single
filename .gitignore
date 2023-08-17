@@ -22,3 +22,6 @@
 **/**.pt
 **/build/
 **/TEST/
+**/CMakeFiles/
+**/CmakeCache.txt
+**/cmake_install.cmake
