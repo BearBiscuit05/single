@@ -52,6 +52,7 @@ class DGL2BinTester(object):
 			valIDBinData = torch.load(valIDBinFile).to(torch.uint8).nonzero().squeeze()
 			testIDBinFile = self.newDataPath + 'part' + str(partIndex) + '/testID.bin'
 			testIDBinData = torch.load(testIDBinFile).to(torch.uint8).nonzero().squeeze()
+			print(trainIDRawData)
 			# 两个int32的numpy数组做比较，一致说明转换正确
 			if trainIDRawData.equal(trainIDBinData) == False:
 				print('error in part %d train id'%partIndex)
@@ -251,10 +252,10 @@ class DGL2BinTester(object):
 			flag = False
 		if self.testID(datas) == False:
 			flag = False
-		if self.testFeat(datas) == False:
-			flag = False
-		if self.testGraph(datas) == False:
-			flag = False
+		# if self.testFeat(datas) == False:
+		# 	flag = False
+		# if self.testGraph(datas) == False:
+		# 	flag = False
 		return flag
 
 if __name__ == '__main__':

@@ -13,6 +13,7 @@
 #include <stdint.h>
 #include <string.h>
 #include <math.h>
+#include <set>
 
 #define __BLOOMFILTER_VERSION__ "1.1"
 #define __MGAIC_CODE__          (0x01464C42)
@@ -469,12 +470,22 @@ inline int LoadBloomFilterFromFile(BaseBloomFilter *pstBloomfilter, char *szFile
 }
 
 // 在bloomfilter中添加n个点
-FORCE_INLINE int BloomFilter_AddNodes(BaseBloomFilter *pstBloomfilter,const int* nodeids,const int n)
+// FORCE_INLINE int BloomFilter_AddNodes(BaseBloomFilter *pstBloomfilter,std::vector<int> nodes)
+// {
+//     int ret = 0;
+//     for(int i = 0;i < nodes.size();i++)
+//     {
+//         ret += BloomFilter_Add(pstBloomfilter,(const void *)(&nodes[i]),sizeof(int));
+//     }
+//     return ret;
+// }
+
+FORCE_INLINE int BloomFilter_AddNodes(BaseBloomFilter *pstBloomfilter,std::set<int> nodes)
 {
     int ret = 0;
-    for(int i = 0;i < n;i++)
+    for(int nid: nodes)
     {
-        ret += BloomFilter_Add(pstBloomfilter,(const void *)(nodeids+i),sizeof(int));
+        ret += BloomFilter_Add(pstBloomfilter,(const void *)(&nid),sizeof(int));
     }
     return ret;
 }

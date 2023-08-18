@@ -1,5 +1,8 @@
 #include "bloomfilter.h"
-#include <stdio.h>
+#include <iostream>
+#include <cstdio>
+#include <cstdlib>
+#include <set>
 
 #define MAX_ITEMS 6000000      // 设置最大元素个数
 #define ADD_ITEMS 1000      // 添加测试元素
@@ -53,7 +56,7 @@ int main(int argc, char** argv)
     for(int i = 0;i < 2;i++)
     {
         printf("epoch: %d\n",i+1);
-        int nodes[20];
+        std::set<int> nodes;
         int cnt = 0;
         for(edge& e: edges)
         {
@@ -65,13 +68,13 @@ int main(int argc, char** argv)
             else if(ret == 1)
             {
                 printf("edge[%2d->%2d] is selected.\n",e.u,e.v);
-                nodes[cnt++] = e.u;
+                nodes.insert(e.u);
                 e.w += weight[i];
             }
             else if(ret == 2)
             {
                 printf("edge[%2d->%2d] is selected.\n",e.u,e.v);
-                nodes[cnt++] = e.v;
+                nodes.insert(e.v);
                 e.w += weight[i];
             }
             else
@@ -81,13 +84,13 @@ int main(int argc, char** argv)
         }
 
         printf("nodes cache to be added:");
-        for(int j = 0;j < cnt;j++)
+        for(int nid:nodes)
         {
-            printf("%d ",nodes[j]);
+            printf("%d ",nid);
         }
         printf("\n");
 
-        if(0 == BloomFilter_AddNodes(&stBloomFilter,nodes,cnt*sizeof(int))){
+        if(0 == BloomFilter_AddNodes(&stBloomFilter,nodes)){
             printf("add nodes success\n");
         }else{
             printf("add nodes failed\n");
