@@ -2,11 +2,11 @@ from setuptools import setup, find_packages
 from torch.utils.cpp_extension import BuildExtension, CUDAExtension, CppExtension
 
 setup(
-    name = "signn_v1",
+    name = "signn",
     include_dirs = ["."],
     ext_modules = [
         CUDAExtension(
-        "signn_v1", 
+        "signn", 
         sources = [
             "cuda_hashtable.cu",
             "cuda_mapping.cu",

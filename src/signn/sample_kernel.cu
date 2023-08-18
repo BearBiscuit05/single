@@ -225,7 +225,6 @@ void sample_hop(
     int seed_num,int fanout,int* out_src,
     int* out_dst,size_t* num_out)
 {   
-    // std::cout << "sample in " << std::endl;
     const int slice = 1024;
     const int blockSize = 256;
     int steps = RoundUpDiv(seed_num,slice);

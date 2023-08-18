@@ -2,7 +2,6 @@
 #define SAMPLE_H
 
 #include "common.cuh"
-#include "cuda_hashtable.cuh"
 
 void sample_hop(
     int* graphEdge,int* bound,int* seed,
@@ -19,6 +18,7 @@ void graph_mapping(
     int* newNodeDST,int* uniqueList,
     int edgeNUM,int uniqueNUM
 );
+
 
 
 #endif
