@@ -6,15 +6,6 @@
 #define NUM 64
 
 int main(){
-  // OrderedHashTable<int64_t> table(80);
-  // std::vector<int64_t> myVector = {2, 3, 4, 2, 7, 8};
-  // myVector.resize(NUM,0);
-  // std::vector<int64_t> myUnique(NUM,0);
-  
-  // int64_t inputNUM = NUM;
-  // int64_t unique = 0;
-  // table.FillWithDuplicates(myVector.data(),inputNUM,myUnique.data(),&unique);
-  // std::cout << "uniqueNUM :"<< unique << std::endl;
   std::vector<int> edges(100,0);
   for (int i = 0 ; i < 100 ; i++) {
     edges[i] = i;
@@ -32,7 +23,7 @@ int main(){
 
   int *dev_edges;int *dev_bound;int *dev_seed;size_t* dev_outNUM;
   int *dev_fanouts;int *dev_outSrcNodes;int *dev_outDstNodes;int *dev_outList;int *dev_outrawnodesid;
-  printf("main in... \n");
+
   CUDA_CALL(cudaMalloc(&dev_edges, sizeof(int)*100));
   CUDA_CALL(cudaMalloc(&dev_bound, sizeof(int)*20));
   CUDA_CALL(cudaMalloc(&dev_seed, sizeof(int)*seed_num));
@@ -81,6 +72,32 @@ int main(){
   }
   std::cout << std::endl;
   printf("outNUM: %zu \n",outNUM[0]);
+  std::cout << std::endl;
+
+
+
+  // ===================================================>
+
+  OrderedHashTable<int32_t> table(outNUM[0]);
+  // std::vector<int64_t> myVector = {2, 3, 4, 2, 7, 8};
+  // myVector.resize(NUM,0);
+  std::vector<int> myUnique(outNUM[0],0);
+  int *dev_myUnique;
+  CUDA_CALL(cudaMalloc(&dev_myUnique, sizeof(int)*outNUM[0]));
+  CUDA_CALL(cudaMemcpy(dev_myUnique, myUnique.data(), sizeof(int)*outNUM[0], cudaMemcpyHostToDevice));
+  
+  int64_t* dev_num_unique;
+  int64_t num_unique=0;
+  cudaMalloc(&dev_num_unique, sizeof(int64_t));
+	cudaMemcpy(dev_num_unique, &num_unique, sizeof(int64_t), cudaMemcpyHostToDevice);
+  table.FillWithDuplicates(dev_outDstNodes,outNUM[0],dev_myUnique,dev_num_unique);
+
+  CUDA_CALL(cudaMemcpy(myUnique.data(),dev_myUnique, sizeof(int)*outNUM[0], cudaMemcpyDeviceToHost));
+  CUDA_CALL(cudaMemcpy(&num_unique,dev_num_unique, sizeof(int64_t), cudaMemcpyDeviceToHost));
+  std::cout << "uniqueNUM :"<< num_unique << std::endl;
+  for (int i = 0 ; i  < num_unique ; i++) {
+    std::cout <<"unique :" << myUnique[i] << " ";
+  }
   std::cout << std::endl;
   return 0;
 }

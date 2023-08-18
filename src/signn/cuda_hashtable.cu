@@ -1,7 +1,7 @@
 #include <cassert>
 #include "cuda_hashtable.cuh"
 
-#define NUM 64
+// #define NUM 64
 
 
 constexpr static const int BLOCK_SIZE = 256;
@@ -71,7 +71,7 @@ size_t TableSize(const size_t num, const int scale) {
 template <typename IdType, int BLOCK_SIZE, size_t TILE_SIZE>
 __global__ void generate_hashmap_duplicates(
     const IdType* const items, const int64_t num_items,
-    MutableDeviceOrderedHashTable<IdType> table,int test) {
+    MutableDeviceOrderedHashTable<IdType> table) {
   
   assert(BLOCK_SIZE == blockDim.x);
 
@@ -165,7 +165,6 @@ __global__ void compact_hashmap(
   __shared__ typename BlockScan::TempStorage temp_space;
   const IdType offset = num_items_prefix[blockIdx.x];
   BlockPrefixCallbackOp<FlagType> prefix_op(0);
-  
   for (int32_t i = 0; i < VALS_PER_THREAD; ++i) {
     const IdType index = threadIdx.x + i * BLOCK_SIZE + blockIdx.x * TILE_SIZE;
     
@@ -173,7 +172,6 @@ __global__ void compact_hashmap(
     Mapping* kv;
     if (index < num_items) {
       kv = table.Search(items[index]);
-      // printf("kv->index : %d \n",kv->index);
       flag = kv->index == index;
     } else {
       flag = 0;
@@ -191,7 +189,7 @@ __global__ void compact_hashmap(
     }
   }
   if (threadIdx.x == 0 && blockIdx.x == 0) {
-    // printf("num_unique_items[0] : %d \n",num_unique_items[0]);
+    printf("num_unique_items[0] : %d \n",num_unique_items[0]);
     *num_unique_items = num_items_prefix[gridDim.x];
     // num_unique_items[0] = 6;
     // printf("num_unique_items[0] : %d \n",num_unique_items[0]);
@@ -234,58 +232,47 @@ void OrderedHashTable<IdType>::FillWithDuplicates(
   const dim3 grid(num_tiles);
   const dim3 block(BLOCK_SIZE);
 
-  IdType *dev_array;
-  IdType *dev_uni_array;
-  size_t dev_num=NUM;
-  IdType test=-1;
-  cudaMalloc(&dev_array, sizeof(IdType)*NUM);
-	cudaMemcpy(dev_array, input, sizeof(IdType)*NUM, cudaMemcpyHostToDevice);
-  cudaMemcpy(input, dev_array, sizeof(IdType)*NUM, cudaMemcpyDeviceToHost);
-  // for(int i = 0 ; i < 8 ; i++){
-  //   std::cout << "TESTING :" << input[i] << std::endl;}
-    
-  cudaMalloc(&dev_uni_array, sizeof(IdType)*NUM);
-	cudaMemcpy(&dev_uni_array, unique, sizeof(IdType)*NUM, cudaMemcpyHostToDevice);
   
   auto device_table = MutableDeviceOrderedHashTable<IdType>(this);
-  // std::cout << "device_table size :"<< device_table.size_ << std::endl;
   
   generate_hashmap_duplicates<IdType, BLOCK_SIZE, TILE_SIZE> 
-  <<<grid, block>>>(dev_array, dev_num, device_table,test);
+  <<<grid, block>>>(input, num_input, device_table);
   CUDA_CALL(cudaDeviceSynchronize());
   IdType* item_prefix = static_cast<IdType*>(AllocDataSpace(sizeof(IdType) * (num_input + 1)));
   
   std::vector<IdType> dev_item(num_input + 1,0);
-	cudaMemcpy(item_prefix, dev_item.data(), sizeof(IdType)*NUM, cudaMemcpyHostToDevice);
+	cudaMemcpy(item_prefix, dev_item.data(), sizeof(IdType)*(num_input + 1), cudaMemcpyHostToDevice);
   
   
   count_hashmap<IdType, BLOCK_SIZE, TILE_SIZE>
-  <<<grid, block>>>(dev_array, num_input, device_table, item_prefix);
+  <<<grid, block>>>(input, num_input, device_table, item_prefix);
   CUDA_CALL(cudaDeviceSynchronize());
-  // cudaMemcpy(dev_item.data(), item_prefix, sizeof(IdType)*NUM, cudaMemcpyDeviceToHost);
+  cudaMemcpy(dev_item.data(), item_prefix, sizeof(IdType)*(num_input + 1), cudaMemcpyDeviceToHost);
+  // for(int i = 0 ; i < 4 ; i++){
+  //   std::cout << "dev_item :" << dev_item[i] << std::endl;}
 
   size_t workspace_bytes=0;
   CUDA_CALL(cub::DeviceScan::ExclusiveSum(
     nullptr, workspace_bytes, static_cast<IdType*>(nullptr),
     static_cast<IdType*>(nullptr), grid.x + 1));
   CUDA_CALL(cudaDeviceSynchronize());
-  printf("workspace_bytes : %zu \n",workspace_bytes);
+  // printf("workspace_bytes : %zu \n",workspace_bytes);
   void* workspace = AllocDataSpace(workspace_bytes);
   CUDA_CALL(cub::DeviceScan::ExclusiveSum(
     workspace, workspace_bytes, item_prefix, item_prefix, grid.x + 1));
   CUDA_CALL(cudaDeviceSynchronize());
   FreeDataSpace(workspace);
-  cudaMemcpy(dev_item.data(), item_prefix, sizeof(int64_t)*NUM, cudaMemcpyDeviceToHost);
+  cudaMemcpy(dev_item.data(), item_prefix, sizeof(IdType)*(num_input + 1), cudaMemcpyDeviceToHost);
+  // for(int i = 0 ; i < 4 ; i++){
+  //   std::cout << "after dev_item :" << dev_item[i] << std::endl;}
 
-  int64_t* dev_num_unique;
-  cudaMalloc(&dev_num_unique, sizeof(int64_t));
-	cudaMemcpy(dev_num_unique, num_unique, sizeof(int64_t), cudaMemcpyHostToDevice);
   compact_hashmap<IdType, BLOCK_SIZE, TILE_SIZE><<<grid, block>>>
-  (dev_array, num_input, device_table, item_prefix, dev_uni_array, dev_num_unique);
+    (input, num_input, device_table, item_prefix, unique, num_unique);
   CUDA_CALL(cudaDeviceSynchronize());
   FreeDataSpace(item_prefix);
-  cudaMemcpy(num_unique, dev_num_unique, sizeof(int64_t), cudaMemcpyDeviceToHost);
-  printf("num_unique : %zu \n",num_unique[0]);
+
+  // cudaMemcpy(num_unique, dev_num_unique, sizeof(int64_t), cudaMemcpyDeviceToHost);
+  // printf("num_unique : %zu \n",num_unique[0]);
 }
 
 template <typename IdType>
