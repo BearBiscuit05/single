@@ -2,4 +2,4 @@
 rm -rf build
 rm -rf dist
 rm -rf signn.egg-info
-python3 test_torch/setup.py install
+python3 setup.py install > build.txt 2>&1

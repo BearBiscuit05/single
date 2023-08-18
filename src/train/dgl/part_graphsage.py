@@ -108,6 +108,7 @@ def train(args, device, g, train_idx,val_idx, model):
         for i in range(4):
             train_dataloader = train_dataloader_list[i]
             for it, (input_nodes, output_nodes, blocks) in enumerate(train_dataloader):
+                print(blocks)
                 x = blocks[0].srcdata['feat']
                 y = blocks[-1].dstdata['label']
                 y_hat = model(blocks, x)
