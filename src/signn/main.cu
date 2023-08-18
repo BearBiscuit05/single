@@ -23,15 +23,14 @@ int main(){
   std::vector<int> seed={0,1,2,3};
   int64_t seed_num=4;
   std::vector<int> fanouts={5};
-  int64_t fanoutNUM=1;
   int sampledNUM = fanouts[0] * seed_num;
   std::vector<int> outSrcNodes(sampledNUM,0);
   std::vector<int> outDstNodes(sampledNUM,0);
   std::vector<int> outList(2,0);
   std::vector<int> outrawnodesid(sampledNUM,0);
-  int64_t outnodesNUM = 0;
+  std::vector<size_t> outNUM(1,0);
 
-  int *dev_edges;int *dev_bound;int *dev_seed;
+  int *dev_edges;int *dev_bound;int *dev_seed;size_t* dev_outNUM;
   int *dev_fanouts;int *dev_outSrcNodes;int *dev_outDstNodes;int *dev_outList;int *dev_outrawnodesid;
   printf("main in... \n");
   CUDA_CALL(cudaMalloc(&dev_edges, sizeof(int)*100));
@@ -42,6 +41,7 @@ int main(){
   CUDA_CALL(cudaMalloc(&dev_outDstNodes, sizeof(int)*sampledNUM));
   CUDA_CALL(cudaMalloc(&dev_outList, sizeof(int)*2));
   CUDA_CALL(cudaMalloc(&dev_outrawnodesid, sizeof(int)*sampledNUM));
+  CUDA_CALL(cudaMalloc(&dev_outNUM, sizeof(size_t)));
 
 	CUDA_CALL(cudaMemcpy(dev_edges, edges.data(), sizeof(int)*100, cudaMemcpyHostToDevice));
   CUDA_CALL(cudaMemcpy(dev_bound, bound.data(), sizeof(int)*20, cudaMemcpyHostToDevice));
@@ -51,12 +51,14 @@ int main(){
   CUDA_CALL(cudaMemcpy(dev_outDstNodes, outDstNodes.data(), sizeof(int)*sampledNUM, cudaMemcpyHostToDevice));
   CUDA_CALL(cudaMemcpy(dev_outList, outList.data(), sizeof(int)*2, cudaMemcpyHostToDevice));
   CUDA_CALL(cudaMemcpy(dev_outrawnodesid, outrawnodesid.data(), sizeof(int)*sampledNUM, cudaMemcpyHostToDevice));
-  printf("get in... \n");
-  mutiLayersSample(
-    dev_edges,dev_bound,
-    dev_seed,seed_num,fanouts.data(),fanoutNUM,
-    dev_outSrcNodes,dev_outDstNodes,dev_outList,
-    dev_outrawnodesid,outnodesNUM);
+  CUDA_CALL(cudaMemcpy(dev_outNUM, outNUM.data(), sizeof(size_t), cudaMemcpyHostToDevice));
+
+  int fanout = fanouts[0];
+  sample_hop(
+    dev_edges,dev_bound,dev_seed,
+    seed_num,fanout,dev_outSrcNodes,
+    dev_outDstNodes,dev_outNUM);
+
   CUDA_CALL(cudaDeviceSynchronize());
 
   CUDA_CALL(cudaMemcpy(edges.data(),dev_edges, sizeof(int)*100, cudaMemcpyDeviceToHost));
@@ -67,6 +69,7 @@ int main(){
   CUDA_CALL(cudaMemcpy(outDstNodes.data(),dev_outDstNodes,  sizeof(int)*sampledNUM, cudaMemcpyDeviceToHost));
   CUDA_CALL(cudaMemcpy(outList.data(), dev_outList, sizeof(int)*2, cudaMemcpyDeviceToHost));
   CUDA_CALL(cudaMemcpy(outrawnodesid.data(), dev_outrawnodesid,sizeof(int)*sampledNUM, cudaMemcpyDeviceToHost));
+  CUDA_CALL(cudaMemcpy(outNUM.data(), dev_outNUM,sizeof(size_t), cudaMemcpyDeviceToHost));
   std::cout << std::endl;
 
   for (int i = 0 ; i  < sampledNUM ; i++) {
@@ -76,6 +79,8 @@ int main(){
   for (int i = 0 ; i  < sampledNUM ; i++) {
     std::cout << outDstNodes[i] << " ";
   }
+  std::cout << std::endl;
+  printf("outNUM: %zu \n",outNUM[0]);
   std::cout << std::endl;
   return 0;
 }

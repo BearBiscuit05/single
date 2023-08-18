@@ -11,7 +11,7 @@ __global__ void sample_hop_kernel(
     int* graphEdge,int* bound,int* seed,
     int seed_num,int fanout,
     int* out_src,int* out_dst,
-    unsigned long random_states,int gapNUM) {
+    unsigned long random_states) {
     assert(BLOCK_SIZE == blockDim.x);
     const size_t block_start = TILE_SIZE * blockIdx.x;
     const size_t block_end = TILE_SIZE * (blockIdx.x + 1);
@@ -189,7 +189,6 @@ __global__ void graph_mapping_kernel(
     ) {
     const size_t block_start = TILE_SIZE * blockIdx.x;
     const size_t block_end = TILE_SIZE * (blockIdx.x + 1);
-    int idx = blockIdx.x * blockDim.x + threadIdx.x;   
     for (size_t index = threadIdx.x + block_start; index < block_end;
        index += BLOCK_SIZE) {
         if (index < nodeNUM) {
@@ -224,7 +223,7 @@ using StreamHandle = void*;
 void sample_hop(
     int* graphEdge,int* bound,int* seed,
     int seed_num,int fanout,int* out_src,
-    int* out_dst,size_t* num_out,int gapNUM)
+    int* out_dst,size_t* num_out)
 {   
     // std::cout << "sample in " << std::endl;
     const int slice = 1024;
@@ -241,7 +240,7 @@ void sample_hop(
 
     sample_hop_kernel<blockSize, slice>
         <<<grid,block>>>(graphEdge,bound,seed,
-        seed_num,fanout,tmp_src,tmp_dst,timeseed,gapNUM);
+        seed_num,fanout,tmp_src,tmp_dst,timeseed);
     CUDA_CALL(cudaDeviceSynchronize());
     
     size_t *item_prefix = static_cast<size_t *>(AllocDataSpace(sizeof(size_t) * (grid.x + 1)));
@@ -315,27 +314,3 @@ void graph_mapping(
 
 
 
-void mutiLayersSample(
-    int* graphEdge,int* bound,
-    int* seed,int64_t seed_num,int* fanouts,int64_t fanoutNUM,
-    int* outSrcNodes,int* outDstNodes,int* outList,
-    int* outrawnodesid,int64_t outnodesNUM
-) {
-    int layers = fanoutNUM;
-    int seedNUM = seed_num;
-    int gapNUM = 0;
-    for (int i = 0 ; i < layers ; ++i) {
-        int fanout = fanouts[i];
-        printf("fanout %d \n",fanout);
-        size_t *dev_num_out = static_cast<size_t *>(AllocDataSpace(sizeof(size_t)));
-        CUDA_CALL(cudaMemcpy(dev_num_out, &outnodesNUM, sizeof(size_t), cudaMemcpyHostToDevice));
-        std::vector<size_t> num_out(1,0);
-        sample_hop(
-            graphEdge,bound,seed,
-            seedNUM,fanout,outSrcNodes,
-            outDstNodes,dev_num_out,gapNUM);  
-        CUDA_CALL(cudaMemcpy(&outnodesNUM,dev_num_out, sizeof(size_t), cudaMemcpyDeviceToHost));
-        printf("run success %zu \n",outnodesNUM);      
-    }
-    
-}

@@ -7,7 +7,7 @@
 void sample_hop(
     int* graphEdge,int* bound,int* seed,
     int seed_num,int fanout,int* out_src,
-    int* out_dst,int gapNUM);
+    int* out_dst,size_t* num_out);
 
 void graph_halo_merge(
     int* edge,int* bound,
@@ -17,11 +17,5 @@ void graph_mapping(
     int* nodeList,int* mappingTable,int nodeNUM,int mappingNUM
 );
 
-void mutiLayersSample(
-    int* graphEdge,int* bound,
-    int* seed,int64_t seed_num,int* fanouts,int64_t fanoutNUM,
-    int* outSrcNodes,int* outDstNodes,int* outList,
-    int* outrawnodesid,int64_t outnodesNUM
-);
 
 #endif
