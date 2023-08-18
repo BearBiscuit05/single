@@ -1,4 +1,4 @@
-#include "sample.h"
+#include "signn.h"
 
 
 void torch_sample_hop(
@@ -31,6 +31,20 @@ void torch_graph_mapping(torch::Tensor &nodeList,torch::Tensor &mappingTable
     );
 }
 
+void torch_mutiLayersSample(
+    torch::Tensor & graphEdge,torch::Tensor &bound,
+    torch::Tensor & seed,int64_t seed_num,torch::Tensor &fanouts,int64_t fanoutNUM,
+    torch::Tensor & outSrcNodes,torch::Tensor & outDstNodes,torch::Tensor & outList,
+    torch::Tensor & outrawnodesid,int64_t outnodesNUM
+) {
+    mutiLayersSample(
+        (int*) graphEdge.data_ptr(),(int*) bound.data_ptr(),
+        (int*) seed.data_ptr(), seed_num,(int*) fanouts.data_ptr(), fanoutNUM,
+        (int*) outSrcNodes.data_ptr(),(int*) outDstNodes.data_ptr(),(int*) outList.data_ptr(),
+        (int*) outrawnodesid.data_ptr(), outnodesNUM
+    );
+
+}
 
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
     m.def("torch_sample_hop",
@@ -42,6 +56,9 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
     m.def("torch_graph_mapping",
           &torch_graph_mapping,
           "mapping new graph");
+    m.def("torch_mutiLayersSample",
+          &torch_mutiLayersSample,
+          "muti layer sample");
 }
 
 // TORCH_LIBRARY(sample_hop_new, m) {

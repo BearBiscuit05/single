@@ -1,44 +1,12 @@
 #include <cassert>
-#include "cuda_hashtable.h"
+#include "cuda_hashtable.cuh"
 
 #define NUM 64
 
-inline __device__ int64_t
-AtomicCAS(int64_t* const address, const int64_t compare, const int64_t val) {
-  // match the type of "::atomicCAS", so ignore lint warning
-  using Type = unsigned long long int;  // NOLINT
-
-  static_assert(sizeof(Type) == sizeof(*address), "Type width must match");
-
-  return atomicCAS(
-      reinterpret_cast<Type*>(address), static_cast<Type>(compare),
-      static_cast<Type>(val));
-}
-
-inline __device__ int32_t
-AtomicCAS(int32_t* const address, const int32_t compare, const int32_t val) {
-  // match the type of "::atomicCAS", so ignore lint warning
-  using Type = int;  // NOLINT
-
-  static_assert(sizeof(Type) == sizeof(*address), "Type width must match");
-
-  return atomicCAS(
-      reinterpret_cast<Type*>(address), static_cast<Type>(compare),
-      static_cast<Type>(val));
-}
-
-void *AllocDataSpace(size_t nbytes) {
-    void *ret = nullptr;
-    CUDA_CALL(cudaMalloc(&ret, nbytes));
-    return ret;
-}
-
-void FreeDataSpace(void *ret) {
-  CUDA_CALL(cudaFree(ret));
-}
 
 constexpr static const int BLOCK_SIZE = 256;
 constexpr static const size_t TILE_SIZE = 1024;
+
 
 
 // using namespace cuda;
@@ -98,19 +66,7 @@ size_t TableSize(const size_t num, const int scale) {
   return next_pow2 << scale;
 }
 
-template <typename IdType>
-struct BlockPrefixCallbackOp {
-  IdType running_total_;
 
-  __device__ BlockPrefixCallbackOp(const IdType running_total)
-      : running_total_(running_total) {}
-
-  __device__ IdType operator()(const IdType block_aggregate) {
-    const IdType old_prefix = running_total_;
-    running_total_ += block_aggregate;
-    return old_prefix;
-  }
-};
 
 template <typename IdType, int BLOCK_SIZE, size_t TILE_SIZE>
 __global__ void generate_hashmap_duplicates(
@@ -349,15 +305,3 @@ void OrderedHashTable<IdType>::FillWithUnique(
 template class OrderedHashTable<int32_t>;
 template class OrderedHashTable<int64_t>;
 
-int main(){
-  OrderedHashTable<int64_t> table(80);
-  std::vector<int64_t> myVector = {2, 3, 4, 2, 7, 8};
-  myVector.resize(NUM,0);
-  std::vector<int64_t> myUnique(NUM,0);
-  
-  int64_t inputNUM = NUM;
-  int64_t unique = 0;
-  table.FillWithDuplicates(myVector.data(),inputNUM,myUnique.data(),&unique);
-  std::cout << "uniqueNUM :"<< unique << std::endl;
-  return 0;
-}

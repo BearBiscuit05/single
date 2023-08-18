@@ -1,10 +1,11 @@
 #include <cassert>
 #include <cstdio>
-#include "cuda_hashtable.h"
+#include "cuda_mapping.cuh"
 
 inline int RoundUpDiv(int target, int unit) {
   return (target + unit - 1) / unit;
 }
+
 
 
 template <typename IdType,size_t BLOCK_SIZE, size_t TILE_SIZE>
