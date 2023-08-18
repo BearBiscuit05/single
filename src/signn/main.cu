@@ -75,22 +75,26 @@ int main(){
   std::cout << std::endl;
 
 
-
+  
   // ===================================================>
+  int* dev_mergedVector;
+  std::vector<int> mergedVector(outDstNodes.begin(), outDstNodes.begin()+outNUM[0]);
+  mergedVector.insert(mergedVector.end(), outSrcNodes.begin(), outSrcNodes.begin()+outNUM[0]);
+  outNUM[0] = outNUM[0] * 2;
+  cudaMalloc(&dev_mergedVector, sizeof(int)*outNUM[0]);
+	cudaMemcpy(dev_mergedVector, mergedVector.data(), sizeof(int)*outNUM[0], cudaMemcpyHostToDevice);
 
   OrderedHashTable<int> table(outNUM[0]);
-  // std::vector<int64_t> myVector = {2, 3, 4, 2, 7, 8};
-  // myVector.resize(NUM,0);
   std::vector<int> myUnique(outNUM[0],0);
   int *dev_myUnique;
   CUDA_CALL(cudaMalloc(&dev_myUnique, sizeof(int)*outNUM[0]));
   CUDA_CALL(cudaMemcpy(dev_myUnique, myUnique.data(), sizeof(int)*outNUM[0], cudaMemcpyHostToDevice));
-  
+
   int64_t* dev_num_unique;
   int64_t num_unique=0;
   cudaMalloc(&dev_num_unique, sizeof(int64_t));
 	cudaMemcpy(dev_num_unique, &num_unique, sizeof(int64_t), cudaMemcpyHostToDevice);
-  table.FillWithDuplicates(dev_outDstNodes,outNUM[0],dev_myUnique,dev_num_unique);
+  table.FillWithDuplicates(dev_mergedVector,outNUM[0],dev_myUnique,dev_num_unique);
 
   CUDA_CALL(cudaMemcpy(myUnique.data(),dev_myUnique, sizeof(int)*outNUM[0], cudaMemcpyDeviceToHost));
   CUDA_CALL(cudaMemcpy(&num_unique,dev_num_unique, sizeof(int64_t), cudaMemcpyDeviceToHost));
@@ -99,14 +103,6 @@ int main(){
     std::cout <<"unique :" << myUnique[i] << " ";
   }
   std::cout << std::endl;
-
-  table.FillWithDuplicates(dev_outSrcNodes,outNUM[0],dev_myUnique,dev_num_unique);
-  CUDA_CALL(cudaMemcpy(myUnique.data(),dev_myUnique, sizeof(int)*outNUM[0], cudaMemcpyDeviceToHost));
-  CUDA_CALL(cudaMemcpy(&num_unique,dev_num_unique, sizeof(int64_t), cudaMemcpyDeviceToHost));
-  std::cout << "uniqueNUM src:"<< num_unique << std::endl;
-  for (int i = 0 ; i  < num_unique ; i++) {
-    std::cout <<"unique src :" << myUnique[i] << "\n";
-  }
 
   
   std::vector<int> new_global_src(outNUM[0],0);
@@ -125,7 +121,7 @@ int main(){
   CUDA_CALL(cudaMemcpy(new_global_dst.data(),dev_new_global_dst, sizeof(int)*outNUM[0], cudaMemcpyDeviceToHost));
   
   std::cout << "-----------------------------" << std::endl;
-  for (int i = 0 ; i  < outNUM[0] ; i++) {
+  for (int i = 0 ; i  < outNUM[0] / 2 ; i++) {
     std::cout << "new edge:" << new_global_src[i] << "-->" << new_global_dst[i] << "\n";
   }
   return 0;

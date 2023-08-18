@@ -82,7 +82,6 @@ __global__ void generate_hashmap_duplicates(
   for (size_t index = threadIdx.x + block_start; index < block_end;
        index += BLOCK_SIZE) {
     if (index < num_items) {
-      // printf("gen items: %d \n",items[index]);
       table.Insert(items[index], index);
     }
   }
@@ -189,7 +188,7 @@ __global__ void compact_hashmap(
     }
   }
   if (threadIdx.x == 0 && blockIdx.x == 0) {
-    printf("num_unique_items[0] : %d \n",num_unique_items[0]);
+    // printf("num_unique_items[0] : %d \n",num_unique_items[0]);
     *num_unique_items = num_items_prefix[gridDim.x];
     // num_unique_items[0] = 6;
     // printf("num_unique_items[0] : %d \n",num_unique_items[0]);
@@ -232,6 +231,14 @@ void OrderedHashTable<IdType>::FillWithDuplicates(
   const dim3 grid(num_tiles);
   const dim3 block(BLOCK_SIZE);
 
+  // std::vector<int> mergedVector(26,0);
+  // // cudaMalloc(&dev_mergedVector, sizeof(int));
+	// // cudaMemcpy(dev_mergedVector, mergedVector.data(), sizeof(int)*26, cudaMemcpyHostToDevice);
+  // cudaMemcpy(mergedVector.data(), dev_mergedVector, sizeof(int)*26, cudaMemcpyDeviceToHost);
+  
+  // for (int i = 0 ; i  < outNUM[0] ; i++) {
+  //   std::cout <<"func in nodes :" << mergedVector[i] << "\n";
+  // }
   
   auto device_table = MutableDeviceOrderedHashTable<IdType>(this);
   
