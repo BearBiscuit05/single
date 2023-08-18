@@ -10,25 +10,15 @@ void graph_mapping(
     int* nodeList,int* nodeSRC,
     int* nodeDST,int* newNodeSRC,
     int* newNodeDST,int* uniqueList,
-    int edgeNUM,int uniqueNUM
+    int edgeNUM,int64_t* uniqueNUM
 ) {
   OrderedHashTable<int> table(edgeNUM*2);
-  int64_t* dev_num_unique;
-  int64_t num_unique=0;
   size_t nodeNUM = edgeNUM * 2;
-  CUDA_CALL(cudaMemcpy(dev_num_unique, &num_unique,sizeof(int64_t), cudaMemcpyHostToDevice));
-  table.FillWithDuplicates(nodeList,nodeNUM,uniqueList,dev_num_unique);
-  CUDA_CALL(cudaMemcpy(&num_unique,dev_num_unique, sizeof(int64_t), cudaMemcpyDeviceToHost));
-  uniqueNUM = (int) num_unique;
-  
-
+  table.FillWithDuplicates(nodeList,nodeNUM,uniqueList,uniqueNUM);
   GPUMapEdges<int>(nodeSRC, newNodeSRC,
                   nodeDST, newNodeDST,
                   edgeNUM, table.DeviceHandle()
                 );
-  
-  
-
 }
 
 

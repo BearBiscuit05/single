@@ -28,12 +28,12 @@ void torch_graph_mapping(
     torch::Tensor &nodeList,torch::Tensor &nodeSRC,
     torch::Tensor &nodeDST,torch::Tensor &newNodeSRC,
     torch::Tensor &newNodeDST,torch::Tensor &uniqueList,
-    int edgeNUM,int uniqueNUM) {
+    int edgeNUM,torch::Tensor & uniqueNUM) {
     graph_mapping(
         (int*) nodeList.data_ptr(),(int*) nodeSRC.data_ptr(),
         (int*) nodeDST.data_ptr(),(int*) newNodeSRC.data_ptr(),
         (int*) newNodeDST.data_ptr(),(int*) uniqueList.data_ptr(),
-        edgeNUM,uniqueNUM
+        edgeNUM,(int64_t *)uniqueNUM.data_ptr()
     );
 }
 

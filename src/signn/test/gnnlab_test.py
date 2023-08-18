@@ -3,7 +3,7 @@ import numpy as np
 import torch
 from torch import nn
 from torch.autograd import Function
-import signn_v1
+import signn
 import time
 import struct
 import os
@@ -41,7 +41,7 @@ def haloTest(graphEdge,boundList):
     # print("halo nodeNUM:",len(halobound)-1)
     graphEdge_tmp = copy.deepcopy(graphEdge).to('cpu')
     start = time.time()
-    signn_v1.torch_graph_halo_merge(graphEdge,boundList,halo2,halobound,nodeNUM)
+    signn.torch_graph_halo_merge(graphEdge,boundList,halo2,halobound,nodeNUM)
     #print("comput time:",time.time()-start)
     # graphEdge = graphEdge.to('cpu')
     # boundList = boundList.to('cpu')
@@ -58,21 +58,39 @@ def right_Test(graphEdge,boundList):
     #boundList = torch.tensor(boundList).to(torch.int).to('cuda:0')
     # print(graphEdge.device)
     # print(boundList.device)
-    seed_num = 100
+    seed_num = 10
     seed = [i for i in range(seed_num)]
     seed = torch.Tensor(seed).to(torch.int).to('cuda:0')
     
-    fanout = 10
+    fanout = 5
     out_src = [-1 for i in range(seed_num*fanout)]
     out_src = torch.Tensor(out_src).to(torch.int).to('cuda:0')
     out_dst = [-1 for i in range(seed_num*fanout)]
     out_dst = torch.Tensor(out_dst).to(torch.int).to('cuda:0')
     start = time.time()
     out_num = torch.Tensor([0]).to(torch.int64).to('cuda:0')
-    signn_v1.torch_sample_hop(graphEdge,boundList,seed,seed_num,fanout,out_src,out_dst,out_num)
+    signn.torch_sample_hop(graphEdge,boundList,seed,seed_num,fanout,out_src,out_dst,out_num)
     print("comput time:",time.time()-start)
     print("out_dst :",out_dst)
     print("out_num : ",out_num)
+    count = torch.sum(out_dst == -1).item()
+    print("count :",seed_num*fanout - count)
+
+    all_node = torch.cat([out_dst[:out_num],out_src[:out_num]])
+    shape = out_dst.shape
+    newNodeSRC = torch.zeros(shape,dtype=torch.int32).to('cuda:0')
+    newNodeDST = torch.zeros(shape,dtype=torch.int32).to('cuda:0')
+    edgeNUM = seed_num*fanout - count
+    unique = torch.zeros(shape,dtype=torch.int32).to('cuda:0')
+    uniqueNUM = torch.Tensor([0]).to(torch.int64).to('cuda:0')
+
+    print(all_node.shape)
+    signn.torch_graph_mapping(all_node,out_src,out_dst,newNodeSRC,newNodeDST,unique,edgeNUM,uniqueNUM)
+    print("newNodeSRC :",newNodeSRC)
+    print("newNodeDST : ",newNodeDST)
+    print("unique : ",unique)
+    print("uniqueNUM : ",uniqueNUM)
+
 
 
 if __name__ == "__main__":

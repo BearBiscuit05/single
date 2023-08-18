@@ -1,8 +1,8 @@
 #ifndef SAMPLE_H
 #define SAMPLE_H
 
-#include "common.cuh"
-
+#include <torch/extension.h>
+//#include<cstdlib>
 void sample_hop(
     int* graphEdge,int* bound,int* seed,
     int seed_num,int fanout,int* out_src,
@@ -16,7 +16,7 @@ void graph_mapping(
     int* nodeList,int* nodeSRC,
     int* nodeDST,int* newNodeSRC,
     int* newNodeDST,int* uniqueList,
-    int edgeNUM,int uniqueNUM
+    int edgeNUM,int64_t* uniqueNUM
 );
 
 
