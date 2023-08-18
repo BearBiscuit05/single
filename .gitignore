@@ -21,4 +21,5 @@
 **/**.pkl
 **/**.pt
 **/build/
-**/TEST/
+**/dist/
+# **/TEST/

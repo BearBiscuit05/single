@@ -1,24 +1,15 @@
-#include <vector>
-#include <iostream>
-#include <fstream>
-#include <algorithm>
-#include <numeric>
-#include <map>
-#include <sstream>
-#include <cassert>
-#include <torch/extension.h>
-#include "sample.h"
+#include "signn.h"
 
 
 void torch_sample_hop(
     torch::Tensor &graphEdge,torch::Tensor &bound,
     torch::Tensor &seed,int seed_num,int fanout,
-    torch::Tensor &out_src,torch::Tensor &out_dst,int gapNUM
+    torch::Tensor &out_src,torch::Tensor &out_dst,torch::Tensor &num_out
     ) {
     sample_hop(
         (int*) graphEdge.data_ptr(),(int*) bound.data_ptr(),(int*) seed.data_ptr(),
         seed_num,fanout,(int*) out_src.data_ptr(),
-        (int*) out_dst.data_ptr(),gapNUM);
+        (int*) out_dst.data_ptr(),(size_t*) num_out.data_ptr());
 }
 
 
@@ -32,6 +23,22 @@ void torch_graph_halo_merge(
     );
 }
 
+
+void torch_graph_mapping(
+    torch::Tensor &nodeList,torch::Tensor &nodeSRC,
+    torch::Tensor &nodeDST,torch::Tensor &newNodeSRC,
+    torch::Tensor &newNodeDST,torch::Tensor &uniqueList,
+    int edgeNUM,torch::Tensor & uniqueNUM) {
+    graph_mapping(
+        (int*) nodeList.data_ptr(),(int*) nodeSRC.data_ptr(),
+        (int*) nodeDST.data_ptr(),(int*) newNodeSRC.data_ptr(),
+        (int*) newNodeDST.data_ptr(),(int*) uniqueList.data_ptr(),
+        edgeNUM,(int64_t *)uniqueNUM.data_ptr()
+    );
+}
+
+
+
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
     m.def("torch_sample_hop",
           &torch_sample_hop,
@@ -39,6 +46,9 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
     m.def("torch_graph_halo_merge",
           &torch_graph_halo_merge,
           "graph halo merge");
+    m.def("torch_graph_mapping",
+          &torch_graph_mapping,
+          "mapping new graph");
 }
 
 // TORCH_LIBRARY(sample_hop_new, m) {
