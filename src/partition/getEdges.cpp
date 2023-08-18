@@ -227,7 +227,7 @@ int main()
 
 	/* 测试读取trainID的二进制文件 */
 	// std::vector<int> trainIDs;
-	// readTrainID("/home/wsy/single-gnn/data/ogb-products-trainID.bin",trainIDs);
+	// readTrainID("/home/wsy/single-gnn/data/ogb-products/trainID.bin",trainIDs);
 	// for(int id:trainIDs)
 	// {
 	// 	printf("%d\n",id);
@@ -236,6 +236,6 @@ int main()
 	/* 测试读取csv文件，按照srcid,dstid的格式 
 		注意：python加载的边数是csv文件的2倍，因为dgl认为是有2条有向边
 	*/
-	readEdgesCSV("/home/wsy/single-gnn/data/ogb-products-edge.csv");
+	readEdgesCSV("/home/wsy/single-gnn/data/ogb-products/edge.csv");
 	return 0;
 }
