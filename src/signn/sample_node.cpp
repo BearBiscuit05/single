@@ -4,12 +4,12 @@
 void torch_sample_hop(
     torch::Tensor &graphEdge,torch::Tensor &bound,
     torch::Tensor &seed,int seed_num,int fanout,
-    torch::Tensor &out_src,torch::Tensor &out_dst,int gapNUM
+    torch::Tensor &out_src,torch::Tensor &out_dst,torch::Tensor &num_out
     ) {
     sample_hop(
         (int*) graphEdge.data_ptr(),(int*) bound.data_ptr(),(int*) seed.data_ptr(),
         seed_num,fanout,(int*) out_src.data_ptr(),
-        (int*) out_dst.data_ptr(),gapNUM);
+        (int*) out_dst.data_ptr(),(size_t*) num_out.data_ptr());
 }
 
 

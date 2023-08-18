@@ -1,8 +1,7 @@
 #ifndef COMMON_H
 #define COMMON_H
 
-#pragma once
-//#include <torch/extension.h>
+#include <torch/extension.h>
 #include <iostream>
 #include <curand_kernel.h>
 #include <vector>

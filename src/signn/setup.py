@@ -11,6 +11,8 @@ setup(
             "cuda_hashtable.cu",
             "cuda_mapping.cu",
             "sample_kernel.cu",
+            "cuda_memory.cu",
+            "signn_kernel.cu",
             "sample_node.cpp",
         ],
         extra_compile_args={
