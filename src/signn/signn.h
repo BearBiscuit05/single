@@ -14,7 +14,10 @@ void graph_halo_merge(
     int* halos,int* halo_bound,int nodeNUM);
 
 void graph_mapping(
-    int* nodeList,int* mappingTable,int nodeNUM,int mappingNUM
+    int* nodeList,int* nodeSRC,
+    int* nodeDST,int* newNodeSRC,
+    int* newNodeDST,int* uniqueList,
+    int edgeNUM,int uniqueNUM
 );
 
 
