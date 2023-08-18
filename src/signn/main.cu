@@ -78,7 +78,7 @@ int main(){
 
   // ===================================================>
 
-  OrderedHashTable<int32_t> table(outNUM[0]);
+  OrderedHashTable<int> table(outNUM[0]);
   // std::vector<int64_t> myVector = {2, 3, 4, 2, 7, 8};
   // myVector.resize(NUM,0);
   std::vector<int> myUnique(outNUM[0],0);
@@ -99,5 +99,34 @@ int main(){
     std::cout <<"unique :" << myUnique[i] << " ";
   }
   std::cout << std::endl;
+
+  table.FillWithDuplicates(dev_outSrcNodes,outNUM[0],dev_myUnique,dev_num_unique);
+  CUDA_CALL(cudaMemcpy(myUnique.data(),dev_myUnique, sizeof(int)*outNUM[0], cudaMemcpyDeviceToHost));
+  CUDA_CALL(cudaMemcpy(&num_unique,dev_num_unique, sizeof(int64_t), cudaMemcpyDeviceToHost));
+  std::cout << "uniqueNUM src:"<< num_unique << std::endl;
+  for (int i = 0 ; i  < num_unique ; i++) {
+    std::cout <<"unique src :" << myUnique[i] << "\n";
+  }
+
+  
+  std::vector<int> new_global_src(outNUM[0],0);
+  std::vector<int> new_global_dst(outNUM[0],0);
+  int * dev_new_global_src;int * dev_new_global_dst;
+  CUDA_CALL(cudaMalloc(&dev_new_global_src, sizeof(int)*outNUM[0]));
+  CUDA_CALL(cudaMemcpy(dev_new_global_src, new_global_src.data(), sizeof(int)*outNUM[0], cudaMemcpyHostToDevice));
+  CUDA_CALL(cudaMalloc(&dev_new_global_dst, sizeof(int)*outNUM[0]));
+  CUDA_CALL(cudaMemcpy(dev_new_global_dst, new_global_dst.data(), sizeof(int)*outNUM[0], cudaMemcpyHostToDevice));
+
+  GPUMapEdges<int>(dev_outSrcNodes, dev_new_global_src,
+                  dev_outDstNodes, dev_new_global_dst,
+                  outNUM[0], table.DeviceHandle()
+                );
+  CUDA_CALL(cudaMemcpy(new_global_src.data(),dev_new_global_src, sizeof(int)*outNUM[0], cudaMemcpyDeviceToHost));
+  CUDA_CALL(cudaMemcpy(new_global_dst.data(),dev_new_global_dst, sizeof(int)*outNUM[0], cudaMemcpyDeviceToHost));
+  
+  std::cout << "-----------------------------" << std::endl;
+  for (int i = 0 ; i  < outNUM[0] ; i++) {
+    std::cout << "new edge:" << new_global_src[i] << "-->" << new_global_dst[i] << "\n";
+  }
   return 0;
 }

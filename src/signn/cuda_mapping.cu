@@ -21,7 +21,7 @@ __device__ void map_node_ids(const IdType *const global,
 
   for (size_t idx = threadIdx.x + block_start; idx < block_end;
        idx += BLOCK_SIZE) {
-    const Bucket &bucket = *table.SearchO2N(global[idx]);
+    const Bucket &bucket = *table.Search(global[idx]);
     new_global[idx] = bucket.local;
   }
 }
@@ -60,3 +60,15 @@ void GPUMapEdges( IdType * global_src, IdType * new_global_src,
       <<<grid, block>>>(global_src, new_global_src, global_dst,
                                       new_global_dst, num_edges, table);
 }
+
+template void GPUMapEdges<int32_t>(
+    int32_t * global_src, int32_t * new_global_src,
+    int32_t * global_dst, int32_t * new_global_dst,
+    size_t num_edges, DeviceOrderedHashTable<int32_t> table
+);
+
+template void GPUMapEdges<int64_t>(
+    int64_t * global_src, int64_t * new_global_src,
+    int64_t * global_dst, int64_t * new_global_dst,
+    size_t num_edges, DeviceOrderedHashTable<int64_t> table
+);
