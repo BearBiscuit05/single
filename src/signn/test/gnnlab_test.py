@@ -38,26 +38,15 @@ def haloTest(graphEdge,boundList):
     file_path = "./../../../data/products_4/part0/halo3_bound.bin"
     halobound = np.fromfile(file_path, dtype=np.int32)
     halobound = torch.tensor(halobound).to('cuda:0')
-    # print("halo nodeNUM:",len(halobound)-1)
     graphEdge_tmp = copy.deepcopy(graphEdge).to('cpu')
     start = time.time()
     signn.torch_graph_halo_merge(graphEdge,boundList,halo2,halobound,nodeNUM)
-    #print("comput time:",time.time()-start)
-    # graphEdge = graphEdge.to('cpu')
-    # boundList = boundList.to('cpu')
-    #are_equal = torch.equal(graphEdge, graphEdge_tmp)
     
     
     return graphEdge,boundList
 
 
 def right_Test(graphEdge,boundList):
-    # graphEdge = [i for i in range(30)]
-    # boundList = [0,8,8,15,17,23,24,30]
-    #graphEdge = torch.tensor(graphEdge).to(torch.int).to('cuda:0')
-    #boundList = torch.tensor(boundList).to(torch.int).to('cuda:0')
-    # print(graphEdge.device)
-    # print(boundList.device)
     seed_num = 10
     seed = [i for i in range(seed_num)]
     seed = torch.Tensor(seed).to(torch.int).to('cuda:0')
@@ -81,14 +70,16 @@ def right_Test(graphEdge,boundList):
     newNodeSRC = torch.zeros(shape,dtype=torch.int32).to('cuda:0')
     newNodeDST = torch.zeros(shape,dtype=torch.int32).to('cuda:0')
     edgeNUM = seed_num*fanout - count
-    unique = torch.zeros(shape,dtype=torch.int32).to('cuda:0')
+    print("edgeNUM :",edgeNUM)
+    print("shape :",shape)
+    unique = torch.zeros(100,dtype=torch.int32).to('cuda:0')
     uniqueNUM = torch.Tensor([0]).to(torch.int64).to('cuda:0')
 
-    print(all_node.shape)
-    signn.torch_graph_mapping(all_node,out_src,out_dst,newNodeSRC,newNodeDST,unique,edgeNUM,uniqueNUM)
-    print("newNodeSRC :",newNodeSRC)
-    print("newNodeDST : ",newNodeDST)
-    print("unique : ",unique)
+    print(all_node)
+    signn.torch_graph_mapping(all_node,out_src,out_dst,out_src,out_dst,unique,edgeNUM,uniqueNUM)
+    print("newNodeSRC :",out_src)
+    print("newNodeDST : ",out_dst)
+    print("unique : ",unique," shape: ",unique.shape)
     print("uniqueNUM : ",uniqueNUM)
 
 
