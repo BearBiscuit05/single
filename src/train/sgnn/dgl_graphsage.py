@@ -162,24 +162,22 @@ if __name__ == '__main__':
     parser.add_argument("--mode", default='mixed', choices=['cpu', 'mixed', 'puregpu'],
                         help="Training mode. 'cpu' for CPU training, 'mixed' for CPU-GPU mixed training, "
                              "'puregpu' for pure-GPU training.")
+    parser.add_argument("--json_path", default='./../../load/graphsage.json', type=str,
+                        help="Path to the JSON file containing dataset information.")
     args = parser.parse_args()
+    
     if not torch.cuda.is_available():
         args.mode = 'cpu'
+    
     print(f'Training in {args.mode} mode.')
     print('Loading data')
     
     device = torch.device('cpu' if args.mode == 'cpu' else 'cuda:0')
-    # create GraphSAGE model
-    # in_size = g.ndata['feat'].shape[1]
-    # out_size = dataset.num_classes
-    model = SAGE(100, 256, 47).to('cuda:0')
-    dataset = CustomDataset("./../../load/graphsage.json")
+    model = SAGE(100, 256, 47).to('cuda:0')  # 请确保 SAGE 模型的参数正确
+    dataset = CustomDataset(args.json_path)  # 使用 args.json_path 作为 JSON 文件路径
     print('Training...')
     train(args, device, dataset, model)
 
-    # test the model
-#    print('Testing...')
-#
     test_dataset = AsNodePredDataset(DglNodePropPredDataset('ogbn-products'))
     g = test_dataset[0]
     g = g.to('cpu')

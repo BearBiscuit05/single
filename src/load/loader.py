@@ -91,12 +91,6 @@ class CustomDataset(Dataset):
         #### 规定用哪张卡单独跑 ####
         self.cudaDevice = 0
 
-        # #### dgl.block ####
-        # if self.framework == "dgl":
-        #     self.templateBlock = self.genBlockTemplate()
-        # elif self.framework == "pyg":
-        # #### pyg.batch ####
-        #     self.templateBlock = self.genPYGBatchTemplate()
 
         #### 数据预取 ####
         self.template_cache_graph,self.template_cache_label = self.initCacheData()
