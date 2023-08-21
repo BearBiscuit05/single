@@ -9,7 +9,7 @@
     "preRating":512,
     "featlen":100,
     "fanout":[10,25],
-    "framework":"dgl",
+    "framework":"pyg",
     "mode":"train",
     "idbound":[
         [

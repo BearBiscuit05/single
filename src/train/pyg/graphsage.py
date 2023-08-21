@@ -1,6 +1,6 @@
 import copy
 import os
-
+import time
 import torch
 import torch.distributed as dist
 import torch.multiprocessing as mp
@@ -89,19 +89,20 @@ def run(rank, world_size, dataset):
     #model = DistributedDataParallel(model, device_ids=[rank])
     optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
 
-    for epoch in range(1, 21):
-        model.train()    
+    for epoch in range(1, 11):
+        model.train()
+        startTime = time.time()    
         for batch in train_loader:        
-            optimizer.zero_grad()     
+            optimizer.zero_grad()    
             out = model(batch.x, batch.edge_index.to('cuda:0'))[:batch.batch_size]
             loss = F.cross_entropy(out, batch.y[:batch.batch_size])
             loss.backward()
             optimizer.step()
-            
+        runTime = time.time() - startTime
         # dist.barrier()
 
         # if rank == 0:
-        print(f'Epoch: {epoch:02d}, Loss: {loss:.4f}')
+        print(f'Epoch: {epoch:02d}, Loss: {loss:.4f}, time: {runTime:.5f}')
 
         if rank == 0 and epoch % 5 == 0:  # We evaluate on a single GPU for now
             model.eval()
@@ -119,7 +120,7 @@ def run(rank, world_size, dataset):
 
 
 if __name__ == '__main__':
-    dataset = Reddit('.')
+    dataset = Reddit('../../../data/pyg_reddit')
     # world_size = torch.cuda.device_count()
     world_size = 1
     print('Let\'s use', world_size, 'GPUs!')

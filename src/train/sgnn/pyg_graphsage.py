@@ -68,8 +68,9 @@ def run(rank, world_size, dataset):
         startTime = time.time()
         model.train()    
         for graph,feat,label,number in train_loader:        
-            optimizer.zero_grad()     
-            out = model(feat.to('cuda:0'), graph)[1:number+1]
+            optimizer.zero_grad()    
+            # print(graph) 
+            out = model(feat.to('cuda:0'), graph)[:number]
             loss = F.cross_entropy(out, label[:number].to(torch.int64).to('cuda:0'))
             loss.backward()
             optimizer.step()
