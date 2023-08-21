@@ -91,12 +91,12 @@ class CustomDataset(Dataset):
         #### 规定用哪张卡单独跑 ####
         self.cudaDevice = 0
 
-        #### dgl.block ####
-        if self.framework == "dgl":
-            self.templateBlock = self.genBlockTemplate()
-        elif self.framework == "pyg":
-        #### pyg.batch ####
-            self.templateBlock = self.genPYGBatchTemplate()
+        # #### dgl.block ####
+        # if self.framework == "dgl":
+        #     self.templateBlock = self.genBlockTemplate()
+        # elif self.framework == "pyg":
+        # #### pyg.batch ####
+        #     self.templateBlock = self.genPYGBatchTemplate()
 
         #### 数据预取 ####
         self.template_cache_graph,self.template_cache_label = self.initCacheData()
@@ -190,11 +190,12 @@ class CustomDataset(Dataset):
         self.loadingGraph()
         self.nextGID = self.trainSubGTrack[self.subGptr//self.partNUM][self.subGptr%self.partNUM]
         halostart = time.time()
-        #self.loadingHalo()
+        self.loadingHalo()
+        logger.info("loadingHalo time: %g"%(time.time()-halostart))
         haloend = time.time()
-        logger.info("loadingHalo time: %g"%(haloend-halostart))
         self.loadingMemFeat(self.nextGID)
-        logger.info("当前加载图为:{},下一个图:{},图训练集规模:{},图节点数目:{},图边数目:{},加载耗时:{}s"\
+        logger.info("loadingHalo time: %g"%(time.time()-haloend))
+        logger.info("当前加载图为:{},下一个图:{},图训练集规模:{},图节点数目:{},图边数目:{},加载耗时:{:.5f}s"\
                         .format(self.trainingGID,self.nextGID,self.subGtrainNodesNUM,\
                         self.graphNodeNUM,self.graphEdgeNUM,time.time()-start))
 
@@ -346,20 +347,22 @@ class CustomDataset(Dataset):
         ptr = 0
         mapping_ptr = [ptr]
         batch = len(sampleIDs)
+        sampleStart = time.time()
         for l, fan_num in enumerate(self.fanout):
             seed_num = len(sampleIDs)
-            # print(sampleIDs)
             out_src = cacheGraph[0][ptr:ptr+seed_num*fan_num]
             out_dst = cacheGraph[1][ptr:ptr+seed_num*fan_num]
             out_num = torch.Tensor([0]).to(torch.int64).to('cuda:0')
-            #sample_start = time.time()
             signn.torch_sample_hop(
-                self.cacheData[0][:self.graphEdgeNUM],self.cacheData[1][:self.graphNodeNUM*2],
+                self.cacheData[0],self.cacheData[1],
                 sampleIDs,seed_num,fan_num,
                 out_src,out_dst,out_num)
             sampleIDs = cacheGraph[0][ptr:ptr+out_num.item()]
             ptr=ptr+out_num.item()
             mapping_ptr.append(ptr)
+        logger.info("sample Time {:.5f}s".format(time.time()-sampleStart))
+
+        mappingTime = time.time()        
         cacheGraph[0] = cacheGraph[0][:mapping_ptr[-1]]
         cacheGraph[1] = cacheGraph[1][:mapping_ptr[-1]]
         uniqueNUM = torch.Tensor([0]).to(torch.int64).to('cuda:0')
@@ -368,11 +371,9 @@ class CustomDataset(Dataset):
         unique = torch.zeros(mapping_ptr[-1]*2,dtype=torch.int32).to('cuda:0')
         signn.torch_graph_mapping(all_node,cacheGraph[0],cacheGraph[1],cacheGraph[0],cacheGraph[1],unique,edgeNUM,uniqueNUM)
         unique = unique[:uniqueNUM.item()]
-        # print("cacheGraph[0]:",cacheGraph[0])
-        # print("cacheGraph[1]:",cacheGraph[1])
-        # print("unique:",unique)
+        logger.info("mapping Time {:.5f}s".format(time.time()-mappingTime))
 
-        #===================================
+        transTime = time.time()
         layer = len(mapping_ptr) - 1
         blocks = []
         save_num = 0
@@ -392,15 +393,13 @@ class CustomDataset(Dataset):
             else:
                 block = self.create_dgl_block(data,save_num,batch)
             blocks.append(block)
-        # print(blocks)
-        # exit()
+        logger.info("trans Time {:.5f}s".format(time.time()-transTime))
         return blocks,unique
 
     def initCacheData(self):
         number = self.batchsize
         tmp = self.batchsize
         cacheGraph = [[],[]]
-
         for layer, fan in enumerate(self.fanout):
             dst = torch.full((tmp * fan,), -1, dtype=torch.int32).to("cuda:0")  # 使用PyTorch张量，指定dtype
             src = torch.full((tmp * fan,), -1, dtype=torch.int32).to("cuda:0")  # 使用PyTorch张量，指定dtype
@@ -410,8 +409,6 @@ class CustomDataset(Dataset):
         cacheLabel = torch.zeros(self.batchsize)
         cacheGraph[0] = torch.cat(cacheGraph[0],dim=0)
         cacheGraph[1] = torch.cat(cacheGraph[1],dim=0)
-        # print(cacheGraph)
-        # print(cacheGraph[0].shape)
         return cacheGraph, cacheLabel
 
     def preGraphBatch(self):
@@ -423,17 +420,16 @@ class CustomDataset(Dataset):
 
         nextLoadingTime = time.time()
         if self.trainptr == self.trainLoop:
-            # 当前cache已经失效，则需要reload新图
             logger.debug("触发cache reload ,ptr:{}".format(self.trainptr))
             self.trainptr = 0           
             self.initNextGraphData()
-        logger.info("next loading cost {}s".format(time.time()-nextLoadingTime))
+        logger.info("next loading cost {:.5f}s".format(time.time()-nextLoadingTime))
 
         cacheTime = time.time()
         cacheGraph = copy.deepcopy(self.template_cache_graph)
         cacheLabel = copy.deepcopy(self.template_cache_label)
         sampleIDs = -1 * torch.ones(self.batchsize,dtype=torch.int64)
-        logger.info("cache copy graph and label cost {}s".format(time.time()-cacheTime))
+        logger.info("cache copy graph and label cost {:.5f}s".format(time.time()-cacheTime))
         
         ##
         createDataTime = time.time()
@@ -445,40 +441,40 @@ class CustomDataset(Dataset):
             cacheLabel = self.nodeLabels[sampleIDs]
         else:
             # 最后一个batch
-            logger.debug("last batch...")
+            # logger.debug("last batch...")
             offset = self.trainptr*self.batchsize
-            logger.debug("train loop:{} , offset:{} ,subGtrainNodesNUM:{}".format(self.trainLoop,offset,self.subGtrainNodesNUM))
+            # logger.debug("train loop:{} , offset:{} ,subGtrainNodesNUM:{}".format(self.trainLoop,offset,self.subGtrainNodesNUM))
             sampleIDs[:self.subGtrainNodesNUM - offset] = self.trainNodes[offset:self.subGtrainNodesNUM]
             batchlen = self.subGtrainNodesNUM - offset
             #sliceIDs = sampleIDs[0:self.subGtrainNodesNUM - offset].to(torch.long)
             cacheLabel = self.nodeLabels[sampleIDs[0:self.subGtrainNodesNUM - offset]]
-        logger.info("create Data Time cost {}s".format(time.time()-createDataTime))    
+        logger.info("create Data Time cost {:.5f}s".format(time.time()-createDataTime))    
         ##
 
         ##
         sampleTime = time.time()
-        logger.debug("sampleIDs shape:{}".format(len(sampleIDs)))
+        # logger.debug("sampleIDs shape:{}".format(len(sampleIDs)))
         blocks,uniqueList = self.sampleNeigGPU_bear(sampleIDs,cacheGraph)
         # logger.debug("cacheGraph shape:{}, first graph shape:{}".format(len(cacheGraph),len(cacheGraph[0][0])))
-        logger.info("sample subG all cost {}s".format(time.time()-sampleTime))
+        logger.info("sample subG all cost {:.5f}s".format(time.time()-sampleTime))
         ##
 
         ##
         featTime = time.time()
         cacheFeat = self.featMerge(uniqueList)
         logger.debug("featLen shape:{}".format(cacheFeat.shape))
-        logger.info("subG feat merge cost {}s".format(time.time()-featTime))
+        logger.info("subG feat merge cost {:.5f}s".format(time.time()-featTime))
         ##
         
         ##
         putinTime = time.time()
         cacheData = [blocks,cacheFeat,cacheLabel,batchlen]
         self.graphPipe.put(cacheData)
-        logger.info("putin pipe time {}s".format(time.time()-putinTime))
+        logger.info("putin pipe time {:.5f}s".format(time.time()-putinTime))
         ##
         
         self.trainptr += 1
-        logger.info("pre graph sample cost {}s".format(time.time()-preBatchTime))
+        logger.info("pre graph sample cost {:.5f}s".format(time.time()-preBatchTime))
         logger.info("===============================================")
         return 0
 
@@ -518,12 +514,10 @@ class CustomDataset(Dataset):
         # self.temp_merge_id[1:] = nodeids
         # logger.info("cat time {}s".format(time.time()-catTime))
         
-        # featTime = time.time()
-
+        featTime = time.time()
         #test = self.feats[nodeLists.to(torch.int64)]   
         test = self.feats[uniqueList.to(torch.int64).to('cpu')]     
-
-        # logger.info("feat merge {}s".format(time.time()-featTime))
+        logger.info("feat merge {}s".format(time.time()-featTime))
         # logger.info("all merge {}s".format(time.time()-toCPUTime))
         # logger.info("-------------------------------------------------")
         return test
@@ -707,10 +701,12 @@ if __name__ == "__main__":
         start = time.time()
         loopTime = time.time()
         for graph,feat,label,number in train_loader:
-            print(graph)
-            print("feat len:",len(feat))
+            # print(graph)
+            # print("feat len:",len(feat))
             count = count + 1
             if count % 20 == 0:
-                print("loop time:{}".format(time.time()-loopTime))
+                print("loop time:{:.5f}".format(time.time()-loopTime))
             loopTime = time.time()
-        print("compute time:{}".format(time.time()-start))
+        print("count :",count)
+        print("compute time:{:.5f}".format(time.time()-start))
+        print("===============================")
