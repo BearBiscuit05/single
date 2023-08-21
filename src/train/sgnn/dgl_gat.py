@@ -15,6 +15,9 @@ import time
 import time
 import sys
 import os
+import copy
+from dgl.data import AsNodePredDataset
+from dgl.dataloading import NeighborSampler, MultiLayerFullNeighborSampler
 current_folder = os.path.abspath(os.path.dirname(__file__))
 sys.path.append(current_folder+"/../../"+"load")
 #from loader_dgl import CustomDataset
@@ -44,7 +47,7 @@ class GAT(nn.Module):
         """Conduct layer-wise inference to get all the node embeddings."""
         feat = g.ndata['feat']
         sampler = MultiLayerFullNeighborSampler(1, prefetch_node_feats=['feat'])
-        dataloader = DataLoader(
+        dataloader = dgl.dataloading.DataLoader(
                 g, torch.arange(g.num_nodes()).to(g.device), sampler, device=device,
                 batch_size=batch_size, shuffle=False, drop_last=False,
                 num_workers=0)
@@ -91,21 +94,23 @@ def layerwise_infer(device, graph, nid, model, batch_size):
 
 def train(args, device, dataset, model):
     opt = torch.optim.Adam(model.parameters(), lr=1e-3, weight_decay=5e-4)
-    for epoch in range(1):
+    train_loader = DataLoader(dataset=dataset, batch_size=1024, collate_fn=collate_fn)
+    for epoch in range(dataset.epoch):
         start = time.time()
         total_loss = 0
         model.train()
-        train_loader = DataLoader(dataset=dataset, batch_size=1024, collate_fn=collate_fn,pin_memory=True)
-        for graph,feat,label,number in train_loader:
-            graph = [block.to('cuda:1') for block in graph]
-            y_hat = model(graph, feat.to('cuda:1'))
-            print("y_hat len:{},label len:{},number:{}".format(len(y_hat),len(label),number))
-            loss = F.cross_entropy(y_hat[1:number+1], label[:number].to(torch.int64).to('cuda:1'))
+        for it,(graph,feat,label,number) in enumerate(train_loader):
+            tmp = copy.deepcopy(graph)
+            tmp = [block.to('cuda:0') for block in tmp]
+            y_hat = model(tmp, feat.to('cuda:0'))
+            #print("y_hat len:{},label len:{},number:{}".format(len(y_hat),len(label),number))
+            loss = F.cross_entropy(y_hat[:number], label[:number].to(torch.int64).to('cuda:0'))
             opt.zero_grad()
             loss.backward()
             opt.step()
             total_loss += loss.item()
-        
+        print("Epoch {:05d} | Loss {:.4f} | Time {:.3f}s"
+              .format(epoch, total_loss / (it+1), time.time()-start))
         # acc = evaluate(model, g, val_dataloader)
         # print("Epoch {:05d} | Loss {:.4f} | Accuracy {:.4f} "
         #       .format(epoch, total_loss / (it+1), acc.item()))
@@ -140,7 +145,7 @@ if __name__ == '__main__':
     # create GraphSAGE model
     # in_size = g.ndata['feat'].shape[1]
     # out_size = dataset.num_classes
-    model = GAT(100, 256, 47, heads=[8,1]).to('cuda:1')
+    model = GAT(100, 256, 47, heads=[8,1]).to('cuda:0')
 
     # model training
     print('Training...')
@@ -148,8 +153,10 @@ if __name__ == '__main__':
     train(args, device, dataset, model)
     # train(args, device, g, dataset, model,data=data)
 
-    # # test the model
-    # print('Testing...')
-    # #acc = layerwise_infer(device, g, test_idx, model, batch_size=4096)
-    # acc = layerwise_infer(device, g, dataset.test_idx, model, batch_size=4096)
-    # print("Test Accuracy {:.4f}".format(acc.item()))
+    test_dataset = AsNodePredDataset(DglNodePropPredDataset('ogbn-products'))
+    print('Testing...')
+    g = test_dataset[0]
+    g = g.to('cpu')
+    #acc = layerwise_infer(device, g, test_idx, model, batch_size=4096)
+    acc = layerwise_infer(device, g, test_dataset.test_idx, model, batch_size=4096)
+    print("Test Accuracy {:.4f}".format(acc.item()))

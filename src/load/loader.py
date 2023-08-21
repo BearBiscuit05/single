@@ -374,25 +374,37 @@ class CustomDataset(Dataset):
         logger.info("mapping Time {:.5f}s".format(time.time()-mappingTime))
 
         transTime = time.time()
-        layer = len(mapping_ptr) - 1
-        blocks = []
-        save_num = 0
-        for index in range(1,layer+1):
-            src = cacheGraph[0][:mapping_ptr[-index]]
-            dst = cacheGraph[1][:mapping_ptr[-index]]
-            data = (src,dst)
-            if index == 1:
-                save_num,_ = torch.max(dst,dim=0)
-                save_num += 1
-                block = self.create_dgl_block(data,uniqueNUM.item(),save_num)
-            elif index == layer:
-                tmp_num = save_num
-                save_num,_ = torch.max(dst,dim=0)
-                save_num += 1
-                block = self.create_dgl_block(data,tmp_num,save_num)
-            else:
-                block = self.create_dgl_block(data,save_num,batch)
-            blocks.append(block)
+        
+        if self.framework == "dgl":
+            layer = len(mapping_ptr) - 1
+            blocks = []
+            save_num = 0
+            for index in range(1,layer+1):
+                src = cacheGraph[0][:mapping_ptr[-index]]
+                dst = cacheGraph[1][:mapping_ptr[-index]]
+                data = (src,dst)
+                if index == 1:
+                    # save_num,_ = torch.max(dst,dim=0)
+                    # save_num += 1
+                    g = dgl.graph(data)
+                    block = dgl.to_block(g)
+                    #block = self.create_dgl_block(data,uniqueNUM.item(),save_num)
+                elif index == layer:
+                    g = dgl.graph(data)
+                    block = dgl.to_block(g)
+                    #block = self.create_dgl_block(data,save_num,batch)
+                else:
+                    g = dgl.graph(data)
+                    block = dgl.to_block(g)
+                    # tmp_num = save_num
+                    # save_num,_ = torch.max(dst,dim=0)
+                    # save_num += 1
+                    # block = self.create_dgl_block(data,tmp_num,save_num)
+                blocks.append(block)
+        elif self.framework == "pyg":
+            src = cacheGraph[0][:mapping_ptr[-1]].to(torch.int64)
+            dst = cacheGraph[1][:mapping_ptr[-1]].to(torch.int64)
+            blocks = torch.stack((src, dst), dim=0)
         logger.info("trans Time {:.5f}s".format(time.time()-transTime))
         return blocks,unique
 
@@ -701,7 +713,7 @@ if __name__ == "__main__":
         start = time.time()
         loopTime = time.time()
         for graph,feat,label,number in train_loader:
-            # print(graph)
+            print(graph)
             # print("feat len:",len(feat))
             count = count + 1
             if count % 20 == 0:
