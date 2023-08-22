@@ -82,6 +82,7 @@ def readGraph(rank,dataPath,datasetName):
     return subg, node_feat, node_type
 
 def gen_graph_file(data,rank,Wsize,dataPath,datasetName,savePath):
+    Wsize = 64
     subg, node_feat, node_type = data
     src = subg.edges()[0].tolist()
     dst = subg.edges()[1].tolist()
@@ -170,13 +171,19 @@ if __name__ == '__main__':
     dataPath = "./../../data/raw_papers100M_64"
     dataName = "ogb-paper100M"
     savePath = "./../../data/papers100M_64"
-    index=64
-    for rank in range(30,index):
-        subg, node_feat, node_type = readGraph(rank,dataPath,dataName)
-        data = (subg, node_feat, node_type)
-        gen_graph_file(data,rank,index,dataPath,dataName,savePath)
-        gen_labels_file(data,rank,savePath)
-        gen_feat_file(data,rank,savePath)
-        gen_ids_file(data,rank,savePath)
-        print("-"*25)
+    index = 64
+    for rank in range(36, 45):
+        try:
+            subg, node_feat, node_type = readGraph(rank, dataPath, dataName)
+            data = (subg, node_feat, node_type)
+            
+            gen_graph_file(data, rank, index, dataPath, dataName, savePath)
+            gen_labels_file(data, rank, savePath)
+            gen_feat_file(data, rank, savePath)
+            gen_ids_file(data, rank, savePath)
+            
+            print("-" * 25)
+        except Exception as e:
+            print(f"An error occurred for rank {rank}: {e}")
+
         
