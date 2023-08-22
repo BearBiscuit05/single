@@ -161,11 +161,11 @@ if __name__ == '__main__':
     
     # load and preprocess dataset
     print('Loading data')
-    dataset = AsNodePredDataset(DglNodePropPredDataset('ogbn-products'))
-    g = dataset[0]
+    # dataset = AsNodePredDataset(DglNodePropPredDataset('ogbn-products'))
+    # g = dataset[0]
     
-    #g, dataset,train_idx,val_idx,test_idx= load_reddit()
-    #data = (train_idx,val_idx,test_idx)
+    g, dataset,train_idx,val_idx,test_idx= load_reddit()
+    data = (train_idx,val_idx,test_idx)
     g = g.to('cuda' if args.mode == 'puregpu' else 'cpu')
     device = torch.device('cpu' if args.mode == 'cpu' else 'cuda')
 
@@ -176,10 +176,10 @@ if __name__ == '__main__':
 
     # model training
     print('Training...')
-    train(args, device, g, dataset, model)
+    train(args, device, g, dataset, model,data=data)
 
     # test the model
-    # print('Testing...')
-    # #acc = layerwise_infer(device, g, dataset.test_idx, model, batch_size=4096)
-    # acc = layerwise_infer(device, g, test_idx, model, batch_size=2)
-    # print("Test Accuracy {:.4f}".format(acc.item()))
+    print('Testing...')
+    #acc = layerwise_infer(device, g, dataset.test_idx, model, batch_size=4096)
+    acc = layerwise_infer(device, g, test_idx, model, batch_size=4096)
+    print("Test Accuracy {:.4f}".format(acc.item()))

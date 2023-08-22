@@ -1,22 +1,14 @@
-import torch
-import time
+import numpy as np
 
-# 创建一个包含 15 万个随机整数的向量
-num_nodes = 250000
-random_data = torch.randint(low=0, high=1000000, size=(num_nodes,), dtype=torch.int32)
+# 读取 npz 文件
+data = np.load('../../data/dataset/ogbn_papers100M/raw/data.npz')
 
-# 测试开始时间
-start_time = time.time()
+# 打印 npz 文件中的数组名
+print("Arrays in the npz file:", data.files)
 
-# 使用 torch.max 函数找到最大值和对应索引
-max_value, max_index = torch.max(random_data, dim=0)
+# 获取特定数组的值
+array_name = 'edge_index'  # 替换为实际的数组名
+array_value = data[array_name]
 
-# 测试结束时间
-end_time = time.time()
-
-# 计算运行时间
-elapsed_time = end_time - start_time
-
-print(f"Max value: {max_value.item()}")
-print(f"Index of max value: {max_index.item()}")
-print(f"Elapsed time: {elapsed_time:.5f} seconds")
+# 打印数组的值
+print(array_value)

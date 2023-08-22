@@ -1,6 +1,6 @@
 import copy
 import os
-
+import os.path as osp
 import torch
 import torch.distributed as dist
 import torch.multiprocessing as mp
@@ -29,7 +29,8 @@ class SAGE(torch.nn.Module):
         for _ in range(num_layers - 2):
             self.convs.append(SAGEConv(hidden_channels, hidden_channels))
         self.convs.append(SAGEConv(hidden_channels, out_channels))
- 
+        self.num_layers = num_layers
+
     def forward(self, x: Tensor, edge_index: Tensor) -> Tensor:
         for i, conv in enumerate(self.convs):
             x = conv(x, edge_index)
@@ -48,8 +49,8 @@ class SAGE(torch.nn.Module):
         for i in range(self.num_layers):
             xs = []
             for batch in subgraph_loader:
-                x = x_all[batch.n_id].to(device)
-                edge_index = batch.edge_index.to(device)
+                x = x_all[batch.n_id].to("cuda:0")
+                edge_index = batch.edge_index.to("cuda:0")
                 x = self.convs[i](x, edge_index)
                 x = x[:batch.batch_size]
                 if i != self.num_layers - 1:
@@ -65,7 +66,7 @@ class SAGE(torch.nn.Module):
         return x_all
 
 @torch.no_grad()
-def test(model,data,subgraph_loader):
+def test(model,evaluator,data,subgraph_loader,split_idx):
     model.eval()
 
     out = model.inference(data.x,subgraph_loader)
@@ -106,11 +107,11 @@ def run(rank, world_size, dataset):
         runTime = time.time() - startTime
         print(f'Epoch: {epoch:02d}, Loss: {loss:.4f}, Time: {runTime:.3f}s')
 
-    root = osp.join(osp.dirname(osp.realpath(__file__)), '.', 'dataset', 'ogbn_products')
+    root = osp.join(osp.dirname(osp.realpath(__file__)), '.', 'dataset')
     dataset = PygNodePropPredDataset('ogbn-products', root)
     split_idx = dataset.get_idx_split()
     evaluator = Evaluator(name='ogbn-products')
-    data = dataset[0].to(device, 'x', 'y')
+    data = dataset[0].to("cuda:0", 'x', 'y')
     subgraph_loader = NeighborLoader(
         data,
         input_nodes=None,
@@ -120,7 +121,7 @@ def run(rank, world_size, dataset):
         persistent_workers=True,
     )
 
-    train_acc, val_acc, test_acc = test(model,data,subgraph_loader)
+    train_acc, val_acc, test_acc = test(model,evaluator,data,subgraph_loader,split_idx)
     print(f'Train: {train_acc:.4f}, Val: {val_acc:.4f}, '
                   f'Test: {test_acc:.4f}')
 

@@ -103,12 +103,12 @@ def train(args, device, g, dataset, model,data=None):
                             prefetch_labels=['label'])
     use_uva = False
     train_dataloader = DataLoader(g, train_idx, sampler, device=device,
-                                  batch_size=256, shuffle=True,
+                                  batch_size=1024, shuffle=True,
                                   drop_last=False, num_workers=0,
                                   use_uva=use_uva)
 
     val_dataloader = DataLoader(g, val_idx, sampler, device=device,
-                                batch_size=256, shuffle=True,
+                                batch_size=1024, shuffle=True,
                                 drop_last=False, num_workers=0,
                                 use_uva=use_uva)
     # train_dataloader = DataLoader(g, train_idx, sampler, device=device,
@@ -124,8 +124,7 @@ def train(args, device, g, dataset, model,data=None):
 
     opt = torch.optim.Adam(model.parameters(), lr=1e-3, weight_decay=5e-4)
     
-    print("second")
-    for epoch in range(50):
+    for epoch in range(10):
         start = time.time()
         model.train()
         total_loss = 0
@@ -166,7 +165,7 @@ def load_reddit(self_loop=True):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument("--mode", default='puregpu', choices=['cpu', 'mixed', 'puregpu'],
+    parser.add_argument("--mode", default='mixed', choices=['cpu', 'mixed', 'puregpu'],
                         help="Training mode. 'cpu' for CPU training, 'mixed' for CPU-GPU mixed training, "
                              "'puregpu' for pure-GPU training.")
     args = parser.parse_args()
@@ -176,10 +175,10 @@ if __name__ == '__main__':
     
     # load and preprocess dataset
     print('Loading data')
-    dataset = AsNodePredDataset(DglNodePropPredDataset('ogbn-products'))
-    g = dataset[0]
-    #g, dataset,train_idx,val_idx,test_idx= load_reddit()
-    #data = (train_idx,val_idx,test_idx)
+    # dataset = AsNodePredDataset(DglNodePropPredDataset('ogbn-products'))
+    # g = dataset[0]
+    g, dataset,train_idx,val_idx,test_idx= load_reddit()
+    data = (train_idx,val_idx,test_idx)
     g = g.to('cuda' if args.mode == 'puregpu' else 'cpu')
     device = torch.device('cpu' if args.mode == 'cpu' else 'cuda')
 
@@ -190,11 +189,11 @@ if __name__ == '__main__':
 
     # model training
     print('Training...')
-    train(args, device, g, dataset, model)
-    #train(args, device, g, dataset, model,data=data)
+    #train(args, device, g, dataset, model)
+    train(args, device, g, dataset, model,data=data)
 
     # test the model
     print('Testing...')
-    #acc = layerwise_infer(device, g, test_idx, model, batch_size=4096)
-    acc = layerwise_infer(device, g, dataset.test_idx, model, batch_size=4096)
+    acc = layerwise_infer(device, g, test_idx, model, batch_size=4096)
+    #acc = layerwise_infer(device, g, dataset.test_idx, model, batch_size=4096)
     print("Test Accuracy {:.4f}".format(acc.item()))

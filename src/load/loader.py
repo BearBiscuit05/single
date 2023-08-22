@@ -55,6 +55,7 @@ class CustomDataset(Dataset):
         self.fanout = []
         self.framework = ""
         self.mode = ""
+        self.classes = 0
         self.readConfig(confPath)
         # ================
 
@@ -138,6 +139,7 @@ class CustomDataset(Dataset):
         self.idbound = config['idbound']
         self.framework = config['framework']
         self.mode = config['mode']
+        self.classes = config['classes']
         formatted_data = json.dumps(config, indent=4)
         #print(formatted_data)
 
@@ -504,9 +506,9 @@ class CustomDataset(Dataset):
         filePath = self.dataPath + "/part" + str(rank)
         tmp_feat = np.fromfile(filePath+"/feat.bin", dtype=np.float32)
         if self.feats == []:
-            self.feats = torch.from_numpy(tmp_feat).reshape(-1,100)
+            self.feats = torch.from_numpy(tmp_feat).reshape(-1,self.featlen)
         else:
-            tmp_feat = torch.from_numpy(tmp_feat).reshape(-1,100)
+            tmp_feat = torch.from_numpy(tmp_feat).reshape(-1,self.featlen)
             self.feats = torch.cat([self.feats,tmp_feat])
     
     def featMerge(self,uniqueList):    
@@ -696,8 +698,8 @@ def collate_fn(data):
 
 
 if __name__ == "__main__":
-    dataset = CustomDataset("./graphsage.json")
-    with open("./graphsage.json", 'r') as f:
+    dataset = CustomDataset("../../config/dgl_reddit_8.json")
+    with open("../../config/dgl_reddit_8.json", 'r') as f:
         config = json.load(f)
         batchsize = config['batchsize']
         epoch = config['epoch']
@@ -707,7 +709,7 @@ if __name__ == "__main__":
         start = time.time()
         loopTime = time.time()
         for graph,feat,label,number in train_loader:
-            print(graph)
+            #print(graph)
             # print("feat len:",len(feat))
             count = count + 1
             if count % 20 == 0:
