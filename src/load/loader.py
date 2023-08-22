@@ -346,6 +346,7 @@ class CustomDataset(Dataset):
         sampleStart = time.time()
         for l, fan_num in enumerate(self.fanout):
             seed_num = len(sampleIDs)
+            #print("seed num :",seed_num)
             out_src = cacheGraph[0][ptr:ptr+seed_num*fan_num]
             out_dst = cacheGraph[1][ptr:ptr+seed_num*fan_num]
             out_num = torch.Tensor([0]).to(torch.int64).to('cuda:0')
@@ -379,24 +380,29 @@ class CustomDataset(Dataset):
                 src = cacheGraph[0][:mapping_ptr[-index]]
                 dst = cacheGraph[1][:mapping_ptr[-index]]
                 data = (src,dst)
-                if index == 1:
-                    # save_num,_ = torch.max(dst,dim=0)
-                    # save_num += 1
-                    g = dgl.graph(data)
-                    block = dgl.to_block(g)
-                    #block = self.create_dgl_block(data,uniqueNUM.item(),save_num)
-                elif index == layer:
-                    g = dgl.graph(data)
-                    block = dgl.to_block(g)
-                    #block = self.create_dgl_block(data,save_num,batch)
-                else:
-                    g = dgl.graph(data)
-                    block = dgl.to_block(g)
-                    # tmp_num = save_num
-                    # save_num,_ = torch.max(dst,dim=0)
-                    # save_num += 1
-                    # block = self.create_dgl_block(data,tmp_num,save_num)
+                # print(data)
+                
+                g = dgl.graph(data)
+                block = dgl.to_block(g)
+                # if index == 1:
+                #     # save_num,_ = torch.max(dst,dim=0)
+                #     # save_num += 1
+                #     g = dgl.graph(data)
+                #     block = dgl.to_block(g)
+                #     #block = self.create_dgl_block(data,uniqueNUM.item(),save_num)
+                # elif index == layer:
+                #     g = dgl.graph(data)
+                #     block = dgl.to_block(g)
+                #     #block = self.create_dgl_block(data,save_num,batch)
+                # else:
+                #     g = dgl.graph(data)
+                #     block = dgl.to_block(g)
+                #     # tmp_num = save_num
+                #     # save_num,_ = torch.max(dst,dim=0)
+                #     # save_num += 1
+                #     # block = self.create_dgl_block(data,tmp_num,save_num)
                 blocks.append(block)
+            # print(blocks)
         elif self.framework == "pyg":
             src = cacheGraph[0][:mapping_ptr[-1]].to(torch.int64)
             dst = cacheGraph[1][:mapping_ptr[-1]].to(torch.int64)
@@ -452,9 +458,13 @@ class CustomDataset(Dataset):
             # logger.debug("last batch...")
             offset = self.trainptr*self.batchsize
             # logger.debug("train loop:{} , offset:{} ,subGtrainNodesNUM:{}".format(self.trainLoop,offset,self.subGtrainNodesNUM))
-            sampleIDs[:self.subGtrainNodesNUM - offset] = self.trainNodes[offset:self.subGtrainNodesNUM]
+            sampleIDs = self.trainNodes[offset:self.subGtrainNodesNUM]
             batchlen = self.subGtrainNodesNUM - offset
             #sliceIDs = sampleIDs[0:self.subGtrainNodesNUM - offset].to(torch.long)
+            # print("==================>last batch<===========================")
+            # print("sampleIDs : ",sampleIDs)
+            # print(batchlen)
+
             cacheLabel = self.nodeLabels[sampleIDs[0:self.subGtrainNodesNUM - offset]]
         logger.info("create Data Time cost {:.5f}s".format(time.time()-createDataTime))    
         ##
@@ -705,12 +715,10 @@ if __name__ == "__main__":
         epoch = config['epoch']
     train_loader = DataLoader(dataset=dataset, batch_size=batchsize,collate_fn=collate_fn)#pin_memory=True)
     count = 0
-    for index in range(3):
+    for index in range(epoch):
         start = time.time()
         loopTime = time.time()
         for graph,feat,label,number in train_loader:
-            #print(graph)
-            # print("feat len:",len(feat))
             count = count + 1
             if count % 20 == 0:
                 print("loop time:{:.5f}".format(time.time()-loopTime))

@@ -164,7 +164,7 @@ def gen_feat_file(data,rank,savePath):
     featInfo = node_feat[nt + '/features']
     featInfo = featInfo.detach().numpy()
     featInfo.tofile(savePath +"/feat.bin")
-    print("feat-part{} processed ! ".format(rank))
+    print("feat-part{} processed ! ".format(rank)) 
 
 
 if __name__ == '__main__':
@@ -172,7 +172,7 @@ if __name__ == '__main__':
     dataName = "ogb-paper100M"
     savePath = "./../../data/papers100M_64"
     index = 64
-    for rank in range(36, 45):
+    for rank in range(38, index):
         try:
             subg, node_feat, node_type = readGraph(rank, dataPath, dataName)
             data = (subg, node_feat, node_type)
