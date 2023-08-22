@@ -171,7 +171,7 @@ if __name__ == '__main__':
     dataName = "ogb-paper100M"
     savePath = "./../../data/papers100M_64"
     index=64
-    for rank in range(index):
+    for rank in range(30,index):
         subg, node_feat, node_type = readGraph(rank,dataPath,dataName)
         data = (subg, node_feat, node_type)
         gen_graph_file(data,rank,index,dataPath,dataName,savePath)

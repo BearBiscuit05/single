@@ -7,6 +7,7 @@ import torch.multiprocessing as mp
 import torch.nn.functional as F
 from torch import Tensor
 from torch.nn.parallel import DistributedDataParallel
+from ogb.nodeproppred import Evaluator, PygNodePropPredDataset
 from tqdm import tqdm
 from torch.utils.data import Dataset, DataLoader
 from torch_geometric.datasets import Reddit
@@ -37,27 +38,55 @@ class SAGE(torch.nn.Module):
                 x = F.dropout(x, p=0.5, training=self.training)
         return x
 
-    @torch.no_grad()
-    def inference(self, x_all: Tensor, device: torch.device,
-                  subgraph_loader: NeighborLoader) -> Tensor:
-
-        pbar = tqdm(total=len(subgraph_loader) * len(self.convs))
+    def inference(self, x_all,subgraph_loader):
+        pbar = tqdm(total=x_all.size(0) * self.num_layers)
         pbar.set_description('Evaluating')
-        for i, conv in enumerate(self.convs):
+
+        # Compute representations of nodes layer by layer, using *all*
+        # available edges. This leads to faster computation in contrast to
+        # immediately computing the final representations of each batch.
+        for i in range(self.num_layers):
             xs = []
             for batch in subgraph_loader:
-                x = x_all[batch.node_id.to(x_all.device)].to(device)
-                x = conv(x, batch.edge_index.to(device))
+                x = x_all[batch.n_id].to(device)
+                edge_index = batch.edge_index.to(device)
+                x = self.convs[i](x, edge_index)
                 x = x[:batch.batch_size]
-                if i < len(self.convs) - 1:
-                    x = x.relu_()
+                if i != self.num_layers - 1:
+                    x = x.relu()
                 xs.append(x.cpu())
-                pbar.update(1)
+
+                pbar.update(batch.batch_size)
+
             x_all = torch.cat(xs, dim=0)
 
         pbar.close()
+
         return x_all
 
+@torch.no_grad()
+def test(model,data,subgraph_loader):
+    model.eval()
+
+    out = model.inference(data.x,subgraph_loader)
+
+    y_true = data.y.cpu()
+    y_pred = out.argmax(dim=-1, keepdim=True)
+
+    train_acc = evaluator.eval({
+        'y_true': y_true[split_idx['train']],
+        'y_pred': y_pred[split_idx['train']],
+    })['acc']
+    val_acc = evaluator.eval({
+        'y_true': y_true[split_idx['valid']],
+        'y_pred': y_pred[split_idx['valid']],
+    })['acc']
+    test_acc = evaluator.eval({
+        'y_true': y_true[split_idx['test']],
+        'y_pred': y_pred[split_idx['test']],
+    })['acc']
+
+    return train_acc, val_acc, test_acc
 
 def run(rank, world_size, dataset):
     train_loader = DataLoader(dataset=dataset, batch_size=1024, collate_fn=collate_fn)#,pin_memory=True)
@@ -68,6 +97,7 @@ def run(rank, world_size, dataset):
         startTime = time.time()
         model.train()    
         for graph,feat,label,number in train_loader:        
+            print(graph)
             optimizer.zero_grad()     
             out = model(feat.to('cuda:0'), graph)[1:number+1]
             loss = F.cross_entropy(out, label[:number].to(torch.int64).to('cuda:0'))
@@ -76,11 +106,31 @@ def run(rank, world_size, dataset):
         runTime = time.time() - startTime
         print(f'Epoch: {epoch:02d}, Loss: {loss:.4f}, Time: {runTime:.3f}s')
 
+    root = osp.join(osp.dirname(osp.realpath(__file__)), '.', 'dataset', 'ogbn_products')
+    dataset = PygNodePropPredDataset('ogbn-products', root)
+    split_idx = dataset.get_idx_split()
+    evaluator = Evaluator(name='ogbn-products')
+    data = dataset[0].to(device, 'x', 'y')
+    subgraph_loader = NeighborLoader(
+        data,
+        input_nodes=None,
+        num_neighbors=[-1],
+        batch_size=4096,
+        num_workers=12,
+        persistent_workers=True,
+    )
+
+    train_acc, val_acc, test_acc = test(model,data,subgraph_loader)
+    print(f'Train: {train_acc:.4f}, Val: {val_acc:.4f}, '
+                  f'Test: {test_acc:.4f}')
+
 def collate_fn(data):
     return data[0]
 
 if __name__ == '__main__':
     world_size = 1
     print('Let\'s use', world_size, 'GPUs!')
-    dataset = CustomDataset("./../../load/graphsage.json")
+    dataset = CustomDataset("./../../../config/pyg_products_graphsage.json")
     run(0, world_size, dataset)
+
+    
