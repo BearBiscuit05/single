@@ -31,19 +31,43 @@ void readRes()
 		cerr <<  "open error!" << endl;
 		exit(-1);
 	}
+	int partid = -1;
+	int size[4] = {0,0,0,0};
 	while(!fin.eof())
 	{
-		int partid,size,id;
-		fin >> partid >> size;
+		int t;
+		fin >> t;
 		if(!fin.good())
 			break;
-		cout << "part " << partid << " has " << size << " nodes" << endl;
-		for(int i = 0;i < size;i++)
+		if(t == -1)
 		{
-			fin >> id;
-			part[id] = '0' + partid;
+			partid++;
+		}
+		else
+		{
+			part[t] = '0' + partid;
+			size[partid]++;
 		}
 	}
+	cout << "part 1 size:" << size[0] << endl;
+	cout << "part 2 size:" << size[1] << endl;
+	cout << "part 3 size:" << size[2] << endl;
+	cout << "part 4 size:" << size[3] << endl;
+	int tot = size[0] + size[1] + size[2] + size[3];
+	cout << "total:" << tot << endl;
+	// {
+	// 	int partid,size,id;
+	// 	fin >> partid >> size;
+	// 	if(!fin.good())
+	// 		break;
+	// 	cout << "part " << partid << " has " << size << " nodes" << endl;
+	// 	for(int i = 0;i < size;i++)
+	// 	{
+	// 		fin >> id;
+	// 		part[id] = '0' + partid;
+	// 	}
+	// }
+	fin.close();
 }
 
 /* 读取有边权的重要边 */

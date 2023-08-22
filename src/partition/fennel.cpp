@@ -1,6 +1,7 @@
 #include <bits/stdc++.h>
 #include <sys/types.h>
 #include <unistd.h>
+#include "omp.h"
 #define DB(x) cerr << __LINE__ << ": " << #x << " = " << (x) << endl
 using namespace std;
 using namespace std::chrono; 
@@ -82,12 +83,15 @@ int main() {
 		partitions[i].insert(ordering[i]);
 	}
 
-	auto start = high_resolution_clock::now(); 
+	auto start = high_resolution_clock::now();
+	omp_set_num_threads(4);
 
 	// Streaming vertices
-	for(int node_number = k; node_number < n; ++node_number) {
+#pragma omp parallel for
+	for(int node_number = k; node_number < n;node_number++) {
 		int finalPartition = 0, node = ordering[node_number], additionalEdge = 0;
-		double objectiveFunctionScore = -1e18; 
+		double objectiveFunctionScore = -1e18;
+#pragma omp parallel for shared(objectiveFunctionScore,finalPartition,additionalEdge)
 		for(int container = 0; container < k; ++container) {
 			double intraPartition = partitionCost((int)partitions[container].size());
 			int interPartition = 0;
@@ -99,14 +103,22 @@ int main() {
 			}
 			// DB(interPartition);
 			// DB(intraPartition);
-			if(((double)interPartition) - intraPartition > objectiveFunctionScore) {
+			// 比较最值，加锁
+			if(((double)interPartition) - intraPartition > objectiveFunctionScore)
+			#pragma omp critical
+			{
 				objectiveFunctionScore = interPartition - intraPartition;
 				finalPartition = container;
 				additionalEdge = interPartition;
 			}
 		}
-		partitions[finalPartition].insert(node);
-		cutEdge[finalPartition] += additionalEdge;
+		// 插入集合和更新损失，加锁
+		#pragma omp critical
+		{
+			partitions[finalPartition].insert(node);
+			cutEdge[finalPartition] += additionalEdge;
+		}
+
 	}
 
 	cout << "complete graph partition,start to write partition file" << endl;
@@ -118,7 +130,9 @@ int main() {
 		exit(-1);
 	}
 	for(int i = 0; i < k; ++i) {
-		fout << i+1 << " " << partitions[i].size() << "\n"; 
+		//fout << i+1 << " " << partitions[i].size() << "\n";
+		cout << i+1 << " " << partitions[i].size() << "\n"; 
+		fout << "-1" << " ";
 		for(auto it: partitions[i]) 
 			fout << it << " ";
 		fout << "\n";
