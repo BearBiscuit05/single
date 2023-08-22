@@ -16,7 +16,7 @@ import math
 
 def load_partition(rank,nodeID):
     graph_dir = 'data_8/'
-    part_config = graph_dir + 'ogb-product.json'
+    part_config = graph_dir + 'ogb-paper100M.json'
     print('loading partitions')
     subg, node_feat, _, gpb, _, node_type, _ = dgl.distributed.load_partition(part_config, rank)
     node_type = node_type[0]
@@ -76,6 +76,8 @@ def save_coo_bin(nodeDict, filepath, nodeNUM, edgeNUM, basicSpace):
     # 存储
     srcList = np.array(srcList,dtype=np.int32)
     range_list = np.array(range_list,dtype=np.int32)
+    if not os.path.exists(filepath):
+        os.makedirs(filepath)
     srcList.tofile(filepath+"/srcList.bin")
     range_list.tofile(filepath+"/range.bin")
 
@@ -105,6 +107,7 @@ def readGraph(rank,dataPath,datasetName):
     return subg, node_feat, node_type
 
 def gen_graph_file(data,rank,Wsize,dataPath,datasetName,savePath):
+    Wsize = 64
     subg, node_feat, node_type = data
     src = subg.edges()[0].tolist()
     dst = subg.edges()[1].tolist()
@@ -187,11 +190,10 @@ def gen_feat_file(data,rank,savePath):
 
 
 if __name__ == '__main__':
-    dataPath = "./../../data/raw-products_4"
-    dataName = "ogb-product"
-    savePath = "./../../data/products_4"
-    index=4
-    for rank in range(index):
+    dataPath = "./../../data/raw_papers100M_64"
+    dataName = "ogb-paper100M"
+    savePath = "./../../data/papers100M_64"
+    for rank in range(35,36):
         subg, node_feat, node_type = readGraph(rank,dataPath,dataName)
         data = (subg, node_feat, node_type)
         gen_graph_file(data,rank,index,dataPath,dataName,savePath)
