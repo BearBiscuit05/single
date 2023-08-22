@@ -1,36 +1,36 @@
 import copy
 import os
-import time
+import sys
 import torch
 import torch.distributed as dist
 import torch.multiprocessing as mp
 import torch.nn.functional as F
 from torch import Tensor
+import time
 from torch.nn.parallel import DistributedDataParallel
 from tqdm import tqdm
-
+from torch.utils.data import Dataset, DataLoader
 from torch_geometric.datasets import Reddit
 from torch_geometric.loader import NeighborLoader
-from torch_geometric.nn import SAGEConv
-import sys
+from torch_geometric.nn import SAGEConv,GATConv
+current_folder = os.path.abspath(os.path.dirname(__file__))
+sys.path.append(current_folder+"/../../"+"load")
+from loader import CustomDataset
 
-class SAGE(torch.nn.Module):
-    def __init__(self, in_channels: int, hidden_channels: int,
-                 out_channels: int, num_layers: int = 2):
+class GAT(torch.nn.Module):
+    def __init__(self, in_channels, hidden_channels, out_channels, heads, num_layers=2):
         super().__init__()
+        self.conv1 = GATConv(in_channels, hidden_channels, heads, dropout=0.6)
+        # On the Pubmed dataset, use `heads` output heads in `conv2`.
+        self.conv2 = GATConv(hidden_channels * heads, out_channels, heads=8,
+                             concat=False, dropout=0.6)
+        self.convs = num_layers
 
-        self.convs = torch.nn.ModuleList()
-        self.convs.append(SAGEConv(in_channels, hidden_channels))
-        for _ in range(num_layers - 2):
-            self.convs.append(SAGEConv(hidden_channels, hidden_channels))
-        self.convs.append(SAGEConv(hidden_channels, out_channels))
- 
-    def forward(self, x: Tensor, edge_index: Tensor) -> Tensor:
-        for i, conv in enumerate(self.convs):
-            x = conv(x, edge_index)
-            if i < len(self.convs) - 1:
-                x = x.relu_()
-                x = F.dropout(x, p=0.5, training=self.training)
+    def forward(self, x, edge_index):
+        x = F.dropout(x, p=0.6, training=self.training)
+        x = F.elu(self.conv1(x, edge_index))
+        x = F.dropout(x, p=0.6, training=self.training)
+        x = self.conv2(x, edge_index)
         return x
 
     @torch.no_grad()
@@ -39,10 +39,6 @@ class SAGE(torch.nn.Module):
 
         pbar = tqdm(total=len(subgraph_loader) * len(self.convs))
         pbar.set_description('Evaluating')
-
-        # Compute representations of nodes layer by layer, using *all*
-        # available edges. This leads to faster computation in contrast to
-        # immediately computing the final representations of each batch:
         for i, conv in enumerate(self.convs):
             xs = []
             for batch in subgraph_loader:
@@ -58,24 +54,16 @@ class SAGE(torch.nn.Module):
         pbar.close()
         return x_all
 
-
 def run(args,rank, world_size, dataset):
-    # os.environ['MASTER_ADDR'] = 'localhost'
-    # os.environ['MASTER_PORT'] = '12355'
-    # dist.init_process_group('nccl', rank=rank, world_size=world_size)
-
+    
     data = dataset[0]
-    data = data.to('cuda:0', 'x', 'y')  # Move to device for faster feature fetch.
-
-    # Split training indices into `world_size` many chunks:
+    data = data.to('cuda:0', 'x', 'y')
     train_idx = data.train_mask.nonzero(as_tuple=False).view(-1)
-    #train_idx = train_idx.split(train_idx.size(0) // world_size)[rank]
 
     kwargs = dict(batch_size=1024, num_workers=1, persistent_workers=True)
     train_loader = NeighborLoader(data, input_nodes=train_idx,
                                   num_neighbors=args.fanout, shuffle=True,
                                   drop_last=True, **kwargs)
-
     if rank == 0:  # Create single-hop evaluation neighbor loader:
         subgraph_loader = NeighborLoader(copy.copy(data), num_neighbors=[-1],
                                          shuffle=False, **kwargs)
@@ -83,12 +71,10 @@ def run(args,rank, world_size, dataset):
         del subgraph_loader.data.x, subgraph_loader.data.y
         # Add global node index information:
         subgraph_loader.data.node_id = torch.arange(data.num_nodes)
-
     torch.manual_seed(12345)
-    model = SAGE(dataset.num_features, 256, dataset.num_classes,args.layers).to('cuda:0')
-    #model = DistributedDataParallel(model, device_ids=[rank])
+    model = GAT(100, 256, 256, 8).to('cuda:0')
     optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
-
+    
     for epoch in range(1, 11):
         model.train()
         startTime = time.time()    
@@ -99,9 +85,7 @@ def run(args,rank, world_size, dataset):
             loss.backward()
             optimizer.step()
         runTime = time.time() - startTime
-        # dist.barrier()
 
-        # if rank == 0:
         print(f'Epoch: {epoch:02d}, Loss: {loss:.4f}, time: {runTime:.5f}')
 
         if rank == 0 and epoch % 5 == 0:  # We evaluate on a single GPU for now
@@ -113,11 +97,12 @@ def run(args,rank, world_size, dataset):
             acc2 = int(res[data.val_mask].sum()) / int(data.val_mask.sum())
             acc3 = int(res[data.test_mask].sum()) / int(data.test_mask.sum())
             print(f'Train: {acc1:.4f}, Val: {acc2:.4f}, Test: {acc3:.4f}')
-
-    #     dist.barrier()
-
-    # dist.destroy_process_group()
-
+def collate_fn(data):
+    """
+    data 输入结构介绍：
+        [graph,feat]
+    """
+    return data[0]
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='pyg gcn program')
@@ -141,4 +126,3 @@ if __name__ == '__main__':
     else:
         raise ValueError(f"Unsupported dataset: {args.dataset}")
     run(args,0, world_size, dataset)
-    #mp.spawn(run, args=(world_size, dataset), nprocs=world_size, join=True)

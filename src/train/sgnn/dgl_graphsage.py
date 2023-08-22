@@ -156,14 +156,17 @@ if __name__ == '__main__':
     parser.add_argument("--mode", default='mixed', choices=['cpu', 'mixed', 'puregpu'],
                         help="Training mode. 'cpu' for CPU training, 'mixed' for CPU-GPU mixed training, "
                              "'puregpu' for pure-GPU training.")
+    parser.add_argument('--fanout', type=ast.literal_eval, default=[25, 10], help='Fanout value')
+    parser.add_argument('--layers', type=int, default=3, help='Number of layers')
+    parser.add_argument('--dataset', type=str, default='Reddit', help='Dataset name')
     args = parser.parse_args()
+
     if not torch.cuda.is_available():
         args.mode = 'cpu'
     print(f'Training in {args.mode} mode.')
     print('Loading data')
-    
     device = torch.device('cpu' if args.mode == 'cpu' else 'cuda:0')
-    # create GraphSAGE model
+
     # in_size = g.ndata['feat'].shape[1]
     # out_size = dataset.num_classes
     model = SAGE(100, 256, 47).to('cuda:0')
