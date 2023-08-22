@@ -29,6 +29,7 @@ class SAGE(nn.Module):
         super().__init__()
         self.layers = nn.ModuleList()
         self.layers.append(dglnn.SAGEConv(in_size, hid_size, 'mean'))
+        self.layers.append(dglnn.SAGEConv(hid_size, hid_size, 'mean'))
         self.layers.append(dglnn.SAGEConv(hid_size, out_size, 'mean'))
         self.dropout = nn.Dropout(0.5)
         self.hid_size = hid_size
@@ -37,14 +38,12 @@ class SAGE(nn.Module):
     def forward(self, blocks, x):
         h = x
         for l, (layer, block) in enumerate(zip(self.layers, blocks)):
-            # print("block=",block)
-            # print("block.device=",block.device)
-            # print(h)
+            # print(block)
+            # print(h.shape)
             h = layer(block, h)
             if l != len(self.layers) - 1:
                 h = F.relu(h)
                 h = self.dropout(h)
-        #exit(-1)
         return h
 
     def inference(self, g, device, batch_size):
@@ -105,6 +104,7 @@ def collate_fn(data):
     return data[0]
 
 def train(args, device, dataset, model):
+    torch.autograd.set_detect_anomaly(True)
     opt = torch.optim.Adam(model.parameters(), lr=1e-3, weight_decay=5e-4)
     train_loader = torch.utils.data.DataLoader(dataset=dataset, batch_size=1024, collate_fn=collate_fn)#,pin_memory=True)
     # 修改此处，epoch数必须同步修改json文件里的epoch数
@@ -113,20 +113,14 @@ def train(args, device, dataset, model):
         total_loss = 0
         model.train()
         for it,(graph,feat,label,number) in enumerate(train_loader):
-            # print(graph)
-            # print(number)
             feat = feat.to('cuda:0')
             tmp = copy.deepcopy(graph)
             tmp = [block.to('cuda:0') for block in tmp]
             y_hat = model(tmp, feat)
-            #print(y_hat.shape)
-            #print(label.shape)
-            loss = F.cross_entropy(y_hat[:number], label[:number].to(torch.int64).to('cuda:0'))
-            #print("graph:{},featLen:{},labelLen:{},predLen:{},number:{}".format(graph,feat.shape,label.shape,y_hat.shape,number))
-            graph.clear()
-            del graph
-            del feat
-            del label
+            try:
+                loss = F.cross_entropy(y_hat[:number], label[:number].to(torch.int64).to('cuda:0'))
+            except:
+                print("error info : y_hat :{} , label :{} ,number :{}".format(y_hat.shape,label.shape,number))
             opt.zero_grad()
             loss.backward()
             opt.step()

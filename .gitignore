@@ -22,4 +22,7 @@
 **/**.pt
 **/build/
 **/dist/
-# **/TEST/
+**/TEST/
+**/CMakeFiles/
+**/CmakeCache.txt
+**/cmake_install.cmake

@@ -3,9 +3,14 @@ import sys
 import json
 import time
 import dgl
+import dgl.nn as dglnn
+from dgl.data import AsNodePredDataset
+from ogb.nodeproppred import DglNodePropPredDataset
+
 from torch.utils.data import Dataset, DataLoader
 current_folder = os.path.abspath(os.path.dirname(__file__))
 sys.path.append(current_folder+"/../"+"load")
+sys.path.append("/home/bear/workspace/singleGNN/data/")
 from loader import CustomDataset
 
 "比较dgl数据加载与自定义数据加载是否存在区别"
@@ -28,8 +33,60 @@ def nodeClassloading_test():
 def nodeLabel_test():
     "测试标签准确性"
 
-def haloSubG_test():
+def load_wholegraph():
+    dataset = AsNodePredDataset(DglNodePropPredDataset('ogbn-products'))
+    g = dataset[0]
+    g = g.to('cuda:0')
+
+def haloSubG_test(partConfigJson,cacheData,graphNodeNum,trainingGID,nextGID,cudaDeviceIndex):
     "测试halo部分的准确性"
+    with open(partConfigJson,'r') as f:
+        SUBGconf = json.load(f)
+        # 使用读取的数据
+    boundRange = SUBGconf['node_map']['_N']
+    
+    edges = cacheData[0]
+    nodeNum = len(cacheData[1])//2
+    edgeNum = len(cacheData[0])
+    srcTensor = torch.zeros(edgeNum,dtype=torch.int32,device=('cuda:%d'%cudaDeviceIndex))
+    dstTensor = torch.zeros(edgeNum,dtype=torch.int32,device=('cuda:%d'%cudaDeviceIndex))
+    cnt = 0
+    # 当前子图
+    for dstid in range(self.graphNodeNUM):
+        boundl,boundr = cacheData[1][2*dstid],cacheData[1][2*dstid+1]
+        srcids = cacheData[0][boundl:boundr]
+        # (srcid->dstid)是两个子图拼接以后的边，节点id是转换后的，注意需要转换成全局id
+        for index,srcid in enumerate(srcids):
+            local_srcid = srcid
+            local_srcid = dstid
+            global_srcid = local_srcid + boundRange[trainingGID][0]
+            global_dstid = local_dstid + boundRange[trainingGID][0]
+            srcTensor[cnt] = global_srcid
+            dstTensor[cnt] = global_dstid
+            cnt = cnt + 1
+    
+    # 下一个子图
+    for dstid in range(self.graphNodeNUM,nodeNum):
+        boundl,boundr = cacheData[1][2*dstid],cacheData[1][2*dstid+1]
+        srcids = cacheData[0][boundl:boundr]
+        # (srcid->dstid)是两个子图拼接以后的边，节点id是转换后的，注意需要转换成全局id
+        for index,srcid in enumerate(srcids):
+            local_srcid = srcid - self.graphNodeNum
+            local_dstid = dstid - self.graphNodeNum
+            global_srcid = local_srcid + boundRange[self.nextGID][0]
+            global_dstid = local_dstid + boundRange[self.nextGID][0]
+            srcTensor[cnt] = global_srcid
+            dstTensor[cnt] = global_dstid
+            cnt = cnt + 1
+    
+    # dgl加载全图到GPU，用has_edges_between检测边的存在性
+    dataset = AsNodePredDataset(DglNodePropPredDataset('ogbn-products'))
+    g = dataset[0]
+    g = g.to('cuda:0')
+    comp = cuda_subg.has_edges_between(srcTensor,dstTensor)
+    if comp.all() == False:
+        print('loadingHalo Test failed')
+
 
 def sampleNeig():
     "测试采样部分的正确性"
@@ -72,11 +129,11 @@ if __name__ == '__main__':
     # train_loader = DataLoader(dataset=dataset, batch_size=batchsize, collate_fn=collate_fn,pin_memory=True)
     # time.sleep(2)
     
-    dataPath = "./../../data/raw-reddit_8"
-    dataName = "reddit"
-    savePath = "./../../data/reddit_8"
-    subg, node_feat, node_type = readGraph(0,dataPath,dataName)
-    print(subg.edges())
+    # dataPath = "./../../data/raw-reddit_8"
+    # dataName = "reddit"
+    # savePath = "./../../data/reddit_8"
+    # subg, node_feat, node_type = readGraph(0,dataPath,dataName)
+    # print(subg.edges())
     # for index in range(epoch):
     #     count = 0
     #     for graph,feat,label,number in train_loader:
@@ -87,3 +144,5 @@ if __name__ == '__main__':
     #         print("label:",len(label))
     #         print("batch number :",number)
     #         exit()
+
+    load_wholegraph()
