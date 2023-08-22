@@ -145,10 +145,15 @@ if __name__ == '__main__':
     if not torch.cuda.is_available():
         args.mode = 'cpu'
     
+    data = None
+    with open(args.json_path, 'r') as json_file:
+        data = json.load(json_file)
+
+
     print(f'Training in {args.mode} mode.')
     print('Loading data')
     device = torch.device('cpu' if args.mode == 'cpu' else 'cuda:0')
-    model = SAGE(602, 256, 41,args.layers).to('cuda:0')  # 请确保 SAGE 模型的参数正确
+    model = SAGE(data['featlen'], 256, data['classes'],args.layers).to('cuda:0')  # 请确保 SAGE 模型的参数正确
     dataset = CustomDataset(args.json_path)  # 使用 args.json_path 作为 JSON 文件路径
     print('Training...')
     train(args, device, dataset, model)
