@@ -91,7 +91,7 @@ def train(args, device, g, dataset, model,data=None):
         train_idx = dataset.train_idx.to(device)
         val_idx = dataset.val_idx.to(device)
     # sampler = dgl.dataloading.MultiLayerFullNeighborSampler(2)
-    sampler = NeighborSampler([25,10],  # fanout for [layer-0, layer-1, layer-2]
+    sampler = NeighborSampler(args.fanout,  # fanout for [layer-0, layer-1, layer-2]
                             prefetch_node_feats=['feat'],
                             prefetch_labels=['label'])
     use_uva = (args.mode == 'mixed')
@@ -107,7 +107,7 @@ def train(args, device, g, dataset, model,data=None):
 
     opt = torch.optim.Adam(model.parameters(), lr=1e-3, weight_decay=5e-4)
     
-    for epoch in range(50):
+    for epoch in range(10):
         start = time.time()
         model.train()
         total_loss = 0
@@ -154,25 +154,30 @@ if __name__ == '__main__':
     parser.add_argument("--mode", default='mixed', choices=['cpu', 'mixed', 'puregpu'],
                         help="Training mode. 'cpu' for CPU training, 'mixed' for CPU-GPU mixed training, "
                              "'puregpu' for pure-GPU training.")
+    parser.add_argument('--fanout', type=ast.literal_eval, default=[25, 10], help='Fanout value')
+    parser.add_argument('--layers', type=int, default=3, help='Number of layers')
+    parser.add_argument('--dataset', type=str, default='Reddit', help='Dataset name')
     args = parser.parse_args()
+
     if not torch.cuda.is_available():
         args.mode = 'cpu'
     print(f'Training in {args.mode} mode.')
     
     # load and preprocess dataset
-    print('Loading data')
-    # dataset = AsNodePredDataset(DglNodePropPredDataset('ogbn-products'))
-    # g = dataset[0]
-    
-    g, dataset,train_idx,val_idx,test_idx= load_reddit()
-    data = (train_idx,val_idx,test_idx)
+    if args.dataset == 'ogb-products':
+        dataset = AsNodePredDataset(DglNodePropPredDataset('ogbn-products'))
+        g = dataset[0]
+        data = None
+    elif args.dataset == 'Reddit':
+        g, dataset,train_idx,val_idx,test_idx= load_reddit()
+        data = (train_idx,val_idx,test_idx)
     g = g.to('cuda' if args.mode == 'puregpu' else 'cpu')
     device = torch.device('cpu' if args.mode == 'cpu' else 'cuda')
 
     # create GraphSAGE model
     in_size = g.ndata['feat'].shape[1]
     out_size = dataset.num_classes
-    model = GAT(in_size, 256, out_size,heads=[1,1]).to(device)
+    model = GAT(in_size, 256, out_size,heads=[8,1]).to(device)
 
     # model training
     print('Training...')
@@ -180,6 +185,8 @@ if __name__ == '__main__':
 
     # test the model
     print('Testing...')
-    #acc = layerwise_infer(device, g, dataset.test_idx, model, batch_size=4096)
-    acc = layerwise_infer(device, g, test_idx, model, batch_size=4096)
+    if args.dataset == 'ogb-products':
+        acc = layerwise_infer(device, g, dataset.test_idx, model, batch_size=4096)
+    elif args.dataset == 'Reddit':
+        acc = layerwise_infer(device, g, test_idx, model, batch_size=4096) 
     print("Test Accuracy {:.4f}".format(acc.item()))
