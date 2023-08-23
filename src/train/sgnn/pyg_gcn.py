@@ -19,6 +19,9 @@ from torch import Tensor
 current_folder = os.path.abspath(os.path.dirname(__file__))
 sys.path.append(current_folder+"/../../"+"load")
 from loader import CustomDataset
+import argparse
+import ast
+import json
 
 class Net(torch.nn.Module):
     def __init__(self, in_channels: int, hidden_channels: int,
@@ -96,40 +99,25 @@ def test(model,evaluator,data,subgraph_loader,split_idx):
     return train_acc, val_acc, test_acc
 
 
-def run(rank, world_size, dataset):
-    train_loader = DataLoader(dataset=dataset, batch_size=1024, collate_fn=collate_fn)#,pin_memory=True)
+def run(args, rank, model, world_size, dataset):
+    train_loader = DataLoader(dataset=dataset, batch_size=dataset.batchsize, collate_fn=collate_fn)#,pin_memory=True)
     torch.manual_seed(12345)
-    model = Net(100, 256, 47).to('cuda:0')
+    
     optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
-    count = 0
     for epoch in range(0, dataset.epoch):
         startTime = time.time()
+        total_loss = 0
         model.train()
-        for graph,feat,label,number in train_loader:
+        for it,(graph,feat,label,number) in enumerate(train_loader):
             optimizer.zero_grad()     
             out = model(feat.to('cuda:0'), graph)[:number]
             loss = F.cross_entropy(out, label[:number].to(torch.int64).to('cuda:0'))
             loss.backward()
             optimizer.step()
+            total_loss += loss.item()
         runTime = time.time() - startTime
-        print(f'Epoch: {epoch:02d}, Loss: {loss:.4f}, Time: {runTime:.3f}s')
+        print(f'Epoch: {epoch:02d}, Loss: {total_loss / (it+1):.4f}, Time: {runTime:.3f}s')
 
-    root = osp.join(osp.dirname(osp.realpath(__file__)), '.', 'dataset')
-    dataset = PygNodePropPredDataset('ogbn-products', root)
-    split_idx = dataset.get_idx_split()
-    evaluator = Evaluator(name='ogbn-products')
-    data = dataset[0].to("cuda:0", 'x', 'y')
-    subgraph_loader = NeighborLoader(
-        data,
-        input_nodes=None,
-        num_neighbors=[-1],
-        batch_size=4096,
-        num_workers=12,
-        persistent_workers=True,
-    )
-    train_acc, val_acc, test_acc = test(model,evaluator,data,subgraph_loader,split_idx)
-    print(f'Train: {train_acc:.4f}, Val: {val_acc:.4f}, '
-                  f'Test: {test_acc:.4f}')
 
 def collate_fn(data):
     """
@@ -140,9 +128,65 @@ def collate_fn(data):
 
 if __name__ == '__main__':
     # world_size = torch.cuda.device_count()
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--mode", default='mixed', choices=['cpu', 'mixed', 'puregpu'],
+                        help="Training mode. 'cpu' for CPU training, 'mixed' for CPU-GPU mixed training, "
+                             "'puregpu' for pure-GPU training.")
+    parser.add_argument('--fanout', type=ast.literal_eval, default=[25, 10], help='Fanout value')
+    parser.add_argument('--layers', type=int, default=2, help='Number of layers')
+    parser.add_argument('--dataset', type=str, default='Reddit', help='Dataset name')
+    parser.add_argument('--json_path', type=str, default='.', help='Dataset name')
+    args = parser.parse_args()
+
+    data = None
+    with open(args.json_path, 'r') as json_file:
+        data = json.load(json_file)
+
     world_size = 1
     print('Let\'s use', world_size, 'GPUs!')
-    dataset = CustomDataset("./../../../config/pyg_products_graphsage.json")
-    run(0, world_size, dataset)
+    dataset = CustomDataset(args.json_path)    
+    model = Net(data['featlen'], 256, data['classes'],args.layers).to('cuda:0')
+    run(args, 0, model ,world_size, dataset)
     
-    #mp.spawn(run, args=(world_size, dataset), nprocs=world_size, join=True)
+    if args.dataset == 'ogb-products':
+        root = osp.join(osp.dirname(osp.realpath(__file__)), '.', 'dataset')
+        dataset = PygNodePropPredDataset('ogbn-products', root)
+        split_idx = dataset.get_idx_split()
+        evaluator = Evaluator(name='ogbn-products')
+        data = dataset[0].to("cuda:0", 'x', 'y')
+        subgraph_loader = NeighborLoader(
+            data,
+            input_nodes=None,
+            num_neighbors=[-1],
+            batch_size=4096,
+            num_workers=12,
+            persistent_workers=True,
+        )
+        train_acc, val_acc, test_acc = test(model,evaluator,data,subgraph_loader,split_idx)
+        print(f'Train: {train_acc:.4f}, Val: {val_acc:.4f}, '
+                    f'Test: {test_acc:.4f}')
+    elif args.dataset == 'Reddit':
+        model.eval()
+        dataset = Reddit('../../../data/pyg_reddit')
+        data = dataset[0]
+        data = data.to('cuda:0', 'x', 'y')
+        subgraph_loader = NeighborLoader(
+            data,
+            input_nodes=None,
+            num_neighbors=[-1],
+            batch_size=4096,
+            num_workers=12,
+            persistent_workers=True,
+        )
+        with torch.no_grad():
+            out = model.inference(data.x, subgraph_loader)
+        res = out.argmax(dim=-1) == data.y.to(out.device)
+        if args.dataset == 'Reddit':
+            acc1 = int(res[data.train_mask].sum()) / int(data.train_mask.sum())
+            acc2 = int(res[data.val_mask].sum()) / int(data.val_mask.sum())
+            acc3 = int(res[data.test_mask].sum()) / int(data.test_mask.sum())
+        elif args.dataset == 'ogb-products':
+            acc1 = int(res[train_idx].sum()) / int(train_idx.sum())
+            acc2 = int(res[val_idx].sum()) / int(val_idx.sum())
+            acc3 = int(res[test_idx].sum()) / int(test_idx.sum())
+        print(f'Train: {acc1:.4f}, Val: {acc2:.4f}, Test: {acc3:.4f}')

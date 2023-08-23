@@ -179,7 +179,7 @@ if __name__ == '__main__':
     train(args, device, dataset, model)
 
     # 指定要保存的文件路径
-    save_path = 'model_parameters.pth'
+    # save_path = 'model_parameters.pth'
 
     # 保存模型参数
     torch.save(model.state_dict(), save_path)

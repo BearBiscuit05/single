@@ -170,7 +170,6 @@ def train(args, device, g, reverse_eids, seed_edges, model):
         for it, (input_nodes, pair_graph, neg_pair_graph, blocks) in enumerate(
             dataloader
         ):
-            print(blocks)
             x = blocks[0].srcdata["feat"]
             pos_score, neg_score = model(pair_graph, neg_pair_graph, blocks, x)
             score = torch.cat([pos_score, neg_score])
@@ -206,6 +205,10 @@ if __name__ == "__main__":
     dataset = DglLinkPropPredDataset("ogbl-citation2")
     g = dataset[0]
     g = g.to("cuda" if args.mode == "puregpu" else "cpu")
+    
+    # print(g.edges())
+    # exit()
+    
     device = torch.device("cpu" if args.mode == "cpu" else "cuda")
     g, reverse_eids = to_bidirected_with_reverse_mapping(g)
     reverse_eids = reverse_eids.to(device)
