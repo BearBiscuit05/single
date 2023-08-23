@@ -26,32 +26,6 @@ def load_partition(rank,nodeID):
     print(subg.nodes())
     print(subg.edges())
 
-def read_subG(rank):
-    graph_dir = 'data_4/'
-    part_config = graph_dir + 'ogb-product.json'
-    print('loading partitions')
-    subg, node_feat, _, gpb, _, node_type, _ = dgl.distributed.load_partition(part_config, rank)
-    in_graph = dgl.node_subgraph(subg, subg.ndata['inner_node'].bool())
-    in_nodes = torch.arange(in_graph.num_nodes())
-    out_graph = subg.clone()
-    out_graph.remove_edges(out_graph.out_edges(in_nodes, form='eid'))
-    """
-        node_feat: only inner node
-        -- _N/features
-        -- _N/labels
-        -- _N/train_mask
-        -- _N/val_mask
-        -- _N/test_mask
-    """
-    print(f'Process {rank} has {subg.num_nodes()} nodes, {subg.num_edges()} edges ')
-          #f'{in_graph.num_nodes()} inner nodes, and {in_graph.num_edges()} inner edges.')
-    print("nodeNUM:",subg.num_nodes())
-    print("featLen:",len(node_feat['_N/features']))
-    print("NID    :",subg.ndata[dgl.NID])
-    print("nodes():",subg.nodes()) # 本地子图序列
-    print("gpb    :",gpb.partid2nids(rank))
-    print("edge   :",subg.edges())  
-    # print(len(node_feat['_N/labels']))
 
 def save_coo_bin(nodeDict, filepath, nodeNUM, edgeNUM, basicSpace):
     srcList = []
@@ -96,6 +70,7 @@ def save_edges_bin(nodeDict, filepath, haloID, nodeNUM, edgeNUM):
             bound.append(ptr)
     edges = np.array(edges,dtype=np.int32)
     bound = np.array(bound,dtype=np.int32)
+    print("edges len:{}, partid:{}".format(len(edges),haloID))
     edges.tofile(filepath+"/halo"+str(haloID)+".bin")
     bound.tofile(filepath+"/halo"+str(haloID)+"_bound.bin")
 
@@ -151,9 +126,12 @@ def gen_graph_file(data,rank,Wsize,dataPath,datasetName,savePath):
             outcount[partid] += 1 
     
     save_coo_bin(nodeDict,savePath+"/part"+str(rank),boundRange[rank][1] - boundRange[rank][0], incount,20)
+    outcount = torch.Tensor(outcount)
+    sorted_indices = torch.argsort(outcount, descending=True)
+    halo_list = sorted_indices[:10]
     for i in range(Wsize):
-        save_edges_bin(partdict[i], savePath+"/part"+str(rank), i, boundRange[rank][1] - boundRange[rank][0], outcount[i])
-
+        if i in halo_list:
+            save_edges_bin(partdict[i], savePath+"/part"+str(rank), i, boundRange[rank][1] - boundRange[rank][0], outcount[i])
     print("graphdata-part{} processed ! ".format(rank))
 
 def gen_labels_file(data,rank,savePath):
@@ -186,18 +164,26 @@ def gen_feat_file(data,rank,savePath):
     featInfo = node_feat[nt + '/features']
     featInfo = featInfo.detach().numpy()
     featInfo.tofile(savePath +"/feat.bin")
-    print("feat-part{} processed ! ".format(rank))
+    print("feat-part{} processed ! ".format(rank)) 
 
 
 if __name__ == '__main__':
     dataPath = "./../../data/raw_papers100M_64"
     dataName = "ogb-paper100M"
     savePath = "./../../data/papers100M_64"
-    for rank in range(35,36):
-        subg, node_feat, node_type = readGraph(rank,dataPath,dataName)
-        data = (subg, node_feat, node_type)
-        gen_graph_file(data,rank,index,dataPath,dataName,savePath)
-        gen_labels_file(data,rank,savePath)
-        gen_feat_file(data,rank,savePath)
-        gen_ids_file(data,rank,savePath)
+    index = 64
+    for rank in range(38, index):
+        try:
+            subg, node_feat, node_type = readGraph(rank, dataPath, dataName)
+            data = (subg, node_feat, node_type)
+            
+            gen_graph_file(data, rank, index, dataPath, dataName, savePath)
+            gen_labels_file(data, rank, savePath)
+            gen_feat_file(data, rank, savePath)
+            gen_ids_file(data, rank, savePath)
+            
+            print("-" * 25)
+        except Exception as e:
+            print(f"An error occurred for rank {rank}: {e}")
+
         

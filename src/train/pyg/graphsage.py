@@ -8,7 +8,10 @@ import torch.nn.functional as F
 from torch import Tensor
 from torch.nn.parallel import DistributedDataParallel
 from tqdm import tqdm
-
+import argparse
+import ast
+import os.path as osp
+from ogb.nodeproppred import Evaluator, PygNodePropPredDataset
 from torch_geometric.datasets import Reddit
 from torch_geometric.loader import NeighborLoader
 from torch_geometric.nn import SAGEConv
@@ -59,17 +62,39 @@ class SAGE(torch.nn.Module):
         return x_all
 
 
-def run(args,rank, world_size, dataset):
-    # os.environ['MASTER_ADDR'] = 'localhost'
-    # os.environ['MASTER_PORT'] = '12355'
-    # dist.init_process_group('nccl', rank=rank, world_size=world_size)
+@torch.no_grad()
+def test(model,evaluator,data,subgraph_loader,split_idx):
+    model.eval()
 
+    out = model.inference(data.x,"cuda:0",subgraph_loader)
+
+    y_true = data.y.cpu()
+    y_pred = out.argmax(dim=-1, keepdim=True)
+
+    train_acc = evaluator.eval({
+        'y_true': y_true[split_idx['train']],
+        'y_pred': y_pred[split_idx['train']],
+    })['acc']
+    val_acc = evaluator.eval({
+        'y_true': y_true[split_idx['valid']],
+        'y_pred': y_pred[split_idx['valid']],
+    })['acc']
+    test_acc = evaluator.eval({
+        'y_true': y_true[split_idx['test']],
+        'y_pred': y_pred[split_idx['test']],
+    })['acc']
+
+    return train_acc, val_acc, test_acc
+
+def run(args,rank, world_size, dataset,split_idx=None):
     data = dataset[0]
     data = data.to('cuda:0', 'x', 'y')  # Move to device for faster feature fetch.
-
-    # Split training indices into `world_size` many chunks:
-    train_idx = data.train_mask.nonzero(as_tuple=False).view(-1)
-    #train_idx = train_idx.split(train_idx.size(0) // world_size)[rank]
+    if args.dataset == 'Reddit':
+        train_idx = data.train_mask.nonzero(as_tuple=False).view(-1)
+    elif args.dataset == 'ogb-products':
+        train_idx = split_idx['train']
+        val_idx = split_idx['valid']
+        test_idx = split_idx['test']
 
     kwargs = dict(batch_size=1024, num_workers=1, persistent_workers=True)
     train_loader = NeighborLoader(data, input_nodes=train_idx,
@@ -79,14 +104,11 @@ def run(args,rank, world_size, dataset):
     if rank == 0:  # Create single-hop evaluation neighbor loader:
         subgraph_loader = NeighborLoader(copy.copy(data), num_neighbors=[-1],
                                          shuffle=False, **kwargs)
-        # No need to maintain these features during evaluation:
         del subgraph_loader.data.x, subgraph_loader.data.y
-        # Add global node index information:
         subgraph_loader.data.node_id = torch.arange(data.num_nodes)
 
     torch.manual_seed(12345)
     model = SAGE(dataset.num_features, 256, dataset.num_classes,args.layers).to('cuda:0')
-    #model = DistributedDataParallel(model, device_ids=[rank])
     optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
 
     for epoch in range(1, 11):
@@ -95,28 +117,36 @@ def run(args,rank, world_size, dataset):
         for batch in train_loader:        
             optimizer.zero_grad()    
             out = model(batch.x, batch.edge_index.to('cuda:0'))[:batch.batch_size]
-            loss = F.cross_entropy(out, batch.y[:batch.batch_size])
+            loss = F.cross_entropy(out, batch.y[:batch.batch_size].squeeze())
             loss.backward()
             optimizer.step()
         runTime = time.time() - startTime
-        # dist.barrier()
 
-        # if rank == 0:
+
         print(f'Epoch: {epoch:02d}, Loss: {loss:.4f}, time: {runTime:.5f}')
 
         if rank == 0 and epoch % 5 == 0:  # We evaluate on a single GPU for now
-            model.eval()
-            with torch.no_grad():
-                out = model.inference(data.x, rank, subgraph_loader)
-            res = out.argmax(dim=-1) == data.y.to(out.device)
-            acc1 = int(res[data.train_mask].sum()) / int(data.train_mask.sum())
-            acc2 = int(res[data.val_mask].sum()) / int(data.val_mask.sum())
-            acc3 = int(res[data.test_mask].sum()) / int(data.test_mask.sum())
-            print(f'Train: {acc1:.4f}, Val: {acc2:.4f}, Test: {acc3:.4f}')
+            if args.dataset == 'Reddit':
+                model.eval()
+                with torch.no_grad():
+                    out = model.inference(data.x, rank, subgraph_loader)
+                res = out.argmax(dim=-1) == data.y.to(out.device)
+                if args.dataset == 'Reddit':
+                    acc1 = int(res[data.train_mask].sum()) / int(data.train_mask.sum())
+                    acc2 = int(res[data.val_mask].sum()) / int(data.val_mask.sum())
+                    acc3 = int(res[data.test_mask].sum()) / int(data.test_mask.sum())
+                elif args.dataset == 'ogb-products':
+                    acc1 = int(res[train_idx].sum()) / int(train_idx.sum())
+                    acc2 = int(res[val_idx].sum()) / int(val_idx.sum())
+                    acc3 = int(res[test_idx].sum()) / int(test_idx.sum())
+                print(f'Train: {acc1:.4f}, Val: {acc2:.4f}, Test: {acc3:.4f}')
 
-    #     dist.barrier()
-
-    # dist.destroy_process_group()
+            elif args.dataset == 'ogb-products':
+                evaluator = Evaluator(name='ogbn-products')
+                train_acc, val_acc, test_acc = test(model,evaluator,data,subgraph_loader,split_idx)
+                print(f'Train: {train_acc:.4f}, Val: {val_acc:.4f}, '
+                            f'Test: {test_acc:.4f}')
+            
 
 
 if __name__ == '__main__':
@@ -137,8 +167,11 @@ if __name__ == '__main__':
     if args.dataset == 'Reddit':
         dataset = Reddit('../../../data/pyg_reddit')
     elif args.dataset == 'ogb-products':
-        pass
+        root = osp.join(osp.dirname(osp.realpath(__file__)), '.', 'dataset')
+        dataset = PygNodePropPredDataset('ogbn-products', root)
+        split_idx = dataset.get_idx_split()
+        evaluator = Evaluator(name='ogbn-products')
     else:
         raise ValueError(f"Unsupported dataset: {args.dataset}")
-    run(args,0, world_size, dataset)
+    run(args,0, world_size, dataset,split_idx)
     #mp.spawn(run, args=(world_size, dataset), nprocs=world_size, join=True)

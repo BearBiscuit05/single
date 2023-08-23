@@ -185,6 +185,7 @@ if __name__ == '__main__':
     device = torch.device('cpu' if args.mode == 'cpu' else 'cuda')
     
     # create GraphSAGE model
+
     in_size = g.ndata['feat'].shape[1]
     out_size = dataset.num_classes
     model = SAGE(in_size, 256, out_size,args.layers).to(device)

@@ -5,6 +5,7 @@ import torchmetrics.functional as MF
 import dgl
 import dgl.nn as dglnn
 #from torch.utils.data import Dataset, DataLoader
+import ast
 import random
 import copy
 import tqdm
@@ -25,11 +26,12 @@ sys.path.append(current_folder+"/../../"+"load")
 from loader import CustomDataset
 
 class SAGE(nn.Module):
-    def __init__(self, in_size, hid_size, out_size):
+    def __init__(self, in_size, hid_size, out_size,layer_NUM=2):
         super().__init__()
         self.layers = nn.ModuleList()
         self.layers.append(dglnn.SAGEConv(in_size, hid_size, 'mean'))
-        self.layers.append(dglnn.SAGEConv(hid_size, hid_size, 'mean'))
+        for _ in range(layer_NUM - 2):
+            self.layers.append(dglnn.SAGEConv(hid_size, hid_size, 'mean'))
         self.layers.append(dglnn.SAGEConv(hid_size, out_size, 'mean'))
         self.dropout = nn.Dropout(0.5)
         self.hid_size = hid_size
@@ -40,10 +42,12 @@ class SAGE(nn.Module):
         for l, (layer, block) in enumerate(zip(self.layers, blocks)):
             # print(block)
             # print(h.shape)
+            
             h = layer(block, h)
             if l != len(self.layers) - 1:
                 h = F.relu(h)
                 h = self.dropout(h)
+        
         return h
 
     def inference(self, g, device, batch_size):
@@ -104,7 +108,6 @@ def collate_fn(data):
     return data[0]
 
 def train(args, device, dataset, model):
-    torch.autograd.set_detect_anomaly(True)
     opt = torch.optim.Adam(model.parameters(), lr=1e-3, weight_decay=5e-4)
     train_loader = torch.utils.data.DataLoader(dataset=dataset, batch_size=1024, collate_fn=collate_fn)#,pin_memory=True)
     # 修改此处，epoch数必须同步修改json文件里的epoch数
@@ -127,29 +130,26 @@ def train(args, device, dataset, model):
             total_loss += loss.item()
         print("Epoch {:05d} | Loss {:.4f} | Time {:.3f}s"
               .format(epoch, total_loss / (it+1), time.time()-start))
-#
-#    dataset.changeMode("test")
-#    test_loader = torch.utils.data.DataLoader(dataset=dataset, batch_size=1024, collate_fn=collate_fn,pin_memory=True)
-#    #model.train()
-#    for graph,feat,label,number in test_loader:
-#        model.eval()
-#        with torch.no_grad():
-#            labels = []
-#            preds = []
-#            graph = [block.to('cuda:0') for block in graph]
-#            pred = model(graph, feat.to('cuda:0')) # pred in buffer_device
-#            preds.extend(pred[1:number+1])
-#            labels.extend(label[:number])
-#    newpreds = torch.zeros((len(preds),47),dtype=torch.float32)
-#    for index,pred in enumerate(preds):
-#        newpreds[index] = pred
-#    labels = torch.Tensor(labels).to(torch.int64).cpu().numpy()
-#    newpreds = newpreds.argmax(1).cpu().numpy()
-#    print(sklearn.metrics.classification_report(labels,newpreds,zero_division=1))
-        # acc = evaluate(model, g, val_dataloader)
-        # print("Epoch {:05d} | Loss {:.4f} | Accuracy {:.4f} "
-        #       .format(epoch, total_loss / (it+1), acc.item()))
-        # print("time :",time.time()-start)
+
+def load_reddit(self_loop=True):
+    from dgl.data import RedditDataset
+    data = RedditDataset(self_loop=self_loop)
+    g = data[0]
+    g.ndata['feat'] = g.ndata.pop('feat')
+    g.ndata['label'] = g.ndata.pop('label')
+    train_idx = []
+    val_idx = []
+    test_idx = []
+    for index in range(len(g.ndata['train_mask'])):
+        if g.ndata['train_mask'][index] == 1:
+            train_idx.append(index)
+    for index in range(len(g.ndata['val_mask'])):
+        if g.ndata['val_mask'][index] == 1:
+            val_idx.append(index)
+    for index in range(len(g.ndata['test_mask'])):
+        if g.ndata['test_mask'][index] == 1:
+            test_idx.append(index)
+    return g, data,train_idx,val_idx,test_idx
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -157,28 +157,43 @@ if __name__ == '__main__':
                         help="Training mode. 'cpu' for CPU training, 'mixed' for CPU-GPU mixed training, "
                              "'puregpu' for pure-GPU training.")
     parser.add_argument('--fanout', type=ast.literal_eval, default=[25, 10], help='Fanout value')
-    parser.add_argument('--layers', type=int, default=3, help='Number of layers')
+    parser.add_argument('--layers', type=int, default=2, help='Number of layers')
     parser.add_argument('--dataset', type=str, default='Reddit', help='Dataset name')
+    parser.add_argument('--json_path', type=str, default='.', help='Dataset name')
     args = parser.parse_args()
 
     if not torch.cuda.is_available():
         args.mode = 'cpu'
+    
+    data = None
+    with open(args.json_path, 'r') as json_file:
+        data = json.load(json_file)
+
+
     print(f'Training in {args.mode} mode.')
     print('Loading data')
     device = torch.device('cpu' if args.mode == 'cpu' else 'cuda:0')
-
-    # in_size = g.ndata['feat'].shape[1]
-    # out_size = dataset.num_classes
-    model = SAGE(100, 256, 47).to('cuda:0')
-    dataset = CustomDataset("./../../load/graphsage.json")
+    model = SAGE(data['featlen'], 256, data['classes'],args.layers).to('cuda:0')  # 请确保 SAGE 模型的参数正确
+    dataset = CustomDataset(args.json_path)  # 使用 args.json_path 作为 JSON 文件路径
     print('Training...')
     train(args, device, dataset, model)
 
-    # test the model
-#    print('Testing...')
-#
-    test_dataset = AsNodePredDataset(DglNodePropPredDataset('ogbn-products'))
-    g = test_dataset[0]
-    g = g.to('cpu')
-    acc = layerwise_infer(device, g, test_dataset.test_idx, model, batch_size=4096)
-    print("Test Accuracy :{:.4f}",acc)
+    # 指定要保存的文件路径
+    save_path = 'model_parameters.pth'
+
+    # 保存模型参数
+    torch.save(model.state_dict(), save_path)
+
+    if args.dataset == 'ogb-products':
+        dataset = AsNodePredDataset(DglNodePropPredDataset('ogbn-products'))
+        g = dataset[0]
+        data = None
+    elif args.dataset == 'Reddit':
+        g, dataset,train_idx,val_idx,test_idx= load_reddit()
+        data = (train_idx,val_idx,test_idx)
+
+    if args.dataset == 'ogb-products':
+        acc = layerwise_infer(device, g, dataset.test_idx, model, batch_size=4096)
+    elif args.dataset == 'Reddit':
+        acc = layerwise_infer(device, g, test_idx, model, batch_size=4096) 
+    print("Test Accuracy {:.4f}".format(acc.item()))

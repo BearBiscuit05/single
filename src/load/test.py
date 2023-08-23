@@ -1,22 +1,24 @@
 import torch
-import time
+import signn
+import numpy as np
 
-# 创建一个包含 15 万个随机整数的向量
-num_nodes = 250000
-random_data = torch.randint(low=0, high=1000000, size=(num_nodes,), dtype=torch.int32)
-
-# 测试开始时间
-start_time = time.time()
-
-# 使用 torch.max 函数找到最大值和对应索引
-max_value, max_index = torch.max(random_data, dim=0)
-
-# 测试结束时间
-end_time = time.time()
-
-# 计算运行时间
-elapsed_time = end_time - start_time
-
-print(f"Max value: {max_value.item()}")
-print(f"Index of max value: {max_index.item()}")
-print(f"Elapsed time: {elapsed_time:.5f} seconds")
+for i in range(100000):
+    filePath="./../../data/reddit_8/part1"
+    srcdata = np.fromfile(filePath+"/srcList.bin", dtype=np.int32)
+    srcdata = torch.tensor(srcdata,device=('cuda:0'))
+    rangedata = np.fromfile(filePath+"/range.bin", dtype=np.int32)
+    rangedata = torch.tensor(rangedata,device=('cuda:0'))
+    seeds = torch.load('sids.pt')
+    seed_num = len(seeds)
+    # print("seed num :",seed_num)
+    # print("seed :",seeds.shape)
+    tmp = seed_num
+    fan = 25
+    cacheGraph = [[],[]]
+    dst = torch.full((tmp * fan,), -1, dtype=torch.int32).to("cuda:0")  # 使用PyTorch张量，指定dtype
+    src = torch.full((tmp * fan,), -1, dtype=torch.int32).to("cuda:0")  # 使用PyTorch张量，指定dtype
+    out_num = torch.Tensor([0]).to(torch.int64).to('cuda:0')
+    signn.torch_sample_hop(
+        srcdata,rangedata,
+        seeds,seed_num,fan,
+        src,dst,out_num)
