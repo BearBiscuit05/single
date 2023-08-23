@@ -86,7 +86,7 @@ def test(model,evaluator,data,subgraph_loader,split_idx):
 
     return train_acc, val_acc, test_acc
 
-def run(args,rank, world_size, dataset,split_idx=None):
+def run(args, rank, world_size, dataset,split_idx=None):
     data = dataset[0]
     data = data.to('cuda:0', 'x', 'y')  # Move to device for faster feature fetch.
     if args.dataset == 'Reddit':

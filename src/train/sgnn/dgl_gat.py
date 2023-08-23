@@ -127,36 +127,51 @@ def collate_fn(data):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument("--mode", default='puregpu', choices=['cpu', 'mixed', 'puregpu'],
+    parser.add_argument("--mode", default='mixed', choices=['cpu', 'mixed', 'puregpu'],
                         help="Training mode. 'cpu' for CPU training, 'mixed' for CPU-GPU mixed training, "
                              "'puregpu' for pure-GPU training.")
+    parser.add_argument('--fanout', type=ast.literal_eval, default=[25, 10], help='Fanout value')
+    parser.add_argument('--layers', type=int, default=2, help='Number of layers')
+    parser.add_argument('--dataset', type=str, default='Reddit', help='Dataset name')
+    parser.add_argument('--json_path', type=str, default='.', help='Dataset name')
     args = parser.parse_args()
+
     if not torch.cuda.is_available():
         args.mode = 'cpu'
     print(f'Training in {args.mode} mode.')
     
-    # load and preprocess dataset
     print('Loading data')
-    # dataset = AsNodePredDataset(DglNodePropPredDataset('ogbn-products'))
-    # g = dataset[0]
-    # g = g.to('cuda' if args.mode == 'puregpu' else 'cpu')
+    data = None
+    with open(args.json_path, 'r') as json_file:
+        data = json.load(json_file)
     device = torch.device('cpu' if args.mode == 'cpu' else 'cuda')
 
     # create GraphSAGE model
     # in_size = g.ndata['feat'].shape[1]
     # out_size = dataset.num_classes
-    model = GAT(100, 256, 47, heads=[8,1]).to('cuda:0')
+    print('Loading data')
+
+    device = torch.device('cpu' if args.mode == 'cpu' else 'cuda')
+    model = GCN(data['featlen'], 256, data['classes'] ,args.layers,F.relu,0.5).to('cuda:0')
+
+    model = GAT(data['featlen'], 256, data['classes'], heads=[8,1]).to('cuda:0')
 
     # model training
     print('Training...')
-    dataset = CustomDataset("./../../load/graphsage.json")
+    dataset = CustomDataset(args.json_path)  # 使用 args.json_path 作为 JSON 文件路径
     train(args, device, dataset, model)
     # train(args, device, g, dataset, model,data=data)
 
-    test_dataset = AsNodePredDataset(DglNodePropPredDataset('ogbn-products'))
-    print('Testing...')
-    g = test_dataset[0]
-    g = g.to('cpu')
-    #acc = layerwise_infer(device, g, test_idx, model, batch_size=4096)
-    acc = layerwise_infer(device, g, test_dataset.test_idx, model, batch_size=4096)
+    if args.dataset == 'ogb-products':
+        dataset = AsNodePredDataset(DglNodePropPredDataset('ogbn-products'))
+        g = dataset[0]
+        data = None
+    elif args.dataset == 'Reddit':
+        g, dataset,train_idx,val_idx,test_idx= load_reddit()
+        data = (train_idx,val_idx,test_idx)
+
+    if args.dataset == 'ogb-products':
+        acc = layerwise_infer(device, g, dataset.test_idx, model, batch_size=4096)
+    elif args.dataset == 'Reddit':
+        acc = layerwise_infer(device, g, test_idx, model, batch_size=4096) 
     print("Test Accuracy {:.4f}".format(acc.item()))
