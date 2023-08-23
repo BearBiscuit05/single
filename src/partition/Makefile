@@ -56,17 +56,6 @@ CMAKE_BINARY_DIR = /home/wsy/single-gnn/src/partition
 #=============================================================================
 # Targets provided globally by CMake.
 
-# Special rule for the target rebuild_cache
-rebuild_cache:
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --cyan "Running CMake to regenerate build system..."
-	/usr/bin/cmake -S$(CMAKE_SOURCE_DIR) -B$(CMAKE_BINARY_DIR)
-.PHONY : rebuild_cache
-
-# Special rule for the target rebuild_cache
-rebuild_cache/fast: rebuild_cache
-
-.PHONY : rebuild_cache/fast
-
 # Special rule for the target edit_cache
 edit_cache:
 	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --cyan "No interactive CMake dialog available..."
@@ -77,6 +66,17 @@ edit_cache:
 edit_cache/fast: edit_cache
 
 .PHONY : edit_cache/fast
+
+# Special rule for the target rebuild_cache
+rebuild_cache:
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --cyan "Running CMake to regenerate build system..."
+	/usr/bin/cmake -S$(CMAKE_SOURCE_DIR) -B$(CMAKE_BINARY_DIR)
+.PHONY : rebuild_cache
+
+# Special rule for the target rebuild_cache
+rebuild_cache/fast: rebuild_cache
+
+.PHONY : rebuild_cache/fast
 
 # The main all target
 all: cmake_check_build_system
@@ -111,44 +111,84 @@ depend:
 .PHONY : depend
 
 #=============================================================================
-# Target rules for targets named ogb-products-bloomfilter
+# Target rules for targets named fennel_test
 
 # Build rule for target.
-ogb-products-bloomfilter: cmake_check_build_system
-	$(MAKE) -f CMakeFiles/Makefile2 ogb-products-bloomfilter
-.PHONY : ogb-products-bloomfilter
+fennel_test: cmake_check_build_system
+	$(MAKE) -f CMakeFiles/Makefile2 fennel_test
+.PHONY : fennel_test
 
 # fast build rule for target.
-ogb-products-bloomfilter/fast:
-	$(MAKE) -f CMakeFiles/ogb-products-bloomfilter.dir/build.make CMakeFiles/ogb-products-bloomfilter.dir/build
-.PHONY : ogb-products-bloomfilter/fast
+fennel_test/fast:
+	$(MAKE) -f CMakeFiles/fennel_test.dir/build.make CMakeFiles/fennel_test.dir/build
+.PHONY : fennel_test/fast
 
-ogb-products-bloomfilter.o: ogb-products-bloomfilter.cpp.o
+#=============================================================================
+# Target rules for targets named fennel
 
-.PHONY : ogb-products-bloomfilter.o
+# Build rule for target.
+fennel: cmake_check_build_system
+	$(MAKE) -f CMakeFiles/Makefile2 fennel
+.PHONY : fennel
+
+# fast build rule for target.
+fennel/fast:
+	$(MAKE) -f CMakeFiles/fennel.dir/build.make CMakeFiles/fennel.dir/build
+.PHONY : fennel/fast
+
+fennel.o: fennel.cpp.o
+
+.PHONY : fennel.o
 
 # target to build an object file
-ogb-products-bloomfilter.cpp.o:
-	$(MAKE) -f CMakeFiles/ogb-products-bloomfilter.dir/build.make CMakeFiles/ogb-products-bloomfilter.dir/ogb-products-bloomfilter.cpp.o
-.PHONY : ogb-products-bloomfilter.cpp.o
+fennel.cpp.o:
+	$(MAKE) -f CMakeFiles/fennel.dir/build.make CMakeFiles/fennel.dir/fennel.cpp.o
+.PHONY : fennel.cpp.o
 
-ogb-products-bloomfilter.i: ogb-products-bloomfilter.cpp.i
+fennel.i: fennel.cpp.i
 
-.PHONY : ogb-products-bloomfilter.i
+.PHONY : fennel.i
 
 # target to preprocess a source file
-ogb-products-bloomfilter.cpp.i:
-	$(MAKE) -f CMakeFiles/ogb-products-bloomfilter.dir/build.make CMakeFiles/ogb-products-bloomfilter.dir/ogb-products-bloomfilter.cpp.i
-.PHONY : ogb-products-bloomfilter.cpp.i
+fennel.cpp.i:
+	$(MAKE) -f CMakeFiles/fennel.dir/build.make CMakeFiles/fennel.dir/fennel.cpp.i
+.PHONY : fennel.cpp.i
 
-ogb-products-bloomfilter.s: ogb-products-bloomfilter.cpp.s
+fennel.s: fennel.cpp.s
 
-.PHONY : ogb-products-bloomfilter.s
+.PHONY : fennel.s
 
 # target to generate assembly for a file
-ogb-products-bloomfilter.cpp.s:
-	$(MAKE) -f CMakeFiles/ogb-products-bloomfilter.dir/build.make CMakeFiles/ogb-products-bloomfilter.dir/ogb-products-bloomfilter.cpp.s
-.PHONY : ogb-products-bloomfilter.cpp.s
+fennel.cpp.s:
+	$(MAKE) -f CMakeFiles/fennel.dir/build.make CMakeFiles/fennel.dir/fennel.cpp.s
+.PHONY : fennel.cpp.s
+
+fennel_test.o: fennel_test.cpp.o
+
+.PHONY : fennel_test.o
+
+# target to build an object file
+fennel_test.cpp.o:
+	$(MAKE) -f CMakeFiles/fennel_test.dir/build.make CMakeFiles/fennel_test.dir/fennel_test.cpp.o
+.PHONY : fennel_test.cpp.o
+
+fennel_test.i: fennel_test.cpp.i
+
+.PHONY : fennel_test.i
+
+# target to preprocess a source file
+fennel_test.cpp.i:
+	$(MAKE) -f CMakeFiles/fennel_test.dir/build.make CMakeFiles/fennel_test.dir/fennel_test.cpp.i
+.PHONY : fennel_test.cpp.i
+
+fennel_test.s: fennel_test.cpp.s
+
+.PHONY : fennel_test.s
+
+# target to generate assembly for a file
+fennel_test.cpp.s:
+	$(MAKE) -f CMakeFiles/fennel_test.dir/build.make CMakeFiles/fennel_test.dir/fennel_test.cpp.s
+.PHONY : fennel_test.cpp.s
 
 # Help Target
 help:
@@ -156,12 +196,16 @@ help:
 	@echo "... all (the default if no target is provided)"
 	@echo "... clean"
 	@echo "... depend"
-	@echo "... rebuild_cache"
 	@echo "... edit_cache"
-	@echo "... ogb-products-bloomfilter"
-	@echo "... ogb-products-bloomfilter.o"
-	@echo "... ogb-products-bloomfilter.i"
-	@echo "... ogb-products-bloomfilter.s"
+	@echo "... rebuild_cache"
+	@echo "... fennel_test"
+	@echo "... fennel"
+	@echo "... fennel.o"
+	@echo "... fennel.i"
+	@echo "... fennel.s"
+	@echo "... fennel_test.o"
+	@echo "... fennel_test.i"
+	@echo "... fennel_test.s"
 .PHONY : help
 
 
