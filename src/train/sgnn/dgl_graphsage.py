@@ -131,6 +131,26 @@ def train(args, device, dataset, model):
         print("Epoch {:05d} | Loss {:.4f} | Time {:.3f}s"
               .format(epoch, total_loss / (it+1), time.time()-start))
 
+def load_reddit(self_loop=True):
+    from dgl.data import RedditDataset
+    data = RedditDataset(self_loop=self_loop)
+    g = data[0]
+    g.ndata['feat'] = g.ndata.pop('feat')
+    g.ndata['label'] = g.ndata.pop('label')
+    train_idx = []
+    val_idx = []
+    test_idx = []
+    for index in range(len(g.ndata['train_mask'])):
+        if g.ndata['train_mask'][index] == 1:
+            train_idx.append(index)
+    for index in range(len(g.ndata['val_mask'])):
+        if g.ndata['val_mask'][index] == 1:
+            val_idx.append(index)
+    for index in range(len(g.ndata['test_mask'])):
+        if g.ndata['test_mask'][index] == 1:
+            test_idx.append(index)
+    return g, data,train_idx,val_idx,test_idx
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("--mode", default='mixed', choices=['cpu', 'mixed', 'puregpu'],
@@ -158,8 +178,22 @@ if __name__ == '__main__':
     print('Training...')
     train(args, device, dataset, model)
 
-    # test_dataset = AsNodePredDataset(DglNodePropPredDataset('ogbn-products'))
-    # g = test_dataset[0]
-    # g = g.to('cpu')
-    # acc = layerwise_infer(device, g, test_dataset.test_idx, model, batch_size=4096)
-    # print("Test Accuracy :{:.4f}",acc)
+    # 指定要保存的文件路径
+    save_path = 'model_parameters.pth'
+
+    # 保存模型参数
+    torch.save(model.state_dict(), save_path)
+
+    if args.dataset == 'ogb-products':
+        dataset = AsNodePredDataset(DglNodePropPredDataset('ogbn-products'))
+        g = dataset[0]
+        data = None
+    elif args.dataset == 'Reddit':
+        g, dataset,train_idx,val_idx,test_idx= load_reddit()
+        data = (train_idx,val_idx,test_idx)
+
+    if args.dataset == 'ogb-products':
+        acc = layerwise_infer(device, g, dataset.test_idx, model, batch_size=4096)
+    elif args.dataset == 'Reddit':
+        acc = layerwise_infer(device, g, test_idx, model, batch_size=4096) 
+    print("Test Accuracy {:.4f}".format(acc.item()))

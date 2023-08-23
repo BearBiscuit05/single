@@ -61,6 +61,14 @@ class CustomDataset(Dataset):
 
         #### 训练记录 ####
         self.trainSubGTrack = self.randomTrainList()    # 训练轨迹
+        # self.trainSubGTrack = []
+        # for i in range(20):
+        #     tmp = []
+        #     for j in range(4):
+        #         tmp.append(1)
+        #         tmp.append(5)
+        #     self.trainSubGTrack.append(tmp)
+
         self.subGptr = -1                               # 子图训练指针，记录当前训练的位置，在加载图时发生改变
         
         #### 节点类型加载 ####
@@ -194,6 +202,9 @@ class CustomDataset(Dataset):
         logger.info("当前加载图为:{},下一个图:{},图训练集规模:{},图节点数目:{},图边数目:{},加载耗时:{:.5f}s"\
                         .format(self.trainingGID,self.nextGID,self.subGtrainNodesNUM,\
                         self.graphNodeNUM,self.graphEdgeNUM,time.time()-start))
+        # print("当前加载图为:{},下一个图:{},图训练集规模:{},图节点数目:{},图边数目:{},加载耗时:{:.5f}s"\
+        #                 .format(self.trainingGID,self.nextGID,self.subGtrainNodesNUM,\
+        #                 self.graphNodeNUM,self.graphEdgeNUM,time.time()-start))
 
     def loadingTrainID(self):
         # 加载子图所有训练集
@@ -299,9 +310,8 @@ class CustomDataset(Dataset):
         bound = torch.tensor(bound,device=deviceName,dtype=torch.int32).contiguous()
         self.cacheData[0] = self.cacheData[0].contiguous()
         self.cacheData[1] = self.cacheData[1].contiguous()
-        # sample_hop.torch_launch_loading_halo_new(self.cacheData[0],self.cacheData[1],edges,bound,len(self.cacheData[0]),len(self.cacheData[1]),len(edges),len(bound),self.graphEdgeNUM,self.cudaDevice)
         signn.torch_graph_halo_merge(self.cacheData[0],self.cacheData[1],edges,bound,self.graphNodeNUM)
-        
+
 ########################## 采样图结构 ##########################
     def sampleNeig(self,sampleIDs,cacheGraph): 
         layer = len(self.fanout)
@@ -338,22 +348,32 @@ class CustomDataset(Dataset):
             info[0] = torch.tensor(info[0])
             info[1] = torch.tensor(info[1])
 
-    def sampleNeigGPU_bear(self,sampleIDs,cacheGraph):     
+    def sampleNeigGPU_bear(self,sampleIDs,cacheGraph,batchlen):     
         sampleIDs = sampleIDs.to(torch.int32).to('cuda:0')
         ptr = 0
         mapping_ptr = [ptr]
         batch = len(sampleIDs)
         sampleStart = time.time()
         for l, fan_num in enumerate(self.fanout):
-            seed_num = len(sampleIDs)
-            #print("seed num :",seed_num)
+            if l == 0:
+                seed_num = batchlen
+            else:
+                seed_num = len(sampleIDs)
             out_src = cacheGraph[0][ptr:ptr+seed_num*fan_num]
             out_dst = cacheGraph[1][ptr:ptr+seed_num*fan_num]
             out_num = torch.Tensor([0]).to(torch.int64).to('cuda:0')
+            #print(sampleIDs.shape)
+            # signn.torch_sample_hop(
+            #     self.cacheData[0][:self.graphEdgeNUM],self.cacheData[1][:self.graphNodeNUM*2],
+            #     sampleIDs,seed_num,fan_num,
+            #     out_src,out_dst,out_num)
+            
             signn.torch_sample_hop(
                 self.cacheData[0],self.cacheData[1],
                 sampleIDs,seed_num,fan_num,
                 out_src,out_dst,out_num)
+
+            # print(seed_num,fan_num)
             sampleIDs = cacheGraph[0][ptr:ptr+out_num.item()]
             ptr=ptr+out_num.item()
             mapping_ptr.append(ptr)
@@ -458,7 +478,9 @@ class CustomDataset(Dataset):
             # logger.debug("last batch...")
             offset = self.trainptr*self.batchsize
             # logger.debug("train loop:{} , offset:{} ,subGtrainNodesNUM:{}".format(self.trainLoop,offset,self.subGtrainNodesNUM))
-            sampleIDs = self.trainNodes[offset:self.subGtrainNodesNUM]
+            #sampleIDs = self.trainNodes[offset:self.subGtrainNodesNUM]
+            sampleIDs[:self.subGtrainNodesNUM - offset] = self.trainNodes[offset:self.subGtrainNodesNUM]
+
             batchlen = self.subGtrainNodesNUM - offset
             #sliceIDs = sampleIDs[0:self.subGtrainNodesNUM - offset].to(torch.long)
             # print("==================>last batch<===========================")
@@ -472,7 +494,7 @@ class CustomDataset(Dataset):
         ##
         sampleTime = time.time()
         # logger.debug("sampleIDs shape:{}".format(len(sampleIDs)))
-        blocks,uniqueList = self.sampleNeigGPU_bear(sampleIDs,cacheGraph)
+        blocks,uniqueList = self.sampleNeigGPU_bear(sampleIDs,cacheGraph,batchlen)
         # logger.debug("cacheGraph shape:{}, first graph shape:{}".format(len(cacheGraph),len(cacheGraph[0][0])))
         logger.info("sample subG all cost {:.5f}s".format(time.time()-sampleTime))
         ##

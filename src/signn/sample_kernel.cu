@@ -34,7 +34,7 @@ __global__ void sample_hop_kernel(
                     out_src[index * fanout + j] = -1;
                 }
             } else {
-                for (int j = 0; j < fanout; j++) {
+                for (int j = 0; j < fanout; ++j) {
                     int selected_j = curand(&local_state) % (len - j);
                     int selected_node_id = graphEdge[off + selected_j];
                     out_dst[index * fanout + j] = rid;
