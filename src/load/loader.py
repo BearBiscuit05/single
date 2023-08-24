@@ -61,14 +61,6 @@ class CustomDataset(Dataset):
 
         #### 训练记录 ####
         self.trainSubGTrack = self.randomTrainList()    # 训练轨迹
-        # self.trainSubGTrack = []
-        # for i in range(20):
-        #     tmp = []
-        #     for j in range(4):
-        #         tmp.append(1)
-        #         tmp.append(5)
-        #     self.trainSubGTrack.append(tmp)
-
         self.subGptr = -1                               # 子图训练指针，记录当前训练的位置，在加载图时发生改变
         
         #### 节点类型加载 ####
@@ -348,7 +340,7 @@ class CustomDataset(Dataset):
             info[0] = torch.tensor(info[0])
             info[1] = torch.tensor(info[1])
 
-    def sampleNeigGPU_bear(self,sampleIDs,cacheGraph,batchlen):     
+    def sampleNeigGPU_NC(self,sampleIDs,cacheGraph,batchlen):     
         sampleIDs = sampleIDs.to(torch.int32).to('cuda:0')
         ptr = 0
         mapping_ptr = [ptr]
@@ -362,11 +354,6 @@ class CustomDataset(Dataset):
             out_src = cacheGraph[0][ptr:ptr+seed_num*fan_num]
             out_dst = cacheGraph[1][ptr:ptr+seed_num*fan_num]
             out_num = torch.Tensor([0]).to(torch.int64).to('cuda:0')
-            #print(sampleIDs.shape)
-            # signn.torch_sample_hop(
-            #     self.cacheData[0][:self.graphEdgeNUM],self.cacheData[1][:self.graphNodeNUM*2],
-            #     sampleIDs,seed_num,fan_num,
-            #     out_src,out_dst,out_num)
             
             signn.torch_sample_hop(
                 self.cacheData[0],self.cacheData[1],
@@ -423,6 +410,69 @@ class CustomDataset(Dataset):
                 #     # block = self.create_dgl_block(data,tmp_num,save_num)
                 blocks.append(block)
             # print(blocks)
+        elif self.framework == "pyg":
+            src = cacheGraph[0][:mapping_ptr[-1]].to(torch.int64)
+            dst = cacheGraph[1][:mapping_ptr[-1]].to(torch.int64)
+            blocks = torch.stack((src, dst), dim=0)
+        logger.info("trans Time {:.5f}s".format(time.time()-transTime))
+        return blocks,unique
+
+    def eids2nids():
+        pass
+
+    def sampleNeigGPU_LP(self,sampleIDs,raw_edges,cacheGraph,batchlen):     
+        sampleIDs = sampleIDs.to(torch.int32).to('cuda:0')
+        ptr = 0
+        mapping_ptr = [ptr]
+        batch = len(sampleIDs)
+        sampleStart = time.time()
+        for l, fan_num in enumerate(self.fanout):
+            if l == 0:
+                seed_num = batchlen
+            else:
+                seed_num = len(sampleIDs)
+            out_src = cacheGraph[0][ptr:ptr+seed_num*fan_num]
+            out_dst = cacheGraph[1][ptr:ptr+seed_num*fan_num]
+            out_num = torch.Tensor([0]).to(torch.int64).to('cuda:0')
+            
+            signn.torch_sample_hop(
+                self.cacheData[0],self.cacheData[1],
+                sampleIDs,seed_num,fan_num,
+                out_src,out_dst,out_num)
+            # 更改存在边
+
+            indices = torch.where((out_src.unsqueeze(1) == raw_edges[0]) & (out_dst.unsqueeze(1) == raw_edges[1]))
+            edge_indices = indices[1]
+
+            sampleIDs = cacheGraph[0][ptr:ptr+out_num.item()]
+            ptr=ptr+out_num.item()
+            mapping_ptr.append(ptr)
+        logger.info("sample Time {:.5f}s".format(time.time()-sampleStart))
+
+        mappingTime = time.time()        
+        cacheGraph[0] = cacheGraph[0][:mapping_ptr[-1]]
+        cacheGraph[1] = cacheGraph[1][:mapping_ptr[-1]]
+        uniqueNUM = torch.Tensor([0]).to(torch.int64).to('cuda:0')
+        edgeNUM = mapping_ptr[-1]
+        all_node = torch.cat([cacheGraph[1],cacheGraph[0]])
+        unique = torch.zeros(mapping_ptr[-1]*2,dtype=torch.int32).to('cuda:0')
+        signn.torch_graph_mapping(all_node,cacheGraph[0],cacheGraph[1],cacheGraph[0],cacheGraph[1],unique,edgeNUM,uniqueNUM)
+        unique = unique[:uniqueNUM.item()]
+        logger.info("mapping Time {:.5f}s".format(time.time()-mappingTime))
+
+        transTime = time.time()
+        
+        if self.framework == "dgl":
+            layer = len(mapping_ptr) - 1
+            blocks = []
+            save_num = 0
+            for index in range(1,layer+1):
+                src = cacheGraph[0][:mapping_ptr[-index]]
+                dst = cacheGraph[1][:mapping_ptr[-index]]
+                data = (src,dst)               
+                g = dgl.graph(data)
+                block = dgl.to_block(g)
+                blocks.append(block)
         elif self.framework == "pyg":
             src = cacheGraph[0][:mapping_ptr[-1]].to(torch.int64)
             dst = cacheGraph[1][:mapping_ptr[-1]].to(torch.int64)
@@ -494,7 +544,7 @@ class CustomDataset(Dataset):
         ##
         sampleTime = time.time()
         # logger.debug("sampleIDs shape:{}".format(len(sampleIDs)))
-        blocks,uniqueList = self.sampleNeigGPU_bear(sampleIDs,cacheGraph,batchlen)
+        blocks,uniqueList = self.sampleNeigGPU_NC(sampleIDs,cacheGraph,batchlen)
         # logger.debug("cacheGraph shape:{}, first graph shape:{}".format(len(cacheGraph),len(cacheGraph[0][0])))
         logger.info("sample subG all cost {:.5f}s".format(time.time()-sampleTime))
         ##

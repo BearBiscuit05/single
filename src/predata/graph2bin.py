@@ -168,11 +168,18 @@ def gen_feat_file(data,rank,savePath):
 
 
 if __name__ == '__main__':
+    if len(sys.argv) != 3:
+        print("Usage: python script_name.py <start_rank> <end_rank>")
+        sys.exit(1)
+
+    start_rank = int(sys.argv[1])
+    end_rank = int(sys.argv[2])
+
     dataPath = "./../../data/raw_papers100M_64"
     dataName = "ogb-paper100M"
     savePath = "./../../data/papers100M_64"
     index = 64
-    for rank in range(38, index):
+    for rank in range(start_rank, end_rank):
         try:
             subg, node_feat, node_type = readGraph(rank, dataPath, dataName)
             data = (subg, node_feat, node_type)

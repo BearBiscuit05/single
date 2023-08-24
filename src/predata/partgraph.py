@@ -67,9 +67,9 @@ if __name__ == '__main__':
     argparser = argparse.ArgumentParser("Partition builtin graphs")
     argparser.add_argument('--dataset', type=str, default='ogb-paper100M',
                            help='datasets: reddit, ogb-product, ogb-paper100M')
-    argparser.add_argument('--num_parts', type=int, default=64,
+    argparser.add_argument('--num_parts', type=int, default=32,
                            help='number of partitions')
-    argparser.add_argument('--part_method', type=str, default='random',
+    argparser.add_argument('--part_method', type=str, default='metis',
                            help='the partition method')
     argparser.add_argument('--balance_train', action='store_true',
                            help='balance the training size in each partition.')
@@ -107,9 +107,10 @@ if __name__ == '__main__':
         for key in g.ndata:
             sym_g.ndata[key] = g.ndata[key]
         g = sym_g
-
+    startTime = time.time()
     dgl.distributed.partition_graph(g, args.dataset, args.num_parts, args.output,
                                     part_method=args.part_method,
                                     balance_ntypes=balance_ntypes,
                                     balance_edges=args.balance_edges,
                                     num_trainers_per_machine=args.num_trainers_per_machine)
+    print("all time :",time.time()-startTime)

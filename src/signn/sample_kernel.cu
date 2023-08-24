@@ -179,36 +179,7 @@ __global__ void graph_halo_merge_kernel(
     }
 }
 
-
-// template <int BLOCK_SIZE, int TILE_SIZE>
-// __global__ void graph_mapping_kernel(
-//     int* nodeList,int* mappingTable,int nodeNUM,int mappingNUM
-//     ) {
-//     const size_t block_start = TILE_SIZE * blockIdx.x;
-//     const size_t block_end = TILE_SIZE * (blockIdx.x + 1);
-//     for (size_t index = threadIdx.x + block_start; index < block_end;
-//        index += BLOCK_SIZE) {
-//         if (index < nodeNUM) {
-//             int raw_node_id = nodeList[index];
-//             int low = 0;
-//             int high = mappingNUM-1;
-//             while(low <= high){
-//                 int middle = (low+high)/2;
-//                 if(raw_node_id == mappingTable[middle]){    //while(rand > degreedis[j])
-//                     nodeList[index] = middle;
-//                     break;
-//                 } else{
-//                     if(raw_node_id > mappingTable[middle])
-//                         low = middle+1;
-//                     else
-//                         high = middle-1;
-//                 }
-//             } 
-//         }
-//     }
-
-//     // random_states[idx] = local_state;
-// }  
+ 
 
 inline int RoundUpDiv(int target, int unit) {
   return (target + unit - 1) / unit;

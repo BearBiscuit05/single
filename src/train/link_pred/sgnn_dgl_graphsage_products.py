@@ -1,6 +1,5 @@
 import argparse
-from dgl.dataloading import DataLoader, NeighborSampler, MultiLayerFullNeighborSampler
-from ogb.nodeproppred import DglNodePropPredDataset
+
 import dgl
 import dgl.nn as dglnn
 import torch
@@ -14,8 +13,10 @@ from dgl.dataloading import (
     negative_sampler,
     NeighborSampler,
 )
-from ogb.linkproppred import DglLinkPropPredDataset, Evaluator
-
+from ogb.linkproppred import DglLinkPropPredDataset
+from dgl.data import AsNodePredDataset
+from ogb.nodeproppred import DglNodePropPredDataset
+from self_evaluate import Evaluator
 
 def to_bidirected_with_reverse_mapping(g):
     """Makes a graph bidirectional, and returns a mapping array ``mapping`` where ``mapping[i]``
@@ -44,7 +45,7 @@ def to_bidirected_with_reverse_mapping(g):
     return g_simple, reverse_mapping
 
 
-class SAGE(nn.Module):
+class SAGE_LP(nn.Module):
     def __init__(self, in_size, hid_size):
         super().__init__()
         self.layers = nn.ModuleList()
@@ -156,8 +157,8 @@ def train(args, device, g, reverse_eids, seed_edges, model):
     sampler = NeighborSampler([15, 10, 5], prefetch_node_feats=["feat"])
     sampler = as_edge_prediction_sampler(
         sampler,
-        exclude="reverse_id",
-        reverse_eids=reverse_eids,
+        # exclude="reverse_id",
+        # reverse_eids=reverse_eids,
         negative_sampler=negative_sampler.Uniform(1),
     )
     use_uva = args.mode == "mixed"
@@ -208,23 +209,23 @@ if __name__ == "__main__":
 
     # load and preprocess dataset
     print("Loading data")
-    dataset = DglLinkPropPredDataset("ogbl-citation2")
+    dataset = AsNodePredDataset(DglNodePropPredDataset('ogbn-products'))
     g = dataset[0]
     g = g.to("cuda" if args.mode == "puregpu" else "cpu")
     device = torch.device("cpu" if args.mode == "cpu" else "cuda")
+    print(g)
 
-    g, reverse_eids = to_bidirected_with_reverse_mapping(g)
-    reverse_eids = reverse_eids.to(device)
+    #g, reverse_eids = to_bidirected_with_reverse_mapping(g)
+    print(g)
+    #reverse_eids = reverse_eids.to(device)
+    reverse_eids = None
     seed_edges = torch.arange(g.num_edges()).to(device)
-    edge_split = dataset.get_edge_split()
-    # print(edge_split)
-    # create GraphSAGE model
     in_size = g.ndata["feat"].shape[1]
-    model = SAGE(in_size, 256).to(device)
+    model = SAGE_LP(in_size, 256).to(device)
 
     # model training
     print("Training...")
-    # train(args, device, g, reverse_eids, seed_edges, model)
+    #train(args, device, g, reverse_eids, seed_edges, model)
 
     # validate/test the model
     print("Validation/Testing...")
