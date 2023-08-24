@@ -3,7 +3,6 @@ import scipy
 import dgl
 from dgl.data import RedditDataset, YelpDataset
 from dgl.distributed import partition_graph
-from ogb.nodeproppred import DglNodePropPredDataset
 import json
 import numpy as np
 import csv
@@ -84,10 +83,15 @@ def readGraph(rank,dataPath,datasetName):
 def gen_graph_file(data,rank,Wsize,dataPath,datasetName,savePath):
     Wsize = 64
     subg, node_feat, node_type = data
-    src = subg.edges()[0].tolist()
-    dst = subg.edges()[1].tolist()
-    inner = subg.ndata['inner_node'].tolist()
+    src = subg.edges()[0]
+    srcList = subg.edges()[0].tolist()
+    dst = subg.edges()[1]
+    dstList = subg.edges()[1]
+    inner = subg.ndata['inner_node']
     innernode = subg.ndata['inner_node'].sum()
+    print(innernode)
+    print(len(src))
+    exit()
     nodeDict = {}
     partdict = []
     for i in range(Wsize):
@@ -101,15 +105,28 @@ def gen_graph_file(data,rank,Wsize,dataPath,datasetName,savePath):
     basiclen = SUBGconf['node_map']['_N'][rank][1] - SUBGconf['node_map']['_N'][rank][0]
     incount = 0
     outcount = [0 for i in range(Wsize)]
+    
+    inner_src = inner[src]
+    inner_dst = inner[dst]
+    print("create mapping success...")
+    count = 0
     for index in range(len(src)):
-        srcid,dstid = src[index],dst[index] # 
-        if inner[srcid] == 1 and inner[dstid] == 1:
+        if count == src // 10 :
+            count = 0
+            print("process 10%...")
+        else:
+            count += 1
+        if inner_src[index] == 1 and inner_dst[index] == 1:
+            dstid = dstList[index]
+            srcid = srcList[index]
             if dstid not in nodeDict:
                 nodeDict[dstid] = [dstid]
             nodeDict[dstid].append(srcid)
             incount += 1
-        elif inner[srcid] != 1 and inner[dstid] == 1:     # 只需要dst在子图内部即可
-            srcid = subg.ndata[dgl.NID][srcid] # srcid ：local 查询全局ID 
+        elif inner_src[index] != 1 and inner_dst[index] == 1:     
+            dstid = dstList[index]
+            srcid = srcList[index]
+            srcid = subg.ndata[dgl.NID][srcid]
             partid = -1
             for pid,(left,right) in enumerate(boundRange):
                 if left <= srcid and srcid < right:
@@ -172,7 +189,16 @@ if __name__ == '__main__':
     dataName = "ogb-paper100M"
     savePath = "./../../data/papers100M_64"
     index = 64
-    for rank in range(38, index):
+
+    
+    if len(sys.argv) != 3:
+        print("Usage: python script_name.py <start_rank> <end_rank>")
+        sys.exit(1)
+
+    start_rank = int(sys.argv[1])
+    end_rank = int(sys.argv[2])
+    
+    for rank in range(start_rank, end_rank):
         try:
             subg, node_feat, node_type = readGraph(rank, dataPath, dataName)
             data = (subg, node_feat, node_type)
