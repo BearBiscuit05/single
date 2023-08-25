@@ -265,6 +265,8 @@ class CustomDataset(Dataset):
     def loadingGraph(self,merge=True):
         # 加载下一个等待训练的图
         self.subGptr += 1
+        # print("self.subGptr:",self.subGptr)
+        # print(self.subGptr//self.partNUM,"  -  ",self.subGptr%self.partNUM)
         subGID = self.trainSubGTrack[self.subGptr//self.partNUM][self.subGptr%self.partNUM]
         filePath = self.dataPath + "/part" + str(subGID)
         srcdata = np.fromfile(filePath+"/srcList.bin", dtype=np.int32)
@@ -304,13 +306,17 @@ class CustomDataset(Dataset):
         # 要先加载下一个子图，然后再加载halo( 当前<->下一个 )
         filePath = self.dataPath + "/part" + str(self.trainingGID)
         deviceName = 'cuda:%d'%self.cudaDevice
-        edges = np.fromfile(filePath+"/halo"+str(self.nextGID)+".bin", dtype=np.int32)
-        edges = torch.tensor(edges,device=deviceName,dtype=torch.int32).contiguous()
-        bound = np.fromfile(filePath+"/halo"+str(self.nextGID)+"_bound.bin", dtype=np.int32)
-        bound = torch.tensor(bound,device=deviceName,dtype=torch.int32).contiguous()
-        self.cacheData[0] = self.cacheData[0].contiguous()
-        self.cacheData[1] = self.cacheData[1].contiguous()
-        signn.torch_graph_halo_merge(self.cacheData[0],self.cacheData[1],edges,bound,self.graphNodeNUM)
+        try:
+            edges = np.fromfile(filePath+"/halo"+str(self.nextGID)+".bin", dtype=np.int32)
+            edges = torch.tensor(edges,device=deviceName,dtype=torch.int32).contiguous()
+            bound = np.fromfile(filePath+"/halo"+str(self.nextGID)+"_bound.bin", dtype=np.int32)
+            bound = torch.tensor(bound,device=deviceName,dtype=torch.int32).contiguous()
+            self.cacheData[0] = self.cacheData[0].contiguous()
+            self.cacheData[1] = self.cacheData[1].contiguous()
+            signn.torch_graph_halo_merge(self.cacheData[0],self.cacheData[1],edges,bound,self.graphNodeNUM)
+        except:
+            logger.info("graph {} has no halo file with {}...".format(self.trainingGID,self.nextGID))
+            print("graph {} has no halo file with {}...".format(self.trainingGID,self.nextGID))
 
 ########################## 采样图结构 ##########################
     def sampleNeig(self,sampleIDs,cacheGraph): 
@@ -730,8 +736,8 @@ def collate_fn(data):
 
 
 if __name__ == "__main__":
-    dataset = CustomDataset("../../config/dgl_reddit_8.json")
-    with open("../../config/dgl_reddit_8.json", 'r') as f:
+    dataset = CustomDataset("../../config/dgl_papers_graphsage.json")
+    with open("../../config/dgl_papers_graphsage.json", 'r') as f:
         config = json.load(f)
         batchsize = config['batchsize']
         epoch = config['epoch']
