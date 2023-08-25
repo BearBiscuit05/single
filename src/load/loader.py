@@ -474,9 +474,9 @@ class CustomDataset(Dataset):
         sampleIDs = sampleIDs.to(torch.int32).to('cuda:0')
         ptr = 0
         mapping_ptr = [ptr]
-        padding_elements = 1024 - (batchlen % 1024)
-        padding_tensor = torch.zeros(padding_elements).to(torch.int32).to('cuda:0')
-        sampleIDs = torch.cat([sampleIDs, padding_tensor], dim=0)
+        # padding_elements = 1024 - (batchlen % 1024)
+        # padding_tensor = torch.zeros(padding_elements).to(torch.int32).to('cuda:0')
+        # sampleIDs = torch.cat([sampleIDs, padding_tensor], dim=0)
 
         
         # print("batch :",batchlen)
@@ -873,7 +873,7 @@ if __name__ == "__main__":
         epoch = config['epoch']
     train_loader = DataLoader(dataset=dataset, batch_size=batchsize,collate_fn=collate_fn)#pin_memory=True)
     count = 0
-    for index in range(1):
+    for index in range(epoch):
         start = time.time()
         loopTime = time.time()
         for graph,feat,label,src_cat,dst_cat,number in train_loader:
