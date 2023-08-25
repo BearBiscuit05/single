@@ -175,22 +175,22 @@ if __name__ == '__main__':
     start_rank = int(sys.argv[1])
     end_rank = int(sys.argv[2])
 
-    dataPath = "./../../data/raw_papers100M_64"
+    dataPath = "/root/data/gnnlab/data"
     dataName = "ogb-paper100M"
-    savePath = "./../../data/papers100M_64"
-    index = 64
-    for rank in range(start_rank, end_rank):
-        try:
-            subg, node_feat, node_type = readGraph(rank, dataPath, dataName)
-            data = (subg, node_feat, node_type)
-            
-            gen_graph_file(data, rank, index, dataPath, dataName, savePath)
-            gen_labels_file(data, rank, savePath)
-            gen_feat_file(data, rank, savePath)
-            gen_ids_file(data, rank, savePath)
-            
-            print("-" * 25)
-        except Exception as e:
-            print(f"An error occurred for rank {rank}: {e}")
+    savePath = "/root/data/gnnlab/processed"
+    index = 32
+    for rank in range(4, 32):
+        # try:
+        subg, node_feat, node_type = readGraph(rank, dataPath, dataName)
+        data = (subg, node_feat, node_type)
+        
+        gen_graph_file(data, rank, index, dataPath, dataName, savePath)
+        gen_labels_file(data, rank, savePath)
+        gen_feat_file(data, rank, savePath)
+        gen_ids_file(data, rank, savePath)
+        
+        print("-" * 25)
+        # except Exception as e:
+        #     print(f"An error occurred for rank {rank}: {e}")
 
         

@@ -96,7 +96,6 @@ class CustomDataset(Dataset):
 
         #### 数据预取 ####
         self.template_cache_graph,self.template_cache_label = self.initCacheData()
-
         self.loadingGraph(merge=False)
         self.loadingMemFeat(self.trainSubGTrack[self.subGptr//self.partNUM][self.subGptr%self.partNUM])
         self.initNextGraphData()
@@ -117,12 +116,19 @@ class CustomDataset(Dataset):
             if self.graphPipe.qsize() > 0:
                 self.sampleFlagQueue.get()
                 cacheData = self.graphPipe.get()
-                return cacheData[0],cacheData[1],cacheData[2],cacheData[3]
+                if self.train_name == "LP":
+                    return cacheData[0],cacheData[1],cacheData[2],cacheData[3],cacheData[4],cacheData[5]
+                else:
+                    return cacheData[0],cacheData[1],cacheData[2],cacheData[3]
+                
             else: #需要等待
                 flag = self.sampleFlagQueue.get()
                 data = flag.result()
                 cacheData = self.graphPipe.get()
-                return cacheData[0],cacheData[1],cacheData[2],cacheData[3]
+                if self.train_name == "LP":
+                    return cacheData[0],cacheData[1],cacheData[2],cacheData[3],cacheData[4],cacheData[5]
+                else:
+                    return cacheData[0],cacheData[1],cacheData[2],cacheData[3]
         return 0,0
 
 ########################## 初始化训练数据 ##########################
@@ -420,39 +426,62 @@ class CustomDataset(Dataset):
         return blocks,unique
 
     def getNegNode(self,sampleIDs,batchlen,negNUM=1):
+        sampleIDs = sampleIDs.to(torch.int32).to('cuda:0')
         out_src = torch.zeros(batchlen).to(torch.int32).to('cuda:0')
         out_dst = torch.zeros(batchlen).to(torch.int32).to('cuda:0')
         seed_num = batchlen
         fan_num = 1
         out_num = torch.Tensor([0]).to(torch.int64).to('cuda:0')
+        # print("sample 1111")
+        # print(sampleIDs)
         signn.torch_sample_hop(
                 self.cacheData[0][:self.graphEdgeNUM],self.cacheData[1][:self.graphNodeNUM*2],
                 sampleIDs,seed_num,fan_num,
                 out_src,out_dst,out_num)
+        # print("sample 1122")
+        out_src = out_src[:out_num.item()]
+        out_dst = out_dst[:out_num.item()]
         raw_src = copy.deepcopy(out_src)
         raw_dst = copy.deepcopy(out_dst)
-        neg_dst = torch.randint(low=0, high=len(self.graphNodeNUM)//2, size=raw_src.shape*4).to(torch.int32).to("cuda:0")
+        # print(raw_src.shape + raw_src.shape)
+
+        # print()
+        # exit()
+        neg_dst = torch.randint(low=0, high=self.graphNodeNUM, size=raw_src.shape).to(torch.int32).to("cuda:0")
         
-        all_tensor = torch.cat([raw_src,raw_dst,neg_dst])
+        all_tensor = torch.cat([raw_src,raw_dst,raw_src,neg_dst])
         raw_edges = torch.cat([raw_src,raw_dst])
         src_cat = torch.cat([raw_src,raw_src])
         dst_cat = torch.cat([raw_dst,neg_dst])
         raw_src = copy.deepcopy(out_src)
         raw_dst = copy.deepcopy(out_dst)
-        edgeNUM = len(src_cat)      
+        edgeNUM = len(src_cat)     
         uniqueNUM = torch.Tensor([0]).to(torch.int64).to('cuda:0')
         unique = torch.zeros(len(all_tensor),dtype=torch.int32).to('cuda:0')
 
+        # t_min,_ = torch.max(raw_src,dim=0)
+        # t1_max,_ = torch.max(raw_dst,dim=0)
+        # t2_max,_ = torch.max(neg_dst,dim=0)
+        # print("raw_src max :",t_min,"  raw_dst max :",t1_max,"  neg_dst max :",t2_max)
+        # print("all_tensor:",all_tensor," shape :",all_tensor.shape)
         signn.torch_graph_mapping(all_tensor,src_cat,dst_cat,src_cat,dst_cat,unique,edgeNUM,uniqueNUM)
-
+        # if uniqueNUM.item() > 
+        # print("uniqueNUM.item():",uniqueNUM.item())
+        # print("unique: ",unique[:uniqueNUM.item()])
         return unique[:uniqueNUM.item()],raw_edges,src_cat,dst_cat
 
     def sampleNeigGPU_LP(self,sampleIDs,raw_edges,cacheGraph,batchlen):     
         sampleIDs = sampleIDs.to(torch.int32).to('cuda:0')
         ptr = 0
         mapping_ptr = [ptr]
-        batch = len(sampleIDs)
+        padding_elements = 1024 - (batchlen % 1024)
+        padding_tensor = torch.zeros(padding_elements).to(torch.int32).to('cuda:0')
+        sampleIDs = torch.cat([sampleIDs, padding_tensor], dim=0)
+
+        
+        # print("batch :",batchlen)
         sampleStart = time.time()
+        #exit()
         for l, fan_num in enumerate(self.fanout):
             if l == 0:
                 seed_num = batchlen
@@ -461,7 +490,11 @@ class CustomDataset(Dataset):
             out_src = cacheGraph[0][ptr:ptr+seed_num*fan_num]
             out_dst = cacheGraph[1][ptr:ptr+seed_num*fan_num]
             out_num = torch.Tensor([0]).to(torch.int64).to('cuda:0')
-            
+            # if l == 0:
+            #     print("sample 2222")
+            # print("sampleIDs :",sampleIDs.shape,"|||",seed_num)
+            # i_max,_ = torch.max(sampleIDs,dim=0) 
+            # print(i_max)
             signn.torch_sample_hop(
                 self.cacheData[0],self.cacheData[1],
                 sampleIDs,seed_num,fan_num,
@@ -483,6 +516,20 @@ class CustomDataset(Dataset):
         edgeNUM = mapping_ptr[-1]
         all_node = torch.cat([cacheGraph[1],cacheGraph[0]])
         unique = torch.zeros(mapping_ptr[-1]*2,dtype=torch.int32).to('cuda:0')
+        
+        # print("all_node :",all_node)
+        # t_max,_ = torch.max(all_node,dim=0)
+        # print("all node max id :",t_max)
+        # print("cacheGraph[0] :",cacheGraph[0])
+        # print("cacheGraph[0].shape :",cacheGraph[0].shape)
+        # print("edgeNUM :",edgeNUM)
+        # t_min,_ = torch.min(cacheGraph[0],dim=0)
+        # print(t_min)
+        # print(cacheGraph[1])
+        # t_min,_ = torch.min(cacheGraph[1],dim=0)
+        # print(t_min)
+        # print(mapping_ptr)
+        
         signn.torch_graph_mapping(all_node,cacheGraph[0],cacheGraph[1],cacheGraph[0],cacheGraph[1],unique,edgeNUM,uniqueNUM)
         unique = unique[:uniqueNUM.item()]
         logger.info("mapping Time {:.5f}s".format(time.time()-mappingTime))
@@ -508,8 +555,11 @@ class CustomDataset(Dataset):
         return blocks,unique
 
     def initCacheData(self):
-        number = self.batchsize
-        tmp = self.batchsize
+        if self.train_name == "NC":
+            number = self.batchsize
+        else:
+            number = self.batchsize * 3
+        tmp = number
         cacheGraph = [[],[]]
         for layer, fan in enumerate(self.fanout):
             dst = torch.full((tmp * fan,), -1, dtype=torch.int32).to("cuda:0")  # 使用PyTorch张量，指定dtype
@@ -571,10 +621,11 @@ class CustomDataset(Dataset):
         ##
         sampleTime = time.time()
         # logger.debug("sampleIDs shape:{}".format(len(sampleIDs)))
-        if self. == "LP":
-            uniqueSeed,raw_edges,src_cat,dst_cat = self.getNegNode(self,sampleIDs,batchlen,negNUM)
+        if self.train_name == "LP":
+            negNUM = 1
+            uniqueSeed,raw_edges,src_cat,dst_cat = self.getNegNode(sampleIDs,batchlen,negNUM=negNUM)
             batchlen = len(uniqueSeed)
-            blocks,uniqueList = self.sampleNeigGPU_LP(self,uniqueSeed,raw_edges,cacheGraph,batchlen)
+            blocks,uniqueList = self.sampleNeigGPU_LP(uniqueSeed,raw_edges,cacheGraph,batchlen)
         else:
             blocks,uniqueList = self.sampleNeigGPU_NC(sampleIDs,cacheGraph,batchlen)
         # logger.debug("cacheGraph shape:{}, first graph shape:{}".format(len(cacheGraph),len(cacheGraph[0][0])))
@@ -590,7 +641,10 @@ class CustomDataset(Dataset):
         
         ##
         putinTime = time.time()
-        cacheData = [blocks,cacheFeat,cacheLabel,batchlen]
+        if self.train_name == "LP":
+            cacheData = [blocks,cacheFeat,cacheLabel,src_cat,dst_cat,batchlen]
+        else:
+            cacheData = [blocks,cacheFeat,cacheLabel,batchlen]
         self.graphPipe.put(cacheData)
         logger.info("putin pipe time {:.5f}s".format(time.time()-putinTime))
         ##
@@ -812,17 +866,21 @@ def collate_fn(data):
 
 
 if __name__ == "__main__":
-    dataset = CustomDataset("../../config/dgl_reddit_8.json")
-    with open("../../config/dgl_reddit_8.json", 'r') as f:
+    dataset = CustomDataset("../../config/dgl_products_graphsage.json")
+    with open("../../config/dgl_products_graphsage.json", 'r') as f:
         config = json.load(f)
         batchsize = config['batchsize']
         epoch = config['epoch']
     train_loader = DataLoader(dataset=dataset, batch_size=batchsize,collate_fn=collate_fn)#pin_memory=True)
     count = 0
-    for index in range(epoch):
+    for index in range(1):
         start = time.time()
         loopTime = time.time()
-        for graph,feat,label,number in train_loader:
+        for graph,feat,label,src_cat,dst_cat,number in train_loader:
+            # print(graph)
+            # print(src_cat)
+            # print(dst_cat)
+            # exit()
             count = count + 1
             if count % 20 == 0:
                 print("loop time:{:.5f}".format(time.time()-loopTime))
