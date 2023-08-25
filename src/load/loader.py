@@ -53,6 +53,7 @@ class CustomDataset(Dataset):
         self.featlen = 0
         self.idbound = []
         self.fanout = []
+        self.train_name = ""
         self.framework = ""
         self.mode = ""
         self.classes = 0
@@ -128,6 +129,7 @@ class CustomDataset(Dataset):
     def readConfig(self,confPath):
         with open(confPath, 'r') as f:
             config = json.load(f)
+        self.train_name = config['train_name']
         self.dataPath = config['datasetpath']+"/"+config['dataset']
         self.batchsize = config['batchsize']
         self.cacheNUM = config['cacheNUM']
@@ -417,8 +419,33 @@ class CustomDataset(Dataset):
         logger.info("trans Time {:.5f}s".format(time.time()-transTime))
         return blocks,unique
 
-    def eids2nids():
-        pass
+    def getNegNode(self,sampleIDs,batchlen,negNUM=1):
+        out_src = torch.zeros(batchlen).to(torch.int32).to('cuda:0')
+        out_dst = torch.zeros(batchlen).to(torch.int32).to('cuda:0')
+        seed_num = batchlen
+        fan_num = 1
+        out_num = torch.Tensor([0]).to(torch.int64).to('cuda:0')
+        signn.torch_sample_hop(
+                self.cacheData[0][:self.graphEdgeNUM],self.cacheData[1][:self.graphNodeNUM*2],
+                sampleIDs,seed_num,fan_num,
+                out_src,out_dst,out_num)
+        raw_src = copy.deepcopy(out_src)
+        raw_dst = copy.deepcopy(out_dst)
+        neg_dst = torch.randint(low=0, high=len(self.graphNodeNUM)//2, size=raw_src.shape*4).to(torch.int32).to("cuda:0")
+        
+        all_tensor = torch.cat([raw_src,raw_dst,neg_dst])
+        raw_edges = torch.cat([raw_src,raw_dst])
+        src_cat = torch.cat([raw_src,raw_src])
+        dst_cat = torch.cat([raw_dst,neg_dst])
+        raw_src = copy.deepcopy(out_src)
+        raw_dst = copy.deepcopy(out_dst)
+        edgeNUM = len(src_cat)      
+        uniqueNUM = torch.Tensor([0]).to(torch.int64).to('cuda:0')
+        unique = torch.zeros(len(all_tensor),dtype=torch.int32).to('cuda:0')
+
+        signn.torch_graph_mapping(all_tensor,src_cat,dst_cat,src_cat,dst_cat,unique,edgeNUM,uniqueNUM)
+
+        return unique[:uniqueNUM.item()],raw_edges,src_cat,dst_cat
 
     def sampleNeigGPU_LP(self,sampleIDs,raw_edges,cacheGraph,batchlen):     
         sampleIDs = sampleIDs.to(torch.int32).to('cuda:0')
@@ -439,10 +466,10 @@ class CustomDataset(Dataset):
                 self.cacheData[0],self.cacheData[1],
                 sampleIDs,seed_num,fan_num,
                 out_src,out_dst,out_num)
-            # 更改存在边
-
-            indices = torch.where((out_src.unsqueeze(1) == raw_edges[0]) & (out_dst.unsqueeze(1) == raw_edges[1]))
-            edge_indices = indices[1]
+            
+            # 暂时先不做:更改存在边
+            # indices = torch.where((out_src.unsqueeze(1) == raw_edges[0]) & (out_dst.unsqueeze(1) == raw_edges[1]))
+            # edge_indices = indices[1]
 
             sampleIDs = cacheGraph[0][ptr:ptr+out_num.item()]
             ptr=ptr+out_num.item()
@@ -544,7 +571,12 @@ class CustomDataset(Dataset):
         ##
         sampleTime = time.time()
         # logger.debug("sampleIDs shape:{}".format(len(sampleIDs)))
-        blocks,uniqueList = self.sampleNeigGPU_NC(sampleIDs,cacheGraph,batchlen)
+        if self. == "LP":
+            uniqueSeed,raw_edges,src_cat,dst_cat = self.getNegNode(self,sampleIDs,batchlen,negNUM)
+            batchlen = len(uniqueSeed)
+            blocks,uniqueList = self.sampleNeigGPU_LP(self,uniqueSeed,raw_edges,cacheGraph,batchlen)
+        else:
+            blocks,uniqueList = self.sampleNeigGPU_NC(sampleIDs,cacheGraph,batchlen)
         # logger.debug("cacheGraph shape:{}, first graph shape:{}".format(len(cacheGraph),len(cacheGraph[0][0])))
         logger.info("sample subG all cost {:.5f}s".format(time.time()-sampleTime))
         ##
