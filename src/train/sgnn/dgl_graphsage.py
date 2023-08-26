@@ -133,7 +133,7 @@ def train(device, dataset, model):
 
 def load_reddit(self_loop=True):
     from dgl.data import RedditDataset
-    data = RedditDataset(self_loop=self_loop)
+    data = RedditDataset(self_loop=self_loop,raw_dir='../../../data/dataset/')
     g = data[0]
     g.ndata['feat'] = g.ndata.pop('feat')
     g.ndata['label'] = g.ndata.pop('label')
