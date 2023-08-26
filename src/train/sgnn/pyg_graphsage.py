@@ -92,7 +92,7 @@ def test(model,evaluator,data,subgraph_loader,split_idx):
 
     return train_acc, val_acc, test_acc
 
-def run(args, rank, model, world_size, dataset):
+def run(rank, model, world_size, dataset):
     train_loader = DataLoader(dataset=dataset, batch_size=dataset.batchsize, collate_fn=collate_fn)#,pin_memory=True)
     torch.manual_seed(12345)
 
@@ -123,9 +123,9 @@ if __name__ == '__main__':
     parser.add_argument("--mode", default='mixed', choices=['cpu', 'mixed', 'puregpu'],
                         help="Training mode. 'cpu' for CPU training, 'mixed' for CPU-GPU mixed training, "
                              "'puregpu' for pure-GPU training.")
-    parser.add_argument('--fanout', type=ast.literal_eval, default=[25, 10], help='Fanout value')
-    parser.add_argument('--layers', type=int, default=2, help='Number of layers')
-    parser.add_argument('--dataset', type=str, default='Reddit', help='Dataset name')
+    #parser.add_argument('--fanout', type=ast.literal_eval, default=[25, 10], help='Fanout value')
+    #parser.add_argument('--layers', type=int, default=2, help='Number of layers')
+    #parser.add_argument('--dataset', type=str, default='Reddit', help='Dataset name')
     parser.add_argument('--json_path', type=str, default='.', help='Dataset name')
     args = parser.parse_args()
 
@@ -135,13 +135,20 @@ if __name__ == '__main__':
         data = json.load(json_file)
     
     print('Loading data')
-    model = SAGE(data['featlen'], 256, data['classes'],args.layers).to('cuda:0')
+    if data["dataset"] == "products_4":
+        arg_dataset = 'ogb-products'
+    elif data["dataset"] == "reddit_8":
+        arg_dataset = 'Reddit'
+    arg_fanout = data["fanout"]
+    arg_layers = len(arg_fanout)
+
+    model = SAGE(data['featlen'], 256, data['classes'],arg_layers).to('cuda:0')
     world_size = 1
     print('Let\'s use', world_size, 'GPUs!')
     dataset = CustomDataset(args.json_path)
-    run(args, 0, model ,world_size, dataset)
+    run(0, model ,world_size, dataset)
 
-    if args.dataset == 'ogb-products':
+    if arg_dataset == 'ogb-products':
         root = osp.join(osp.dirname(osp.realpath(__file__)), '.', 'dataset')
         dataset = PygNodePropPredDataset('ogbn-products', root)
         split_idx = dataset.get_idx_split()
@@ -158,7 +165,7 @@ if __name__ == '__main__':
         train_acc, val_acc, test_acc = test(model,evaluator,data,subgraph_loader,split_idx)
         print(f'Train: {train_acc:.4f}, Val: {val_acc:.4f}, '
                     f'Test: {test_acc:.4f}')
-    elif args.dataset == 'Reddit':
+    elif arg_dataset == 'Reddit':
         model.eval()
         dataset = Reddit('../../../data/pyg_reddit')
         data = dataset[0]
@@ -174,12 +181,7 @@ if __name__ == '__main__':
         with torch.no_grad():
             out = model.inference(data.x, subgraph_loader)
         res = out.argmax(dim=-1) == data.y.to(out.device)
-        if args.dataset == 'Reddit':
-            acc1 = int(res[data.train_mask].sum()) / int(data.train_mask.sum())
-            acc2 = int(res[data.val_mask].sum()) / int(data.val_mask.sum())
-            acc3 = int(res[data.test_mask].sum()) / int(data.test_mask.sum())
-        elif args.dataset == 'ogb-products':
-            acc1 = int(res[train_idx].sum()) / int(train_idx.sum())
-            acc2 = int(res[val_idx].sum()) / int(val_idx.sum())
-            acc3 = int(res[test_idx].sum()) / int(test_idx.sum())
+        acc1 = int(res[data.train_mask].sum()) / int(data.train_mask.sum())
+        acc2 = int(res[data.val_mask].sum()) / int(data.val_mask.sum())
+        acc3 = int(res[data.test_mask].sum()) / int(data.test_mask.sum())
         print(f'Train: {acc1:.4f}, Val: {acc2:.4f}, Test: {acc3:.4f}')

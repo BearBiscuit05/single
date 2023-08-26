@@ -13,6 +13,8 @@ import argparse
 import sklearn.metrics
 import numpy as np
 import time
+import ast
+
 class GCN(nn.Module):
     def __init__(self,
                  in_feats,
@@ -101,7 +103,7 @@ def train(args, device, g, dataset, model,data=None):
     sampler = NeighborSampler(args.fanout,  # fanout for [layer-0, layer-1, layer-2]
                             prefetch_node_feats=['feat'],
                             prefetch_labels=['label'])
-    use_uva = False
+    use_uva = True#mixed下用True，否则False
     train_dataloader = DataLoader(g, train_idx, sampler, device=device,
                                   batch_size=1024, shuffle=True,
                                   drop_last=False, num_workers=0,
@@ -145,7 +147,7 @@ def train(args, device, g, dataset, model,data=None):
 
 def load_reddit(self_loop=True):
     from dgl.data import RedditDataset
-    data = RedditDataset(self_loop=self_loop)
+    data = RedditDataset(self_loop=self_loop,raw_dir='../../../data/dataset/')
     g = data[0]
     g.ndata['feat'] = g.ndata.pop('feat')
     g.ndata['label'] = g.ndata.pop('label')

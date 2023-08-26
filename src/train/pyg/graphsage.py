@@ -166,12 +166,14 @@ if __name__ == '__main__':
     # world_size = torch.cuda.device_count()
     if args.dataset == 'Reddit':
         dataset = Reddit('../../../data/pyg_reddit')
+        run(args,0, world_size, dataset,split_idx=None)
     elif args.dataset == 'ogb-products':
         root = osp.join(osp.dirname(osp.realpath(__file__)), '.', 'dataset')
         dataset = PygNodePropPredDataset('ogbn-products', root)
         split_idx = dataset.get_idx_split()
         evaluator = Evaluator(name='ogbn-products')
+        run(args,0, world_size, dataset,split_idx)
     else:
         raise ValueError(f"Unsupported dataset: {args.dataset}")
-    run(args,0, world_size, dataset,split_idx)
+    
     #mp.spawn(run, args=(world_size, dataset), nprocs=world_size, join=True)

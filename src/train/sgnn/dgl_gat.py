@@ -92,7 +92,7 @@ def layerwise_infer(device, graph, nid, model, batch_size):
         label = graph.ndata['label'][nid].to(pred.device)
     return sklearn.metrics.accuracy_score(label.cpu().numpy(), pred.argmax(1).cpu().numpy())
 
-def train(args, device, dataset, model):
+def train(device, dataset, model):
     opt = torch.optim.Adam(model.parameters(), lr=1e-3, weight_decay=5e-4)
     train_loader = DataLoader(dataset=dataset, batch_size=1024, collate_fn=collate_fn)
     for epoch in range(dataset.epoch):
@@ -130,9 +130,9 @@ if __name__ == '__main__':
     parser.add_argument("--mode", default='mixed', choices=['cpu', 'mixed', 'puregpu'],
                         help="Training mode. 'cpu' for CPU training, 'mixed' for CPU-GPU mixed training, "
                              "'puregpu' for pure-GPU training.")
-    parser.add_argument('--fanout', type=ast.literal_eval, default=[25, 10], help='Fanout value')
-    parser.add_argument('--layers', type=int, default=2, help='Number of layers')
-    parser.add_argument('--dataset', type=str, default='Reddit', help='Dataset name')
+    #parser.add_argument('--fanout', type=ast.literal_eval, default=[25, 10], help='Fanout value')
+    #parser.add_argument('--layers', type=int, default=2, help='Number of layers')
+    #parser.add_argument('--dataset', type=str, default='Reddit', help='Dataset name')
     parser.add_argument('--json_path', type=str, default='.', help='Dataset name')
     args = parser.parse_args()
 
@@ -150,28 +150,34 @@ if __name__ == '__main__':
     # in_size = g.ndata['feat'].shape[1]
     # out_size = dataset.num_classes
     print('Loading data')
+    if data["dataset"] == "products_4":
+        arg_dataset = 'ogb-products'
+    elif data["dataset"] == "reddit_8":
+        arg_dataset = 'Reddit'
+    arg_fanout = data["fanout"]
+    arg_layers = len(arg_fanout)
 
     device = torch.device('cpu' if args.mode == 'cpu' else 'cuda')
-    model = GCN(data['featlen'], 256, data['classes'] ,args.layers,F.relu,0.5).to('cuda:0')
+    model = GCN(data['featlen'], 256, data['classes'] ,arg_layers,F.relu,0.5).to('cuda:0')
 
     model = GAT(data['featlen'], 256, data['classes'], heads=[8,1]).to('cuda:0')
 
     # model training
     print('Training...')
     dataset = CustomDataset(args.json_path)  # 使用 args.json_path 作为 JSON 文件路径
-    train(args, device, dataset, model)
+    train(device, dataset, model)
     # train(args, device, g, dataset, model,data=data)
 
-    if args.dataset == 'ogb-products':
+    if arg_dataset == 'ogb-products':
         dataset = AsNodePredDataset(DglNodePropPredDataset('ogbn-products'))
         g = dataset[0]
         data = None
-    elif args.dataset == 'Reddit':
+    elif arg_dataset == 'Reddit':
         g, dataset,train_idx,val_idx,test_idx= load_reddit()
         data = (train_idx,val_idx,test_idx)
 
-    if args.dataset == 'ogb-products':
+    if arg_dataset == 'ogb-products':
         acc = layerwise_infer(device, g, dataset.test_idx, model, batch_size=4096)
-    elif args.dataset == 'Reddit':
+    elif arg_dataset == 'Reddit':
         acc = layerwise_infer(device, g, test_idx, model, batch_size=4096) 
     print("Test Accuracy {:.4f}".format(acc.item()))

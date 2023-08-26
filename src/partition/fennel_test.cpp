@@ -17,6 +17,11 @@ const char* partitionFile = "/home/wsy/single-gnn/data/ogb-products/result";
 const char* allEdgesfile = "/home/wsy/single-gnn/data/ogb-products/edge.csv";
 /* 存放每一个node对应在哪一个分区 */
 char part[nodeNum];
+
+/* 0,1,2分别表示其他节点，1跳节点，2跳节点 */
+int bound[3] = {0,0,0};
+int cut[3] = {0,0,0};
+
 void readRes()
 {
 	ifstream fin;
@@ -26,19 +31,43 @@ void readRes()
 		cerr <<  "open error!" << endl;
 		exit(-1);
 	}
+	int partid = -1;
+	int size[4] = {0,0,0,0};
 	while(!fin.eof())
 	{
-		int partid,size,id;
-		fin >> partid >> size;
+		int t;
+		fin >> t;
 		if(!fin.good())
 			break;
-		cout << "part " << partid << " has " << size << " nodes" << endl;
-		for(int i = 0;i < size;i++)
+		if(t == -1)
 		{
-			fin >> id;
-			part[id] = '0' + partid;
+			partid++;
+		}
+		else
+		{
+			part[t] = '0' + partid;
+			size[partid]++;
 		}
 	}
+	cout << "part 1 size:" << size[0] << endl;
+	cout << "part 2 size:" << size[1] << endl;
+	cout << "part 3 size:" << size[2] << endl;
+	cout << "part 4 size:" << size[3] << endl;
+	int tot = size[0] + size[1] + size[2] + size[3];
+	cout << "total:" << tot << endl;
+	// {
+	// 	int partid,size,id;
+	// 	fin >> partid >> size;
+	// 	if(!fin.good())
+	// 		break;
+	// 	cout << "part " << partid << " has " << size << " nodes" << endl;
+	// 	for(int i = 0;i < size;i++)
+	// 	{
+	// 		fin >> id;
+	// 		part[id] = '0' + partid;
+	// 	}
+	// }
+	fin.close();
 }
 
 /* 读取有边权的重要边 */
@@ -53,8 +82,7 @@ void readImportantEdges()
 	}
 	int srcid,dstid,weight;
 	char ch1,ch2;
-	int bound[2] = {0,0};
-	int cut[2] = {0,0};
+	
 	while(!fin.eof())
 	{
 		fin >> srcid >> ch1 >> dstid >> ch2 >> weight;
@@ -62,9 +90,9 @@ void readImportantEdges()
 		{
 			int b = -1;
 			if(weight == 50)
-				b = 0;
-			else if(weight == 20)
 				b = 1;
+			else if(weight == 20)
+				b = 2;
 			bound[b]++;
 			if(part[srcid] != part[dstid])
 				cut[b]++;
@@ -76,14 +104,11 @@ void readImportantEdges()
 	}
 	fin.close();
 	double cuttingRate[2] = {
-		double(cut[0]) / double(bound[0]),
-		double(cut[1]) / double(bound[1]),
+		100.00 * double(cut[1]) / double(bound[1]),
+		100.00 * double(cut[2]) / double(bound[2]),
 	};
-	cout << "cutting rate of bound 1 and 2:" << endl;
-	cout << cuttingRate[0] << endl;
-	cout << cuttingRate[1] << endl;
-	cout << cut[0] << " " << cut[1] << endl;
-	cout << bound[0] << " " << bound[1] << endl;
+	cout << "cutting rate of bound 1 edges:" << cuttingRate[0] << "%" << endl;
+	cout << "cutting rate of bound 2 edges:" << cuttingRate[1] << "%" << endl;
 }
 
 /* 读取没有边权的原文件，先读重要边 */
@@ -98,16 +123,14 @@ void readCommonEdges()
 	}
 	int srcid,dstid;
 	char ch;
-	int cut = 0;
-	int all = 0;
 	while(!fin.eof())
 	{
 		fin >> srcid >> ch >> dstid;
 		if(fin.good())
 		{
 			if(part[srcid] != part[dstid])
-				cut++;
-			all++;
+				cut[0]++;
+			bound[0]++;
 		}
 		else{
 			fin.clear();
@@ -115,8 +138,10 @@ void readCommonEdges()
 		}
 	}
 	fin.close();
-	double cuttingRate = double(cut) / double(all);
-	cout << "average edges cutting rate:" << cuttingRate << endl;
+	cut[0] -= (cut[1]+cut[2]);
+	bound[0] -= (bound[1]+bound[2]);
+	double cuttingRate = 100.00 * double(cut[0]) / double(bound[0]);
+	cout << "cutting rate of other   edges:" << cuttingRate << "%" << endl;
 }
 
 int main()
