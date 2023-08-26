@@ -179,7 +179,7 @@ if __name__ == '__main__':
     dataName = "ogb-paper100M"
     savePath = "/root/data/gnnlab/processed"
     index = 32
-    for rank in range(4, 32):
+    for rank in range(start_rank, end_rank):
         # try:
         subg, node_feat, node_type = readGraph(rank, dataPath, dataName)
         data = (subg, node_feat, node_type)

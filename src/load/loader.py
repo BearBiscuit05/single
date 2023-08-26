@@ -15,7 +15,7 @@ import sys
 import logging
 import signn
 import os
-
+from memory_profiler import profile
 # logging.basicConfig(level=logging.INFO,filename='./log/loader.log',filemode='w',
 #                     format='%(asctime)s-%(levelname)s-%(message)s',datefmt='%H:%M:%S')
                     #format='%(message)s')
@@ -36,6 +36,7 @@ logger = logging.getLogger(__name__)
     4.当图采样完成后释放当前子图,加载下一个图
 """
 class CustomDataset(Dataset):
+    @profile(precision=4, stream=open('./__init__.log','w+'))
     def __init__(self,confPath):
         #### 采样资源 ####
         self.cacheData = []     # 子图存储部分
@@ -168,6 +169,7 @@ class CustomDataset(Dataset):
         return epochList
 
 ########################## 加载/释放 图结构数据 ##########################
+    @profile(precision=4, stream=open('./info.log','w+'))
     def initNextGraphData(self):
         start = time.time()
         # 查看是否需要释放
@@ -262,6 +264,7 @@ class CustomDataset(Dataset):
             self.testNUM += idDict[index].shape[0]
         return idDict,numberList
 
+    #@profile(precision=4, stream=open('./info.log','w+'))
     def loadingGraph(self,merge=True):
         # 加载下一个等待训练的图
         self.subGptr += 1
@@ -287,7 +290,8 @@ class CustomDataset(Dataset):
     def loadingLabels(self,rank):
         filePath = self.dataPath + "/part" + str(rank)
         return torch.from_numpy(np.fromfile(filePath+"/label.bin", dtype=np.int32)).to(torch.int64)
-
+    
+    #@profile(precision=4, stream=open('./info.log','w+'))
     def moveGraph(self):
         logger.debug("move last graph {},and now graph {}".format(self.trainingGID,self.nextGID))
         logger.debug("befor move srclist len:{}".format(len(self.cacheData[0])))
@@ -300,6 +304,7 @@ class CustomDataset(Dataset):
         logger.debug("after move srclist len:{}".format(len(self.cacheData[0])))
         logger.debug("after move range len:{}".format(len(self.cacheData[1])))     
 
+    #@profile(precision=4, stream=open('./loadingHalo.log','w+'))
     def loadingHalo(self):
         # 要先加载下一个子图，然后再加载halo( 当前<->下一个 )
         filePath = self.dataPath + "/part" + str(self.trainingGID)
@@ -348,6 +353,7 @@ class CustomDataset(Dataset):
             info[0] = torch.tensor(info[0])
             info[1] = torch.tensor(info[1])
 
+    #@profile(precision=4, stream=open('./sampleNeigGPU_NC.log','w+'))
     def sampleNeigGPU_NC(self,sampleIDs,cacheGraph,batchlen):     
         sampleIDs = sampleIDs.to(torch.int32).to('cuda:0')
         ptr = 0
@@ -469,7 +475,8 @@ class CustomDataset(Dataset):
         # print("uniqueNUM.item():",uniqueNUM.item())
         # print("unique: ",unique[:uniqueNUM.item()])
         return unique[:uniqueNUM.item()],raw_edges,src_cat,dst_cat
-
+    
+    #@profile(precision=4, stream=open('./sampleNeigGPU_LP.log','w+'))
     def sampleNeigGPU_LP(self,sampleIDs,raw_edges,cacheGraph,batchlen):     
         sampleIDs = sampleIDs.to(torch.int32).to('cuda:0')
         ptr = 0
@@ -554,6 +561,7 @@ class CustomDataset(Dataset):
         logger.info("trans Time {:.5f}s".format(time.time()-transTime))
         return blocks,unique
 
+    #@profile(precision=4, stream=open('./initCacheData.log','w+'))
     def initCacheData(self):
         if self.train_name == "NC":
             number = self.batchsize
@@ -572,6 +580,8 @@ class CustomDataset(Dataset):
         cacheGraph[1] = torch.cat(cacheGraph[1],dim=0)
         return cacheGraph, cacheLabel
 
+    #@profile(precision=4, stream=open('./info.log','w+'))
+    # 无影响
     def preGraphBatch(self):
         # 如果当前管道已经被充满，则不采样，该函数直接返回
         logger.info("===============================================")
@@ -670,6 +680,7 @@ class CustomDataset(Dataset):
         for file in self.readfile:
             file.close()
 
+    #@profile(precision=4, stream=open('./info.log','w+'))
     def loadingMemFeat(self,rank):
         filePath = self.dataPath + "/part" + str(rank)
         tmp_feat = np.fromfile(filePath+"/feat.bin", dtype=np.float32)
@@ -679,6 +690,8 @@ class CustomDataset(Dataset):
             tmp_feat = torch.from_numpy(tmp_feat).reshape(-1,self.featlen)
             self.feats = torch.cat([self.feats,tmp_feat])
     
+    #@profile(precision=4, stream=open('./info.log','w+'))
+    # 已经测试，无影响
     def featMerge(self,uniqueList):    
         # logger.info("-------------------------------------------------")
         # toCPUTime = time.time()
@@ -864,27 +877,53 @@ def collate_fn(data):
     """
     return data[0]
 
-
-if __name__ == "__main__":
-    dataset = CustomDataset("../../config/dgl_products_graphsage.json")
-    with open("../../config/dgl_products_graphsage.json", 'r') as f:
+@profile(precision=4, stream=open('./run.log','w+'))
+def run():
+    dataset = CustomDataset("../../config/dgl_papers_graphsage.json")
+    with open("../../config/dgl_papers_graphsage.json", 'r') as f:
         config = json.load(f)
         batchsize = config['batchsize']
         epoch = config['epoch']
     train_loader = DataLoader(dataset=dataset, batch_size=batchsize,collate_fn=collate_fn)#pin_memory=True)
     count = 0
-    for index in range(epoch):
+    for index in range(2):
         start = time.time()
         loopTime = time.time()
-        for graph,feat,label,src_cat,dst_cat,number in train_loader:
+        for graph,feat,label,number in train_loader:
+            # src_cat,dst_cat,
             # print(graph)
             # print(src_cat)
             # print(dst_cat)
             # exit()
-            count = count + 1
-            if count % 20 == 0:
-                print("loop time:{:.5f}".format(time.time()-loopTime))
-            loopTime = time.time()
-        print("count :",count)
-        print("compute time:{:.5f}".format(time.time()-start))
-        print("===============================")
+            # count = count + 1
+            # if count % 20 == 0:
+            #     print("loop time:{:.5f}".format(time.time()-loopTime))
+            # loopTime = time.time()
+            pass
+
+if __name__ == "__main__":
+    run()
+    # dataset = CustomDataset("../../config/dgl_papers_graphsage.json")
+    # with open("../../config/dgl_papers_graphsage.json", 'r') as f:
+    #     config = json.load(f)
+    #     batchsize = config['batchsize']
+    #     epoch = config['epoch']
+    # train_loader = DataLoader(dataset=dataset, batch_size=batchsize,collate_fn=collate_fn)#pin_memory=True)
+    # count = 0
+    # for index in range(2):
+    #     start = time.time()
+    #     loopTime = time.time()
+    #     for graph,feat,label,number in train_loader:
+    #         # src_cat,dst_cat,
+    #         # print(graph)
+    #         # print(src_cat)
+    #         # print(dst_cat)
+    #         # exit()
+    #         # count = count + 1
+    #         # if count % 20 == 0:
+    #         #     print("loop time:{:.5f}".format(time.time()-loopTime))
+    #         # loopTime = time.time()
+    #         pass
+        # print("count :",count)
+        # print("compute time:{:.5f}".format(time.time()-start))
+        # print("===============================")
