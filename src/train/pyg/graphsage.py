@@ -131,14 +131,9 @@ def run(args, rank, world_size, dataset,split_idx=None):
                 with torch.no_grad():
                     out = model.inference(data.x, rank, subgraph_loader)
                 res = out.argmax(dim=-1) == data.y.to(out.device)
-                if args.dataset == 'Reddit':
-                    acc1 = int(res[data.train_mask].sum()) / int(data.train_mask.sum())
-                    acc2 = int(res[data.val_mask].sum()) / int(data.val_mask.sum())
-                    acc3 = int(res[data.test_mask].sum()) / int(data.test_mask.sum())
-                elif args.dataset == 'ogb-products':
-                    acc1 = int(res[train_idx].sum()) / int(train_idx.sum())
-                    acc2 = int(res[val_idx].sum()) / int(val_idx.sum())
-                    acc3 = int(res[test_idx].sum()) / int(test_idx.sum())
+                acc1 = int(res[data.train_mask].sum()) / int(data.train_mask.sum())
+                acc2 = int(res[data.val_mask].sum()) / int(data.val_mask.sum())
+                acc3 = int(res[data.test_mask].sum()) / int(data.test_mask.sum())
                 print(f'Train: {acc1:.4f}, Val: {acc2:.4f}, Test: {acc3:.4f}')
 
             elif args.dataset == 'ogb-products':

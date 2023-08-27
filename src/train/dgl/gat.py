@@ -14,6 +14,8 @@ import numpy as np
 import time
 import time
 import sys
+import ast
+
 class GAT(nn.Module):
     def __init__(self,in_size, hid_size, out_size, heads):
         super().__init__()
@@ -111,7 +113,7 @@ def train(args, device, g, dataset, model,data=None):
         start = time.time()
         model.train()
         total_loss = 0
-        batchTime = time.time()
+
         for it, (input_nodes, output_nodes, blocks) in enumerate(train_dataloader):
             x = blocks[0].srcdata['feat']
             y = blocks[-1].dstdata['label']
@@ -121,8 +123,6 @@ def train(args, device, g, dataset, model,data=None):
             loss.backward()
             opt.step()
             total_loss += loss.item()
-            print("batch time :{}".format(time.time() - batchTime))
-            batchTime = time.time()
         
         acc = evaluate(model, g, val_dataloader)
         print("Epoch {:05d} | Loss {:.4f} | Accuracy {:.4f} "
