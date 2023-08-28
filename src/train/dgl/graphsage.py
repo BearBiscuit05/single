@@ -36,10 +36,13 @@ class SAGE(nn.Module):
                 h = self.dropout(h)
         return h
 
-    def inference(self, g, device, batch_size):
+    def inference(self, g,device, batch_size):
         """Conduct layer-wise inference to get all the node embeddings."""
         feat = g.ndata['feat']
         sampler = MultiLayerFullNeighborSampler(1, prefetch_node_feats=['feat'])
+        # sampler = NeighborSampler([15],  # fanout for [layer-0, layer-1, layer-2]
+        #                     prefetch_node_feats=['feat'],
+        #                     prefetch_labels=['label'])
         dataloader = DataLoader(
                 g, torch.arange(g.num_nodes()).to(g.device), sampler, device=device,
                 batch_size=batch_size, shuffle=False, drop_last=False,
@@ -62,7 +65,7 @@ class SAGE(nn.Module):
                 y[output_nodes[0]:output_nodes[-1]+1] = h.to(buffer_device)
             feat = y
         return y
-    
+
 def evaluate(model, graph, dataloader):
     model.eval()
     ys = []
@@ -91,12 +94,14 @@ def train(args, device, g, dataset, model,data=None):
     else:
         train_idx = dataset.train_idx.to(device)
         val_idx = dataset.val_idx.to(device)
+        test_idx = dataset.test_idx.to(device)
     # sampler = NeighborSampler([10, 10, 10],  # fanout for [layer-0, layer-1, layer-2]
     #                           prefetch_node_feats=['feat'],
     #                           prefetch_labels=['label'])
     sampler = NeighborSampler(args.fanout,  # fanout for [layer-0, layer-1, layer-2]
                             prefetch_node_feats=['feat'],
                             prefetch_labels=['label'])
+    
     use_uva = (args.mode == 'mixed')
     train_dataloader = DataLoader(g, train_idx, sampler, device=device,
                                   batch_size=1024, shuffle=True,
@@ -119,9 +124,8 @@ def train(args, device, g, dataset, model,data=None):
         for it, (input_nodes, output_nodes, blocks) in enumerate(train_dataloader):
             x = blocks[0].srcdata['feat']
             y = blocks[-1].dstdata['label']
-            print(blocks)
-            exit()
             y_hat = model(blocks, x)
+            y = y.to(torch.int64)
             loss = F.cross_entropy(y_hat, y)
             opt.zero_grad()
             loss.backward()
@@ -133,7 +137,7 @@ def train(args, device, g, dataset, model,data=None):
         acc = evaluate(model, g, val_dataloader)
         print("Epoch {:05d} | Loss {:.4f} | Accuracy {:.4f} "
               .format(epoch, total_loss / (it+1), acc.item()))
-
+    
 def load_reddit(self_loop=True):
     from dgl.data import RedditDataset
     data = RedditDataset(self_loop=self_loop,raw_dir='../../../data/dataset/')
@@ -159,9 +163,9 @@ if __name__ == '__main__':
     parser.add_argument("--mode", default='mixed', choices=['cpu', 'mixed', 'puregpu'],
                         help="Training mode. 'cpu' for CPU training, 'mixed' for CPU-GPU mixed training, "
                              "'puregpu' for pure-GPU training.")
-    parser.add_argument('--fanout', type=ast.literal_eval, default=[25, 10], help='Fanout value')
+    parser.add_argument('--fanout', type=ast.literal_eval, default=[10, 10, 10], help='Fanout value')
     parser.add_argument('--layers', type=int, default=3, help='Number of layers')
-    parser.add_argument('--dataset', type=str, default='Reddit', help='Dataset name')
+    parser.add_argument('--dataset', type=str, default='ogb-papers100M', help='Dataset name')
     args = parser.parse_args()
 
     if not torch.cuda.is_available():
@@ -175,13 +179,16 @@ if __name__ == '__main__':
     
     # create GraphSAGE model
     if args.dataset == 'ogb-products':
-        dataset = AsNodePredDataset(DglNodePropPredDataset('ogbn-products'))
+        dataset = AsNodePredDataset(DglNodePropPredDataset('ogbn-products',root="/home/bear/workspace/singleGNN/data/dataset"))
         g = dataset[0]
         data = None
     elif args.dataset == 'Reddit':
         g, dataset,train_idx,val_idx,test_idx= load_reddit()
         data = (train_idx,val_idx,test_idx)
-    
+    elif args.dataset == 'ogb-papers100M':
+        dataset = AsNodePredDataset(DglNodePropPredDataset('ogbn-papers100M',root="/home/bear/workspace/singleGNN/data/dataset"))
+        g = dataset[0]
+        data = None
     g = g.to('cuda' if args.mode == 'puregpu' else 'cpu')
     device = torch.device('cpu' if args.mode == 'cpu' else 'cuda')
     
@@ -200,4 +207,13 @@ if __name__ == '__main__':
         acc = layerwise_infer(device, g, dataset.test_idx, model, batch_size=4096)
     elif args.dataset == 'Reddit':
         acc = layerwise_infer(device, g, test_idx, model, batch_size=4096) 
+    elif args.dataset == 'ogb-papers100M':
+        sampler_test = NeighborSampler([100,100,100],  # fanout for [layer-0, layer-1, layer-2]
+                            prefetch_node_feats=['feat'],
+                            prefetch_labels=['label'])
+        test_dataloader = DataLoader(g, dataset.test_idx, sampler_test, device=device,
+                                batch_size=4096, shuffle=True,
+                                drop_last=False, num_workers=0,
+                                use_uva=True)
+        acc = evaluate(model, g, test_dataloader)
     print("Test Accuracy {:.4f}".format(acc.item()))

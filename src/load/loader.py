@@ -215,8 +215,7 @@ class CustomDataset(Dataset):
             trainIDs = torch.load(filePath+"/trainID.bin")
             # trainIDs = trainIDs.to(torch.uint8).nonzero().squeeze()[:TESTNODE]
             trainIDs = trainIDs.to(torch.uint8).nonzero().squeeze()
-            _,idDict[index] = torch.sort(trainIDs)
-            idDict[index] = idDict[index]
+            idDict[index],_ = torch.sort(trainIDs)
             current_length = len(idDict[index])
             numberList[index] = current_length
             fill_length = self.batchsize - current_length % self.batchsize
@@ -234,8 +233,7 @@ class CustomDataset(Dataset):
             filePath = self.dataPath + "/part" + str(index)   
             ValIDs = torch.load(filePath+"/valID.bin")
             ValIDs = ValIDs.to(torch.uint8).nonzero().squeeze()
-            _,idDict[index] = torch.sort(ValIDs)
-            idDict[index] = idDict[index]
+            idDict[index],_ = torch.sort(ValIDs)
             current_length = len(idDict[index])
             numberList[index] = current_length
             fill_length = self.batchsize - current_length % self.batchsize
@@ -252,8 +250,7 @@ class CustomDataset(Dataset):
             filePath = self.dataPath + "/part" + str(index)   
             TestID = torch.load(filePath+"/testID.bin")
             TestID = TestID.to(torch.uint8).nonzero().squeeze()
-            _,idDict[index] = torch.sort(TestID)
-            idDict[index] = idDict[index]
+            idDict[index],_ = torch.sort(TestID)
             current_length = len(idDict[index])
             numberList[index] = current_length
             fill_length = self.batchsize - current_length % self.batchsize
@@ -736,8 +733,8 @@ def collate_fn(data):
 
 
 if __name__ == "__main__":
-    dataset = CustomDataset("../../config/dgl_papers_graphsage.json")
-    with open("../../config/dgl_papers_graphsage.json", 'r') as f:
+    dataset = CustomDataset("../../config/dgl_reddit_8.json")
+    with open("../../config/dgl_reddit_8.json", 'r') as f:
         config = json.load(f)
         batchsize = config['batchsize']
         epoch = config['epoch']
