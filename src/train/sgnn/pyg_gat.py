@@ -122,9 +122,6 @@ if __name__ == '__main__':
     parser.add_argument("--mode", default='mixed', choices=['cpu', 'mixed', 'puregpu'],
                         help="Training mode. 'cpu' for CPU training, 'mixed' for CPU-GPU mixed training, "
                              "'puregpu' for pure-GPU training.")
-    # parser.add_argument('--fanout', type=ast.literal_eval, default=[25, 10], help='Fanout value')
-    # parser.add_argument('--layers', type=int, default=2, help='Number of layers')
-    # parser.add_argument('--dataset', type=str, default='Reddit', help='Dataset name')
     parser.add_argument('--json_path', type=str, default='.', help='Dataset name')
     args = parser.parse_args()
 

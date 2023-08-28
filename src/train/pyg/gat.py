@@ -29,7 +29,7 @@ class GAT(torch.nn.Module):
         # On the Pubmed dataset, use `heads` output heads in `conv2`.
         self.conv2 = GATConv(hidden_channels * heads, out_channels, heads=8,
                              concat=False, dropout=0.6)
-        self.convs = num_layers
+        self.convs = [self.conv1,self.conv2]
 
     def forward(self, x, edge_index):
         x = F.dropout(x, p=0.6, training=self.training)
@@ -85,11 +85,16 @@ def test(model,evaluator,data,subgraph_loader,split_idx):
     return train_acc, val_acc, test_acc
 
 
-def run(args,rank, world_size, dataset):
+def run(args,rank, world_size, dataset,split_idx=None):
     
     data = dataset[0]
     data = data.to('cuda:0', 'x', 'y')
-    train_idx = data.train_mask.nonzero(as_tuple=False).view(-1)
+    if args.dataset == 'Reddit':
+        train_idx = data.train_mask.nonzero(as_tuple=False).view(-1)
+    elif args.dataset == 'ogb-products':
+        train_idx = split_idx['train']
+        val_idx = split_idx['valid']
+        test_idx = split_idx['test']
 
     kwargs = dict(batch_size=1024, num_workers=1, persistent_workers=True)
     train_loader = NeighborLoader(data, input_nodes=train_idx,
@@ -103,7 +108,11 @@ def run(args,rank, world_size, dataset):
         # Add global node index information:
         subgraph_loader.data.node_id = torch.arange(data.num_nodes)
     torch.manual_seed(12345)
-    model = GAT(100, 256, 256, 8).to('cuda:0')
+    if args.dataset == 'Reddit':
+        feat_size = 602
+    elif args.dataset == 'ogb-products':
+        feat_size = 100
+    model = GAT(feat_size, 256, 256, 8).to('cuda:0')
     optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
     
     for epoch in range(1, 11):
@@ -120,14 +129,20 @@ def run(args,rank, world_size, dataset):
         print(f'Epoch: {epoch:02d}, Loss: {loss:.4f}, time: {runTime:.5f}')
 
         if rank == 0 and epoch % 5 == 0:  # We evaluate on a single GPU for now
-            model.eval()
-            with torch.no_grad():
-                out = model.inference(data.x, rank, subgraph_loader)
-            res = out.argmax(dim=-1) == data.y.to(out.device)
-            acc1 = int(res[data.train_mask].sum()) / int(data.train_mask.sum())
-            acc2 = int(res[data.val_mask].sum()) / int(data.val_mask.sum())
-            acc3 = int(res[data.test_mask].sum()) / int(data.test_mask.sum())
-            print(f'Train: {acc1:.4f}, Val: {acc2:.4f}, Test: {acc3:.4f}')
+            if args.dataset == 'Reddit':
+                model.eval()
+                with torch.no_grad():
+                    out = model.inference(data.x, rank, subgraph_loader)
+                res = out.argmax(dim=-1) == data.y.to(out.device)
+                acc1 = int(res[data.train_mask].sum()) / int(data.train_mask.sum())
+                acc2 = int(res[data.val_mask].sum()) / int(data.val_mask.sum())
+                acc3 = int(res[data.test_mask].sum()) / int(data.test_mask.sum())
+                print(f'Train: {acc1:.4f}, Val: {acc2:.4f}, Test: {acc3:.4f}')
+            elif args.dataset == 'ogb-products':
+                evaluator = Evaluator(name='ogbn-products')
+                train_acc, val_acc, test_acc = test(model,evaluator,data,subgraph_loader,split_idx)
+                print(f'Train: {train_acc:.4f}, Val: {val_acc:.4f}, '
+                            f'Test: {test_acc:.4f}')
 
 def collate_fn(data):
     """
@@ -153,8 +168,11 @@ if __name__ == '__main__':
     # world_size = torch.cuda.device_count()
     if args.dataset == 'Reddit':
         dataset = Reddit('../../../data/pyg_reddit')
+        split_idx = None
     elif args.dataset == 'ogb-products':
-        pass
+        root = osp.join(osp.dirname(osp.realpath(__file__)), '.', 'dataset')
+        dataset = PygNodePropPredDataset('ogbn-products', root)
+        split_idx = dataset.get_idx_split()
     else:
         raise ValueError(f"Unsupported dataset: {args.dataset}")
-    run(args,0, world_size, dataset)
+    run(args,0, world_size, dataset,split_idx)
