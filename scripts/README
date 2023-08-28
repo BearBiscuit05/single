@@ -1,0 +1,13 @@
+# 测试脚本说明
+
+## 1.现状
+
+dgl/pyg/sgnn+dgl/sgnn+pyg四种框架下的graphsage/gcn/gat
+
+ogb-products和reddit数据集
+
+暂时没写papers
+
+dgl/pyg暂时不测分区
+
+gat暂时不考虑3层采样

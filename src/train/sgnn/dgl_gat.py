@@ -117,7 +117,25 @@ def train(device, dataset, model):
         #       .format(epoch, total_loss / (it+1), acc.item()))
         # print("time :",time.time()-start)
 
-
+def load_reddit(self_loop=True):
+    from dgl.data import RedditDataset
+    data = RedditDataset(self_loop=self_loop,raw_dir='../../../data/dataset/')
+    g = data[0]
+    g.ndata['feat'] = g.ndata.pop('feat')
+    g.ndata['label'] = g.ndata.pop('label')
+    train_idx = []
+    val_idx = []
+    test_idx = []
+    for index in range(len(g.ndata['train_mask'])):
+        if g.ndata['train_mask'][index] == 1:
+            train_idx.append(index)
+    for index in range(len(g.ndata['val_mask'])):
+        if g.ndata['val_mask'][index] == 1:
+            val_idx.append(index)
+    for index in range(len(g.ndata['test_mask'])):
+        if g.ndata['test_mask'][index] == 1:
+            test_idx.append(index)
+    return g, data,train_idx,val_idx,test_idx
 
 def collate_fn(data):
     """
@@ -156,7 +174,6 @@ if __name__ == '__main__':
     arg_layers = len(arg_fanout)
 
     device = torch.device('cpu' if args.mode == 'cpu' else 'cuda')
-    model = GCN(data['featlen'], 256, data['classes'] ,arg_layers,F.relu,0.5).to('cuda:0')
 
     model = GAT(data['featlen'], 256, data['classes'], heads=[8,1]).to('cuda:0')
 
