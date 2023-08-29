@@ -185,7 +185,14 @@ def gen_feat_file(data,rank,savePath):
 
 
 if __name__ == '__main__':
-    dataPath = "./../../data/raw_papers100M_64"
+    if len(sys.argv) != 3:
+        print("Usage: python script_name.py <start_rank> <end_rank>")
+        sys.exit(1)
+
+    start_rank = int(sys.argv[1])
+    end_rank = int(sys.argv[2])
+
+    dataPath = "/root/data/gnnlab/data"
     dataName = "ogb-paper100M"
     savePath = "./../../data/papers100M_64"
     index = 64
