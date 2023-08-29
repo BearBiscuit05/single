@@ -16,11 +16,11 @@ import logging
 import signn
 import os
 from memory_profiler import profile
-# logging.basicConfig(level=logging.INFO,filename='./log/loader.log',filemode='w',
+# logging.basicConfig(level=logging.INFO,filename='../../log/loader.log',filemode='w',
 #                     format='%(asctime)s-%(levelname)s-%(message)s',datefmt='%H:%M:%S')
                     #format='%(message)s')
 
-logging.basicConfig(level=logging.INFO,filename='./log/loader.log',filemode='w',
+logging.basicConfig(level=logging.INFO,filename='../../log/loader.log',filemode='w',
                     format='%(message)s',datefmt='%H:%M:%S')
                     #format='%(message)s')
 logger = logging.getLogger(__name__)
@@ -28,7 +28,7 @@ logger = logging.getLogger(__name__)
 # TESTNODE = 3000
 #变量控制原则 : 谁用谁负责 
 """
-数据加载的逻辑:
+数据加载的逻辑:@profile
     1.生成训练随机序列
     2.预加载训练节点(所有的训练节点都被加载进入)
     2.预加载图集合(从初始开始就存入2个)
@@ -36,7 +36,7 @@ logger = logging.getLogger(__name__)
     4.当图采样完成后释放当前子图,加载下一个图
 """
 class CustomDataset(Dataset):
-    @profile(precision=4, stream=open('./__init__.log','w+'))
+    #@profile(precision=4, stream=open('./__init__.log','w+'))
     def __init__(self,confPath):
         #### 采样资源 ####
         self.cacheData = []     # 子图存储部分
@@ -154,7 +154,7 @@ class CustomDataset(Dataset):
         formatted_data = json.dumps(config, indent=4)
         #print(formatted_data)
 
-    def custom_sort():
+    def custom_sort(self):
         idMap={}
         for i in range(self.partNUM):
             folder_path = self.dataPath+"/part"+str(i)
@@ -196,24 +196,24 @@ class CustomDataset(Dataset):
         return sorted_numbers
 
     def randomTrainList(self): 
-        epochList = self.custom_sort()
-        # epochList = []
-        # for i in range(self.epoch + 1): # 额外多增加一行
-        #     random_array = np.random.choice(np.arange(0, self.partNUM), size=self.partNUM, replace=False)
-        #     if len(epochList) == 0:
-        #         epochList.append(random_array)
-        #     else:
-        #         # 已经存在列
-        #         lastid = epochList[-1][-1]
-        #         while(lastid == random_array[0]):
-        #             random_array = np.random.choice(np.arange(0, self.partNUM), size=self.partNUM, replace=False)
-        #         epochList.append(random_array)
+        #epochList = self.custom_sort()
+        epochList = []
+        for i in range(self.epoch + 1): # 额外多增加一行
+            random_array = np.random.choice(np.arange(0, self.partNUM), size=self.partNUM, replace=False)
+            if len(epochList) == 0:
+                epochList.append(random_array)
+            else:
+                # 已经存在列
+                lastid = epochList[-1][-1]
+                while(lastid == random_array[0]):
+                    random_array = np.random.choice(np.arange(0, self.partNUM), size=self.partNUM, replace=False)
+                epochList.append(random_array)
 
-        # logger.info("train track:{}".format(epochList))    
+        logger.info("train track:{}".format(epochList))    
         return epochList
 
 ########################## 加载/释放 图结构数据 ##########################
-    @profile(precision=4, stream=open('./info.log','w+'))
+    #@profile(precision=4, stream=open('./info.log','w+'))
     def initNextGraphData(self):
         start = time.time()
         # 查看是否需要释放
@@ -333,7 +333,7 @@ class CustomDataset(Dataset):
     def loadingLabels(self,rank):
         filePath = self.dataPath + "/part" + str(rank)
         if self.dataset == "papers100M_64":
-            labels = torch.from_numpy(np.fromfile(filePath+"/label.bin", dtype=np.int64)).to(torch.int64)
+            labels = torch.from_numpy(np.fromfile(filePath+"/label.bin", dtype=np.int32)).to(torch.int64)
         else:
             labels = torch.from_numpy(np.fromfile(filePath+"/label.bin", dtype=np.int32)).to(torch.int64)
         return labels
@@ -927,8 +927,9 @@ def collate_fn(data):
     """
     return data[0]
 
-@profile(precision=4, stream=open('./run.log','w+'))
-def run():
+
+
+if __name__ == "__main__":
     dataset = CustomDataset("../../config/dgl_papers_graphsage.json")
     with open("../../config/dgl_papers_graphsage.json", 'r') as f:
         config = json.load(f)
@@ -945,14 +946,10 @@ def run():
             # print(src_cat)
             # print(dst_cat)
             # exit()
-            # count = count + 1
-            # if count % 20 == 0:
-            #     print("loop time:{:.5f}".format(time.time()-loopTime))
-            # loopTime = time.time()
-            pass
-
-if __name__ == "__main__":
-    run()
+            count = count + 1
+            if count % 20 == 0:
+                print("loop time:{:.5f}".format(time.time()-loopTime))
+            loopTime = time.time()
     # dataset = CustomDataset("../../config/dgl_papers_graphsage.json")
     # with open("../../config/dgl_papers_graphsage.json", 'r') as f:
     #     config = json.load(f)

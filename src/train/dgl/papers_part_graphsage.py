@@ -11,7 +11,8 @@ import tqdm
 import argparse
 import sklearn.metrics
 import numpy as np
-partNUM = 16
+partNUM = 32
+epochNUM = 30
 
 class SAGE(nn.Module):
     def __init__(self, in_size, hid_size, out_size):
@@ -103,7 +104,7 @@ def train(args, device, g, train_idx,val_idx, model):
                                 use_uva=use_uva)
         )
     opt = torch.optim.Adam(model.parameters(), lr=1e-3, weight_decay=5e-4)
-    for epoch in range(10):
+    for epoch in range(epochNUM):
         model.train()
         total_loss = 0
         for i in range(partNUM):
@@ -111,13 +112,13 @@ def train(args, device, g, train_idx,val_idx, model):
             for it, (input_nodes, output_nodes, blocks) in enumerate(train_dataloader):
                 x = blocks[0].srcdata['feat']
                 y = blocks[-1].dstdata['label']
+                y = y.to(torch.int64)
                 y_hat = model(blocks, x)
                 loss = F.cross_entropy(y_hat, y)
                 opt.zero_grad()
                 loss.backward()
                 opt.step()
                 total_loss += loss.item()
-                #accuracy = sklearn.metrics.accuracy_score(y.cpu().numpy(), y_hat.argmax(1).detach().cpu().numpy())
             acc = evaluate(model, g, val_dataloader_list[i])
         print("Epoch {:05d} | Loss {:.4f} | Accuracy {:.4f} "
               .format(epoch, total_loss / (it+1), acc.item()))
@@ -134,12 +135,12 @@ if __name__ == '__main__':
     
     # load and preprocess dataset
     print('Loading data')
-    graph_dir = '../../../data/raw-products_16/'#'data_4/'
-    part_config = graph_dir + 'ogb-product.json'
+    graph_dir = '../../../data/papers100M/raw_papers100M_32/'
+    part_config = graph_dir + 'ogb-paper100M.json'
     print('loading partitions')
     
     device = torch.device('cpu' if args.mode == 'cpu' else 'cuda')
-    model = SAGE(100, 256, 47).to(device)
+    model = SAGE(128, 256, 172).to(device)
     g_list = []
     train_list = []
     val_list = []
@@ -166,11 +167,21 @@ if __name__ == '__main__':
     train(args, device, g_list, train_list , val_list, model)
 
     
-    dataset = AsNodePredDataset(DglNodePropPredDataset('ogbn-products'))
+    dataset = DglNodePropPredDataset('ogbn-papers100M',root="/home/bear/workspace/singleGNN/data/dataset")
     g = dataset[0]
     g = g.to('cuda' if args.mode == 'puregpu' else 'cpu')
     device = torch.device('cpu' if args.mode == 'cpu' else 'cuda')
     # test the model
     print('Testing...')
-    acc = layerwise_infer(device, g, dataset.test_idx, model, batch_size=4096)
+
+    model.eval()
+    sampler_test = NeighborSampler([100,100],  # fanout for [layer-0, layer-1, layer-2]
+                        prefetch_node_feats=['feat'],
+                        prefetch_labels=['label'])
+    test_dataloader = DataLoader(g, dataset.test_idx, sampler_test, device=device,
+                            batch_size=4096, shuffle=True,
+                            drop_last=False, num_workers=0,
+                            use_uva=True)
+    acc = evaluate(model, g, test_dataloader)
+    #acc = layerwise_infer(device, g, dataset.test_idx, model, batch_size=4096)
     print("Test Accuracy {:.4f}".format(acc.item()))
