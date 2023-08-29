@@ -11,7 +11,7 @@ import tqdm
 import argparse
 import sklearn.metrics
 import numpy as np
-partNUM = 32
+partNUM = 16
 epochNUM = 50
 
 class SAGE(nn.Module):
@@ -129,7 +129,7 @@ def train(args, device, g, train_idx,val_idx, model):
                 acc = torch.Tensor([0])
             accs += acc.item()
         print("Epoch {:05d} | Loss {:.4f} | Accuracy {:.4f} "
-              .format(epoch, total_loss / (it+1), accs/31))
+              .format(epoch, total_loss / (it+1), accs/16))
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -143,7 +143,7 @@ if __name__ == '__main__':
     
     # load and preprocess dataset
     print('Loading data')
-    graph_dir = '../../../data/papers100M/raw_papers100M_32/'
+    graph_dir = '../../../data/papers100M/raw_papers100M_16/'
     part_config = graph_dir + 'ogb-paper100M.json'
     print('loading partitions')
     
