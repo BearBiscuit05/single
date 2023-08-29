@@ -55,6 +55,7 @@ class CustomDataset(Dataset):
         self.fanout = []
         self.framework = ""
         self.mode = ""
+        self.dataset = ""
         self.classes = 0
         self.readConfig(confPath)
         # ================
@@ -137,6 +138,7 @@ class CustomDataset(Dataset):
         with open(confPath, 'r') as f:
             config = json.load(f)
         self.dataPath = config['datasetpath']+"/"+config['dataset']
+        self.dataset = config['dataset']
         self.batchsize = config['batchsize']
         self.cacheNUM = config['cacheNUM']
         self.partNUM = config['partNUM']
@@ -151,20 +153,62 @@ class CustomDataset(Dataset):
         formatted_data = json.dumps(config, indent=4)
         #print(formatted_data)
 
-    def randomTrainList(self): 
-        epochList = []
-        for i in range(self.epoch + 1): # 额外多增加一行
-            random_array = np.random.choice(np.arange(0, self.partNUM), size=self.partNUM, replace=False)
-            if len(epochList) == 0:
-                epochList.append(random_array)
-            else:
-                # 已经存在列
-                lastid = epochList[-1][-1]
-                while(lastid == random_array[0]):
-                    random_array = np.random.choice(np.arange(0, self.partNUM), size=self.partNUM, replace=False)
-                epochList.append(random_array)
+    def custom_sort():
+        idMap={}
+        for i in range(self.partNUM):
+            folder_path = self.dataPath+"/part"+str(i)
+            idMap[i] = []
+            for filename in os.listdir(folder_path):
+                if filename.startswith("halo") and filename.endswith(".bin"):
+                    try:
+                        x = int(filename[len("halo"):-len(".bin")])
+                        idMap[i].append(x)
+                    except:
+                        continue
 
-        logger.info("train track:{}".format(epochList))    
+        sorted_numbers = []
+        lastid = 0
+        for loop in range(self.epoch + 1):
+            used_numbers = set()
+            tmp = []
+            for idx in range(0,self.partNUM):
+                if idx == 0:
+                    num = lastid
+                else:
+                    num = tmp[-1]
+                candidates = idMap[num]
+                available_candidates = [int(candidate) for candidate in candidates if int(candidate) not in used_numbers]                
+                if available_candidates:
+                    chosen_num = random.choice(available_candidates)
+                    tmp.append(chosen_num)
+                    used_numbers.add(chosen_num)
+                else:
+                    for i in range(partNUM):
+                        if i not in used_numbers:
+                            available_candidates.append(i)
+                    chosen_num = random.choice(available_candidates)
+                    tmp.append(chosen_num)
+                    used_numbers.add(chosen_num)
+            sorted_numbers.append(tmp)
+            lastid = tmp[-1]
+        print(sorted_numbers)
+        return sorted_numbers
+
+    def randomTrainList(self): 
+        epochList = self.custom_sort()
+        # epochList = []
+        # for i in range(self.epoch + 1): # 额外多增加一行
+        #     random_array = np.random.choice(np.arange(0, self.partNUM), size=self.partNUM, replace=False)
+        #     if len(epochList) == 0:
+        #         epochList.append(random_array)
+        #     else:
+        #         # 已经存在列
+        #         lastid = epochList[-1][-1]
+        #         while(lastid == random_array[0]):
+        #             random_array = np.random.choice(np.arange(0, self.partNUM), size=self.partNUM, replace=False)
+        #         epochList.append(random_array)
+
+        # logger.info("train track:{}".format(epochList))    
         return epochList
 
 ########################## 加载/释放 图结构数据 ##########################
@@ -285,7 +329,11 @@ class CustomDataset(Dataset):
         
     def loadingLabels(self,rank):
         filePath = self.dataPath + "/part" + str(rank)
-        return torch.from_numpy(np.fromfile(filePath+"/label.bin", dtype=np.int32)).to(torch.int64)
+        if self.dataset == "papers100M_64":
+            labels = torch.from_numpy(np.fromfile(filePath+"/label.bin", dtype=np.int64)).to(torch.int64)
+        else:
+            labels = torch.from_numpy(np.fromfile(filePath+"/label.bin", dtype=np.int32)).to(torch.int64)
+        return labels
 
     def moveGraph(self):
         logger.debug("move last graph {},and now graph {}".format(self.trainingGID,self.nextGID))

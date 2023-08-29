@@ -65,11 +65,11 @@ def inductive_split(g):
 
 if __name__ == '__main__':
     argparser = argparse.ArgumentParser("Partition builtin graphs")
-    argparser.add_argument('--dataset', type=str, default='ogb-paper100M',
+    argparser.add_argument('--dataset', type=str, default='ogb-product',
                            help='datasets: reddit, ogb-product, ogb-paper100M')
-    argparser.add_argument('--num_parts', type=int, default=64,
+    argparser.add_argument('--num_parts', type=int, default=32,
                            help='number of partitions')
-    argparser.add_argument('--part_method', type=str, default='random',
+    argparser.add_argument('--part_method', type=str, default='metis',
                            help='the partition method')
     argparser.add_argument('--balance_train', action='store_true',
                            help='balance the training size in each partition.')
