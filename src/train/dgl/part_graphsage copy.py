@@ -81,14 +81,15 @@ def layerwise_infer(device, graph, nid, model, batch_size):
         label = graph.ndata['label'][nid].to(pred.device)
     return sklearn.metrics.accuracy_score(label.cpu().numpy(), pred.argmax(1).cpu().numpy())
 
-def train(args, device, g, train_idx,val_idx, model):
+def train(args, device, g, train_idx,val_idx,test_idx, model):
     sampler = NeighborSampler([10, 25],  # fanout for [layer-0, layer-1, layer-2]
                               prefetch_node_feats=['feat'],
                               prefetch_labels=['label'])
     use_uva = (args.mode == 'mixed')
     train_dataloader_list = []
     val_dataloader_list = []
-    for i in range(32):
+    test_dataloader_list = []
+    for i in range(16):
         train_dataloader_list.append(
             DataLoader(g[i], train_idx[i], sampler, device=device,
                                   batch_size=1024, shuffle=True,
@@ -101,11 +102,18 @@ def train(args, device, g, train_idx,val_idx, model):
                                 drop_last=False, num_workers=0,
                                 use_uva=use_uva)
         )
+        test_dataloader_list.append(
+            DataLoader(g[i], test_idx[i], sampler, device=device,
+                                batch_size=1024, shuffle=True,
+                                drop_last=False, num_workers=0,
+                                use_uva=use_uva)
+        )
     opt = torch.optim.Adam(model.parameters(), lr=1e-3, weight_decay=5e-4)
-    for epoch in range(10):
+    for epoch in range(50):
         model.train()
         total_loss = 0
-        for i in range(32):
+        accs = 0
+        for i in range(16):
             train_dataloader = train_dataloader_list[i]
             for it, (input_nodes, output_nodes, blocks) in enumerate(train_dataloader):
                 x = blocks[0].srcdata['feat']
@@ -118,12 +126,18 @@ def train(args, device, g, train_idx,val_idx, model):
                 total_loss += loss.item()
                 #accuracy = sklearn.metrics.accuracy_score(y.cpu().numpy(), y_hat.argmax(1).detach().cpu().numpy())
             acc = evaluate(model, g, val_dataloader_list[i])
+            accs += acc.item()
         print("Epoch {:05d} | Loss {:.4f} | Accuracy {:.4f} "
-              .format(epoch, total_loss / (it+1), acc.item()))
+              .format(epoch, total_loss / (it+1), accs/16))
+    
+    for i in range(16):
+        acc = evaluate(model, g, test_dataloader_list[i])
+        print("acc: ",acc)
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument("--mode", default='mixed', choices=['cpu', 'mixed', 'puregpu'],
+    parser.add_argument("--mode", default='cpu', choices=['cpu', 'mixed', 'puregpu'],
                         help="Training mode. 'cpu' for CPU training, 'mixed' for CPU-GPU mixed training, "
                              "'puregpu' for pure-GPU training.")
     args = parser.parse_args()
@@ -133,16 +147,17 @@ if __name__ == '__main__':
     
     # load and preprocess dataset
     print('Loading data')
-    graph_dir = '../../../data/data/'#'data_4/'
-    part_config = graph_dir + 'ogb-product.json'
+    graph_dir = './data/'#'data_4/'
+    part_config = graph_dir + 'ogb-paper100M.json'
     print('loading partitions')
     
     device = torch.device('cpu' if args.mode == 'cpu' else 'cuda')
-    model = SAGE(100, 256, 47).to(device)
+    model = SAGE(128, 256, 172).to(device)
     g_list = []
     train_list = []
     val_list = []
-    for i in range(32):
+    test_list = []
+    for i in range(16):
         subg, node_feat, _, gpb, _, node_type, _ = dgl.distributed.load_partition(part_config, i)
         in_graph = dgl.node_subgraph(subg, subg.ndata['inner_node'].bool())
         in_graph.ndata.clear()
@@ -150,25 +165,29 @@ if __name__ == '__main__':
         in_graph.ndata['feat'] = node_feat['_N/features']
         in_graph.ndata['label'] = node_feat['_N/labels']
         train_mask = node_feat['_N/train_mask']
-        train_idx = [index for index, value in enumerate(train_mask) if value == 1]
+        train_idx = np.nonzero(train_mask)[0]
         train_idx = torch.Tensor(train_idx).to(torch.int64).to(device)
         val_mask = node_feat['_N/val_mask']
-        val_idx = [index for index, value in enumerate(val_mask) if value == 1]
+        val_idx = np.nonzero(val_mask)[0]
         val_idx = torch.Tensor(val_idx).to(torch.int64).to(device)
+        test_mask = node_feat['_N/test_mask']
+        test_idx = np.nonzero(test_mask)[0]
+        test_idx = torch.tensor(test_idx).to(torch.int64).to(device)
         subg = subg.to('cuda' if args.mode == 'puregpu' else 'cpu')
         device = torch.device('cpu' if args.mode == 'cpu' else 'cuda')
         g_list.append(in_graph)
         train_list.append(train_idx)
         val_list.append(val_idx)
+        test_list.append(test_idx)
     print('Training...')
-    train(args, device, g_list, train_list , val_list, model)
-
+    train(args, device, g_list, train_list , val_list,test_list,model)
+    torch.save(model,'save.pt')
     
-    dataset = AsNodePredDataset(DglNodePropPredDataset('ogbn-products'))
-    g = dataset[0]
-    g = g.to('cuda' if args.mode == 'puregpu' else 'cpu')
-    device = torch.device('cpu' if args.mode == 'cpu' else 'cuda')
-    # test the model
-    print('Testing...')
-    acc = layerwise_infer(device, g, dataset.test_idx, model, batch_size=4096)
-    print("Test Accuracy {:.4f}".format(acc.item()))
+    # dataset = AsNodePredDataset(DglNodePropPredDataset('ogbn-papers100M'))
+    # g = dataset[0]
+    # g = g.to('cuda' if args.mode == 'puregpu' else 'cpu')
+    # device = torch.device('cpu' if args.mode == 'cpu' else 'cuda')
+    # # test the model
+    # print('Testing...')
+    # acc = layerwise_infer(device, g, dataset.test_idx, model, batch_size=4096)
+    # print("Test Accuracy {:.4f}".format(acc.item()))

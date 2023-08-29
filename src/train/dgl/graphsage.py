@@ -115,7 +115,7 @@ def train(args, device, g, dataset, model,data=None):
 
     opt = torch.optim.Adam(model.parameters(), lr=1e-3, weight_decay=5e-4)
     
-    for epoch in range(10):
+    for epoch in range(5):
         start = time.time()
         model.train()
         total_loss = 0
@@ -137,6 +137,8 @@ def train(args, device, g, dataset, model,data=None):
         acc = evaluate(model, g, val_dataloader)
         print("Epoch {:05d} | Loss {:.4f} | Accuracy {:.4f} "
               .format(epoch, total_loss / (it+1), acc.item()))
+        save_path = 'model'+str(epoch)+'.pth'
+        torch.save(model.state_dict(), save_path)
     
 def load_reddit(self_loop=True):
     from dgl.data import RedditDataset
@@ -163,8 +165,8 @@ if __name__ == '__main__':
     parser.add_argument("--mode", default='mixed', choices=['cpu', 'mixed', 'puregpu'],
                         help="Training mode. 'cpu' for CPU training, 'mixed' for CPU-GPU mixed training, "
                              "'puregpu' for pure-GPU training.")
-    parser.add_argument('--fanout', type=ast.literal_eval, default=[10, 10, 10], help='Fanout value')
-    parser.add_argument('--layers', type=int, default=3, help='Number of layers')
+    parser.add_argument('--fanout', type=ast.literal_eval, default=[3, 3], help='Fanout value')
+    parser.add_argument('--layers', type=int, default=2, help='Number of layers')
     parser.add_argument('--dataset', type=str, default='ogb-papers100M', help='Dataset name')
     args = parser.parse_args()
 
@@ -199,8 +201,10 @@ if __name__ == '__main__':
     model = SAGE(in_size, 256, out_size,args.layers).to(device)
     # model training
     print('Training...')
-    train(args, device, g, dataset, model,data=data)
-
+    #train(args, device, g, dataset, model,data=data)
+    model = torch.load("save.pt")
+    model = model.to(device) 
+    #model.load_state_dict(torch.load("model_param.pth"))
     # test the model
     print('Testing...')
     if args.dataset == 'ogb-products':
@@ -208,7 +212,8 @@ if __name__ == '__main__':
     elif args.dataset == 'Reddit':
         acc = layerwise_infer(device, g, test_idx, model, batch_size=4096) 
     elif args.dataset == 'ogb-papers100M':
-        sampler_test = NeighborSampler([100,100,100],  # fanout for [layer-0, layer-1, layer-2]
+        model.eval()
+        sampler_test = NeighborSampler([100,100],  # fanout for [layer-0, layer-1, layer-2]
                             prefetch_node_feats=['feat'],
                             prefetch_labels=['label'])
         test_dataloader = DataLoader(g, dataset.test_idx, sampler_test, device=device,
