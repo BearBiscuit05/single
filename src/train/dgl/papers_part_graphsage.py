@@ -12,7 +12,7 @@ import argparse
 import sklearn.metrics
 import numpy as np
 partNUM = 32
-epochNUM = 30
+epochNUM = 50
 
 class SAGE(nn.Module):
     def __init__(self, in_size, hid_size, out_size):
@@ -20,7 +20,7 @@ class SAGE(nn.Module):
         self.layers = nn.ModuleList()
         # three-layer GraphSAGE-mean
         self.layers.append(dglnn.SAGEConv(in_size, hid_size, 'mean'))
-        #self.layers.append(dglnn.SAGEConv(hid_size, hid_size, 'mean'))
+        # self.layers.append(dglnn.SAGEConv(hid_size, hid_size, 'mean'))
         self.layers.append(dglnn.SAGEConv(hid_size, out_size, 'mean'))
         self.dropout = nn.Dropout(0.5)
         self.hid_size = hid_size
@@ -97,16 +97,20 @@ def train(args, device, g, train_idx,val_idx, model):
                                   drop_last=False, num_workers=0,
                                   use_uva=use_uva)
         )
-        val_dataloader_list.append(
-            DataLoader(g[i], val_idx[i], sampler, device=device,
-                                batch_size=1024, shuffle=True,
-                                drop_last=False, num_workers=0,
-                                use_uva=use_uva)
-        )
+        if val_idx[i].shape == torch.Size([]):
+            val_dataloader_list.append([])
+        else:
+            val_dataloader_list.append(
+                DataLoader(g[i], val_idx[i], sampler, device=device,
+                                    batch_size=1024, shuffle=True,
+                                    drop_last=False, num_workers=0,
+                                    use_uva=use_uva)
+            )
     opt = torch.optim.Adam(model.parameters(), lr=1e-3, weight_decay=5e-4)
     for epoch in range(epochNUM):
         model.train()
         total_loss = 0
+        accs = 0
         for i in range(partNUM):
             train_dataloader = train_dataloader_list[i]
             for it, (input_nodes, output_nodes, blocks) in enumerate(train_dataloader):
@@ -119,9 +123,13 @@ def train(args, device, g, train_idx,val_idx, model):
                 loss.backward()
                 opt.step()
                 total_loss += loss.item()
-            acc = evaluate(model, g, val_dataloader_list[i])
+            if val_dataloader_list[i] != []:
+                acc = evaluate(model, g, val_dataloader_list[i])
+            else:
+                acc = torch.Tensor([0])
+            accs += acc.item()
         print("Epoch {:05d} | Loss {:.4f} | Accuracy {:.4f} "
-              .format(epoch, total_loss / (it+1), acc.item()))
+              .format(epoch, total_loss / (it+1), accs/31))
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -160,15 +168,18 @@ if __name__ == '__main__':
         subg = subg.to('cuda' if args.mode == 'puregpu' else 'cpu')
         device = torch.device('cpu' if args.mode == 'cpu' else 'cuda')
         g_list.append(in_graph)
-        g_list.append(in_graph)
         train_list.append(train_idx)
         val_list.append(val_idx)
-    print('Training...')
+        # print("val len :",val_idx.shape)
+    # print('Training...')
+    # print("val_idx shape : ",len(val_list))
+    # print("g_list shape:",len(g_list))
     train(args, device, g_list, train_list , val_list, model)
-
+    torch.save(model,"sage.pt")
     
     dataset = DglNodePropPredDataset('ogbn-papers100M',root="/home/bear/workspace/singleGNN/data/dataset")
-    g = dataset[0]
+    g = dataset[0][0]
+    print(g)
     g = g.to('cuda' if args.mode == 'puregpu' else 'cpu')
     device = torch.device('cpu' if args.mode == 'cpu' else 'cuda')
     # test the model

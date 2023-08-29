@@ -134,7 +134,7 @@ if __name__ == '__main__':
     
     # load and preprocess dataset
     print('Loading data')
-    graph_dir = '../../../data/raw-products_16/'#'data_4/'
+    graph_dir = '../../../data/products/raw-products_16/'#'data_4/'
     part_config = graph_dir + 'ogb-product.json'
     print('loading partitions')
     
@@ -159,7 +159,7 @@ if __name__ == '__main__':
         subg = subg.to('cuda' if args.mode == 'puregpu' else 'cpu')
         device = torch.device('cpu' if args.mode == 'cpu' else 'cuda')
         g_list.append(in_graph)
-        g_list.append(in_graph)
+        # g_list.append(in_graph)
         train_list.append(train_idx)
         val_list.append(val_idx)
     print('Training...')

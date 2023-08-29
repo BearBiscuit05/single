@@ -65,6 +65,8 @@ class CustomDataset(Dataset):
 
         #### 训练记录 ####
         self.trainSubGTrack = self.randomTrainList()    # 训练轨迹
+        self.trainSubGTrack = [[2,1,0],[2,1,0],[2,1,0],[2,1,0]]
+        print(self.trainSubGTrack)
         self.subGptr = -1                               # 子图训练指针，记录当前训练的位置，在加载图时发生改变
         
         #### 节点类型加载 ####
@@ -153,7 +155,6 @@ class CustomDataset(Dataset):
         self.mode = config['mode']
         self.classes = config['classes']
         formatted_data = json.dumps(config, indent=4)
-        #print(formatted_data)
 
     def custom_sort(self):
         idMap={}
@@ -214,7 +215,7 @@ class CustomDataset(Dataset):
         return epochList
 
 ########################## 加载/释放 图结构数据 ##########################
-    #@profile(precision=4, stream=open('./info.log','w+'))
+    @profile(precision=4, stream=open('./info.log','w+'))
     def initNextGraphData(self):
         start = time.time()
         # 查看是否需要释放
@@ -244,6 +245,7 @@ class CustomDataset(Dataset):
         self.loadingHalo()
         logger.info("loadingHalo time: %g"%(time.time()-halostart))
         haloend = time.time()
+        print("loading.....=====================>")
         self.loadingMemFeat(self.nextGID)
         logger.info("loadingHalo time: %g"%(time.time()-haloend))
         logger.info("当前加载图为:{},下一个图:{},图训练集规模:{},图节点数目:{},图边数目:{},加载耗时:{:.5f}s"\
@@ -306,7 +308,7 @@ class CustomDataset(Dataset):
             self.testNUM += idDict[index].shape[0]
         return idDict,numberList
 
-    #@profile(precision=4, stream=open('./info.log','w+'))
+    @profile(precision=4, stream=open('./info.log','w+'))
     def loadingGraph(self,merge=True):
         # 加载下一个等待训练的图
         self.subGptr += 1
@@ -339,7 +341,7 @@ class CustomDataset(Dataset):
             labels = torch.from_numpy(np.fromfile(filePath+"/label.bin", dtype=np.int32)).to(torch.int64)
         return labels
 
-    @profile(precision=4, stream=open('./move.log','w+'))
+    @profile(precision=4, stream=open('./info.log','w+'))
     def moveGraph(self):
         logger.debug("move last graph {},and now graph {}".format(self.trainingGID,self.nextGID))
         logger.debug("befor move srclist len:{}".format(len(self.cacheData[0])))
@@ -353,7 +355,7 @@ class CustomDataset(Dataset):
         logger.debug("after move range len:{}".format(len(self.cacheData[1])))     
         gc.collect()
 
-    #@profile(precision=4, stream=open('./loadingHalo.log','w+'))
+    @profile(precision=4, stream=open('./info.log','w+'))
     def loadingHalo(self):
         # 要先加载下一个子图，然后再加载halo( 当前<->下一个 )
         filePath = self.dataPath + "/part" + str(self.trainingGID)
@@ -621,7 +623,7 @@ class CustomDataset(Dataset):
         cacheGraph[1] = torch.cat(cacheGraph[1],dim=0)
         return cacheGraph, cacheLabel
 
-    #@profile(precision=4, stream=open('./info.log','w+'))
+    @profile(precision=4, stream=open('./info.log','w+'))
     # 无影响
     def preGraphBatch(self):
         # 如果当前管道已经被充满，则不采样，该函数直接返回
@@ -731,7 +733,7 @@ class CustomDataset(Dataset):
             tmp_feat = torch.from_numpy(tmp_feat).reshape(-1,self.featlen)
             self.feats = torch.cat([self.feats,tmp_feat])
     
-    #@profile(precision=4, stream=open('./info.log','w+'))
+    @profile(precision=4, stream=open('./info.log','w+'))
     # 已经测试，无影响
     def featMerge(self,uniqueList):    
         # logger.info("-------------------------------------------------")
