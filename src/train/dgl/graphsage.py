@@ -115,7 +115,7 @@ def train(args, device, g, dataset, model,data=None):
 
     opt = torch.optim.Adam(model.parameters(), lr=1e-3, weight_decay=5e-4)
     
-    for epoch in range(5):
+    for epoch in range(3):
         start = time.time()
         model.train()
         total_loss = 0
@@ -201,9 +201,9 @@ if __name__ == '__main__':
     model = SAGE(in_size, 256, out_size,args.layers).to(device)
     # model training
     print('Training...')
-    #train(args, device, g, dataset, model,data=data)
-    model = torch.load("sage.pt")
-    model = model.to(device) 
+    train(args, device, g, dataset, model,data=data)
+    # model = torch.load("sage.pt")
+    # model = model.to(device) 
     #model.load_state_dict(torch.load("model_param.pth"))
     # test the model
     print('Testing...')

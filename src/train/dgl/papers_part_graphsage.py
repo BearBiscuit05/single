@@ -11,7 +11,7 @@ import tqdm
 import argparse
 import sklearn.metrics
 import numpy as np
-partNUM = 16
+partNUM = 8
 epochNUM = 50
 
 class SAGE(nn.Module):
@@ -20,7 +20,7 @@ class SAGE(nn.Module):
         self.layers = nn.ModuleList()
         # three-layer GraphSAGE-mean
         self.layers.append(dglnn.SAGEConv(in_size, hid_size, 'mean'))
-        # self.layers.append(dglnn.SAGEConv(hid_size, hid_size, 'mean'))
+        self.layers.append(dglnn.SAGEConv(hid_size, hid_size, 'mean'))
         self.layers.append(dglnn.SAGEConv(hid_size, out_size, 'mean'))
         self.dropout = nn.Dropout(0.5)
         self.hid_size = hid_size
@@ -84,7 +84,7 @@ def layerwise_infer(device, graph, nid, model, batch_size):
     return sklearn.metrics.accuracy_score(label.cpu().numpy(), pred.argmax(1).cpu().numpy())
 
 def train(args, device, g, train_idx,val_idx, model):
-    sampler = NeighborSampler([10, 25],  # fanout for [layer-0, layer-1, layer-2]
+    sampler = NeighborSampler([10, 10,10],  # fanout for [layer-0, layer-1, layer-2]
                               prefetch_node_feats=['feat'],
                               prefetch_labels=['label'])
     use_uva = (args.mode == 'mixed')
@@ -143,7 +143,7 @@ if __name__ == '__main__':
     
     # load and preprocess dataset
     print('Loading data')
-    graph_dir = '../../../data/papers100M/raw_papers100M_16/'
+    graph_dir = '/raid/bear/raw_papers100M_8/'
     part_config = graph_dir + 'ogb-paper100M.json'
     print('loading partitions')
     
@@ -170,15 +170,11 @@ if __name__ == '__main__':
         g_list.append(in_graph)
         train_list.append(train_idx)
         val_list.append(val_idx)
-        # print("val len :",val_idx.shape)
-    # print('Training...')
-    # print("val_idx shape : ",len(val_list))
-    # print("g_list shape:",len(g_list))
     train(args, device, g_list, train_list , val_list, model)
     torch.save(model,"sage.pt")
     
-    dataset = DglNodePropPredDataset('ogbn-papers100M',root="/home/bear/workspace/singleGNN/data/dataset")
-    g = dataset[0][0]
+    dataset = AsNodePredDataset(DglNodePropPredDataset('ogbn-papers100M',root="/home/bear/workspace/singleGNN/data/dataset"))
+    g = dataset[0]
     print(g)
     g = g.to('cuda' if args.mode == 'puregpu' else 'cpu')
     device = torch.device('cpu' if args.mode == 'cpu' else 'cuda')
