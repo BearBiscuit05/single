@@ -21,7 +21,14 @@ void graph_mapping(
                 );
 }
 
-
+void node_mapping(
+    int* nodeList,int* uniqueList,
+    int nodenum,int64_t* uniqueNUM
+) {
+  OrderedHashTable<int> table(nodenum);
+  size_t nodeNUM = nodenum;
+  table.FillWithDuplicates(nodeList,nodeNUM,uniqueList,uniqueNUM);
+}
 
 
 

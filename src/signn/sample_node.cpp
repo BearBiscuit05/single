@@ -37,6 +37,14 @@ void torch_graph_mapping(
     );
 }
 
+void torch_node_mapping(
+    torch::Tensor &nodeList,torch::Tensor &uniqueList,
+    int nodenum,torch::Tensor & uniqueNUM) {
+    node_mapping(
+        (int*) nodeList.data_ptr(),(int*) uniqueList.data_ptr(),
+        nodenum,(int64_t *)uniqueNUM.data_ptr()
+    );
+}
 
 
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
@@ -49,6 +57,9 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
     m.def("torch_graph_mapping",
           &torch_graph_mapping,
           "mapping new graph");
+    m.def("torch_node_mapping",
+          &torch_node_mapping,
+          "mapping new node");
 }
 
 // TORCH_LIBRARY(sample_hop_new, m) {

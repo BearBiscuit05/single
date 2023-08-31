@@ -21,7 +21,7 @@ from memory_profiler import profile
 #                     format='%(asctime)s-%(levelname)s-%(message)s',datefmt='%H:%M:%S')
                     #format='%(message)s')
 
-logging.basicConfig(level=logging.INFO,filename='../../log/loader.log',filemode='w',
+logging.basicConfig(level=logging.INFO,filename='/home/bear/workspace/singleGNN/log/loader.log',filemode='w',
                     format='%(message)s',datefmt='%H:%M:%S')
                     #format='%(message)s')
 logger = logging.getLogger(__name__)
@@ -421,10 +421,22 @@ class CustomDataset(Dataset):
                 sampleIDs,seed_num,fan_num,
                 out_src,out_dst,out_num)
 
-            # print(seed_num,fan_num)
+            # 得到dst + src  ==> 组合得到下一次的采样seed
             sampleIDs = cacheGraph[0][ptr:ptr+out_num.item()]
+
+            # uniqueNUM = torch.Tensor([0]).to(torch.int64).to('cuda:0')
+            # nodeCache = torch.cat([out_dst[:out_num.item()],out_src[:out_num.item()]])
+            # unique = torch.zeros(nodeCache.shape).to(torch.int32).to('cuda:0')
+
+
+            # nodeNUM = len(nodeCache)
+            # signn.torch_node_mapping(nodeCache,unique,nodeNUM,uniqueNUM)    
+            # sampleIDs = unique[:uniqueNUM.item()]
+
             ptr=ptr+out_num.item()
             mapping_ptr.append(ptr)
+        #     print("-"*25)
+        # exit()
         logger.info("sample Time {:.5f}s".format(time.time()-sampleStart))
 
         mappingTime = time.time()        
@@ -449,7 +461,6 @@ class CustomDataset(Dataset):
                 dst = cacheGraph[1][:mapping_ptr[-index]]
                 data = (src,dst)
                 # print(data)
-                
                 g = dgl.graph(data)
                 block = dgl.to_block(g)
                 # if index == 1:
@@ -470,6 +481,8 @@ class CustomDataset(Dataset):
                 #     # save_num += 1
                 #     # block = self.create_dgl_block(data,tmp_num,save_num)
                 blocks.append(block)
+            # print(blocks)
+            # exit()
             # print(blocks)
         elif self.framework == "pyg":
             src = cacheGraph[0][:mapping_ptr[-1]].to(torch.int64)
@@ -496,8 +509,6 @@ class CustomDataset(Dataset):
         raw_dst = copy.deepcopy(out_dst)
         # print(raw_src.shape + raw_src.shape)
 
-        # print()
-        # exit()
         neg_dst = torch.randint(low=0, high=self.graphNodeNUM, size=raw_src.shape).to(torch.int32).to("cuda:0")
         
         all_tensor = torch.cat([raw_src,raw_dst,raw_src,neg_dst])
@@ -599,7 +610,9 @@ class CustomDataset(Dataset):
             src = torch.full((tmp * fan,), -1, dtype=torch.int32).to("cuda:0")  # 使用PyTorch张量，指定dtype
             cacheGraph[0].append(src)
             cacheGraph[1].append(dst)
-            tmp = tmp * fan
+            tmp = tmp * (fan + 1)
+
+
         cacheLabel = torch.zeros(self.batchsize)
         cacheGraph[0] = torch.cat(cacheGraph[0],dim=0)
         cacheGraph[1] = torch.cat(cacheGraph[1],dim=0)
