@@ -152,7 +152,6 @@ class CustomDataset(Dataset):
         self.framework = config['framework']
         self.mode = config['mode']
         self.classes = config['classes']
-        formatted_data = json.dumps(config, indent=4)
         #print(formatted_data)
 
     def custom_sort(self):
@@ -310,17 +309,13 @@ class CustomDataset(Dataset):
     def loadingGraph(self,merge=True):
         # 加载下一个等待训练的图
         self.subGptr += 1
-        # print("self.subGptr:",self.subGptr)
-        # print(self.subGptr//self.partNUM,"  -  ",self.subGptr%self.partNUM)
         subGID = self.trainSubGTrack[self.subGptr//self.partNUM][self.subGptr%self.partNUM]
         filePath = self.dataPath + "/part" + str(subGID)
         srcdata = np.fromfile(filePath+"/srcList.bin", dtype=np.int32)
         srcdata = torch.tensor(srcdata,device=('cuda:%d'%self.cudaDevice))#.to(device=('cuda:%d'%self.cudaDevice))
         rangedata = np.fromfile(filePath+"/range.bin", dtype=np.int32)
         rangedata = torch.tensor(rangedata,device=('cuda:%d'%self.cudaDevice))#.to(device=('cuda:%d'%self.cudaDevice))
-        
-        #print(type(srcdata))
-        #print(type(rangedata))
+
         if merge :
             srcdata = srcdata + self.graphNodeNUM
             rangedata = rangedata + self.graphEdgeNUM
@@ -339,7 +334,6 @@ class CustomDataset(Dataset):
             labels = torch.from_numpy(np.fromfile(filePath+"/label.bin", dtype=np.int32)).to(torch.int64)
         return labels
 
-    @profile(precision=4, stream=open('./move.log','w+'))
     def moveGraph(self):
         logger.debug("move last graph {},and now graph {}".format(self.trainingGID,self.nextGID))
         logger.debug("befor move srclist len:{}".format(len(self.cacheData[0])))
@@ -491,8 +485,6 @@ class CustomDataset(Dataset):
         seed_num = batchlen
         fan_num = 1
         out_num = torch.Tensor([0]).to(torch.int64).to('cuda:0')
-        # print("sample 1111")
-        # print(sampleIDs)
         signn.torch_sample_hop(
                 self.cacheData[0][:self.graphEdgeNUM],self.cacheData[1][:self.graphNodeNUM*2],
                 sampleIDs,seed_num,fan_num,
@@ -529,19 +521,11 @@ class CustomDataset(Dataset):
         # print("unique: ",unique[:uniqueNUM.item()])
         return unique[:uniqueNUM.item()],raw_edges,src_cat,dst_cat
     
-    #@profile(precision=4, stream=open('./sampleNeigGPU_LP.log','w+'))
     def sampleNeigGPU_LP(self,sampleIDs,raw_edges,cacheGraph,batchlen):     
         sampleIDs = sampleIDs.to(torch.int32).to('cuda:0')
         ptr = 0
         mapping_ptr = [ptr]
-        # padding_elements = 1024 - (batchlen % 1024)
-        # padding_tensor = torch.zeros(padding_elements).to(torch.int32).to('cuda:0')
-        # sampleIDs = torch.cat([sampleIDs, padding_tensor], dim=0)
-
-        
-        # print("batch :",batchlen)
         sampleStart = time.time()
-        #exit()
         for l, fan_num in enumerate(self.fanout):
             if l == 0:
                 seed_num = batchlen
@@ -726,9 +710,9 @@ class CustomDataset(Dataset):
         filePath = self.dataPath + "/part" + str(rank)
         tmp_feat = np.fromfile(filePath+"/feat.bin", dtype=np.float32)
         if self.feats == []:
-            self.feats = torch.from_numpy(tmp_feat).reshape(-1,self.featlen)
+            self.feats = torch.from_numpy(tmp_feat).reshape(-1,self.featlen)#.to("cuda:0")
         else:
-            tmp_feat = torch.from_numpy(tmp_feat).reshape(-1,self.featlen)
+            tmp_feat = torch.from_numpy(tmp_feat).reshape(-1,self.featlen)#.to("cuda:0")
             self.feats = torch.cat([self.feats,tmp_feat])
     
     #@profile(precision=4, stream=open('./info.log','w+'))
@@ -921,14 +905,14 @@ def collate_fn(data):
 
 
 if __name__ == "__main__":
-    dataset = CustomDataset("../../config/dgl_papers_graphsage.json")
-    with open("../../config/dgl_papers_graphsage.json", 'r') as f:
+    dataset = CustomDataset("../../config/dgl_products_graphsage.json")
+    with open("../../config/dgl_products_graphsage.json", 'r') as f:
         config = json.load(f)
         batchsize = config['batchsize']
         epoch = config['epoch']
     train_loader = DataLoader(dataset=dataset, batch_size=batchsize,collate_fn=collate_fn)#pin_memory=True)
     count = 0
-    for index in range(2):
+    for index in range(3):
         start = time.time()
         loopTime = time.time()
         for graph,feat,label,number in train_loader:

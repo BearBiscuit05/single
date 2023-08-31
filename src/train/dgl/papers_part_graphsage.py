@@ -84,7 +84,7 @@ def layerwise_infer(device, graph, nid, model, batch_size):
     return sklearn.metrics.accuracy_score(label.cpu().numpy(), pred.argmax(1).cpu().numpy())
 
 def train(args, device, g, train_idx,val_idx, model):
-    sampler = NeighborSampler([10, 10,10],  # fanout for [layer-0, layer-1, layer-2]
+    sampler = NeighborSampler([10, 10, 10],  # fanout for [layer-0, layer-1, layer-2]
                               prefetch_node_feats=['feat'],
                               prefetch_labels=['label'])
     use_uva = (args.mode == 'mixed')
@@ -129,7 +129,7 @@ def train(args, device, g, train_idx,val_idx, model):
                 acc = torch.Tensor([0])
             accs += acc.item()
         print("Epoch {:05d} | Loss {:.4f} | Accuracy {:.4f} "
-              .format(epoch, total_loss / (it+1), accs/16))
+              .format(epoch, total_loss / (it+1), accs/8))
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
