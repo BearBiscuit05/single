@@ -456,25 +456,27 @@ class CustomDataset(Dataset):
                 dst = cacheGraph[1][:mapping_ptr[-index]]
                 data = (src,dst)
                 # print(data)
-                g = dgl.graph(data)
-                block = dgl.to_block(g)
-                # if index == 1:
-                #     # save_num,_ = torch.max(dst,dim=0)
-                #     # save_num += 1
-                #     g = dgl.graph(data)
-                #     block = dgl.to_block(g)
-                #     #block = self.create_dgl_block(data,uniqueNUM.item(),save_num)
-                # elif index == layer:
-                #     g = dgl.graph(data)
-                #     block = dgl.to_block(g)
-                #     #block = self.create_dgl_block(data,save_num,batch)
-                # else:
-                #     g = dgl.graph(data)
-                #     block = dgl.to_block(g)
-                #     # tmp_num = save_num
-                #     # save_num,_ = torch.max(dst,dim=0)
-                #     # save_num += 1
-                #     # block = self.create_dgl_block(data,tmp_num,save_num)
+                # block = dgl.create_block(data)
+
+
+                # g = dgl.graph(data)
+                # block = dgl.to_block(g)
+
+                if index == 1:
+                    save_num,_ = torch.max(dst,dim=0)
+                    save_num += 1
+                    block = self.create_dgl_block(data,uniqueNUM.item(),save_num)
+                elif index == layer:
+                    tmp_num = save_num
+                    save_num,_ = torch.max(dst,dim=0)
+                    save_num += 1
+                    #block = self.create_dgl_block(data,save_num,batch)
+                    block = self.create_dgl_block(data,tmp_num,save_num)
+                else:
+                    tmp_num = save_num
+                    save_num,_ = torch.max(dst,dim=0)
+                    save_num += 1
+                    block = self.create_dgl_block(data,tmp_num,save_num)
                 blocks.append(block)
             # print(blocks)
             # exit()
@@ -516,15 +518,7 @@ class CustomDataset(Dataset):
         uniqueNUM = torch.Tensor([0]).to(torch.int64).to('cuda:0')
         unique = torch.zeros(len(all_tensor),dtype=torch.int32).to('cuda:0')
 
-        # t_min,_ = torch.max(raw_src,dim=0)
-        # t1_max,_ = torch.max(raw_dst,dim=0)
-        # t2_max,_ = torch.max(neg_dst,dim=0)
-        # print("raw_src max :",t_min,"  raw_dst max :",t1_max,"  neg_dst max :",t2_max)
-        # print("all_tensor:",all_tensor," shape :",all_tensor.shape)
         signn.torch_graph_mapping(all_tensor,src_cat,dst_cat,src_cat,dst_cat,unique,edgeNUM,uniqueNUM)
-        # if uniqueNUM.item() > 
-        # print("uniqueNUM.item():",uniqueNUM.item())
-        # print("unique: ",unique[:uniqueNUM.item()])
         return unique[:uniqueNUM.item()],raw_edges,src_cat,dst_cat
     
     def sampleNeigGPU_LP(self,sampleIDs,raw_edges,cacheGraph,batchlen):     
@@ -540,19 +534,10 @@ class CustomDataset(Dataset):
             out_src = cacheGraph[0][ptr:ptr+seed_num*fan_num]
             out_dst = cacheGraph[1][ptr:ptr+seed_num*fan_num]
             out_num = torch.Tensor([0]).to(torch.int64).to('cuda:0')
-            # if l == 0:
-            #     print("sample 2222")
-            # print("sampleIDs :",sampleIDs.shape,"|||",seed_num)
-            # i_max,_ = torch.max(sampleIDs,dim=0) 
-            # print(i_max)
             signn.torch_sample_hop(
                 self.cacheData[0],self.cacheData[1],
                 sampleIDs,seed_num,fan_num,
                 out_src,out_dst,out_num)
-            
-            # 暂时先不做:更改存在边
-            # indices = torch.where((out_src.unsqueeze(1) == raw_edges[0]) & (out_dst.unsqueeze(1) == raw_edges[1]))
-            # edge_indices = indices[1]
 
             sampleIDs = cacheGraph[0][ptr:ptr+out_num.item()]
             ptr=ptr+out_num.item()
@@ -566,8 +551,6 @@ class CustomDataset(Dataset):
         edgeNUM = mapping_ptr[-1]
         all_node = torch.cat([cacheGraph[1],cacheGraph[0]])
         unique = torch.zeros(mapping_ptr[-1]*2,dtype=torch.int32).to('cuda:0')
-        
-        
         signn.torch_graph_mapping(all_node,cacheGraph[0],cacheGraph[1],cacheGraph[0],cacheGraph[1],unique,edgeNUM,uniqueNUM)
         unique = unique[:uniqueNUM.item()]
         logger.info("mapping Time {:.5f}s".format(time.time()-mappingTime))
@@ -718,16 +701,16 @@ class CustomDataset(Dataset):
         filePath = self.dataPath + "/part" + str(rank)
         tmp_feat = np.fromfile(filePath+"/feat.bin", dtype=np.float32)
         if self.feats == []:
-            self.feats = torch.from_numpy(tmp_feat).reshape(-1,self.featlen)#.to("cuda:0")
+            self.feats = torch.from_numpy(tmp_feat).reshape(-1,self.featlen).to("cuda:0")
         else:
-            tmp_feat = torch.from_numpy(tmp_feat).reshape(-1,self.featlen)#.to("cuda:0")
+            tmp_feat = torch.from_numpy(tmp_feat).reshape(-1,self.featlen).to("cuda:0")
             self.feats = torch.cat([self.feats,tmp_feat])
     
     #@profile(precision=4, stream=open('./info.log','w+'))
     # 已经测试，无影响
     def featMerge(self,uniqueList):           
         featTime = time.time() 
-        test = self.feats[uniqueList.to(torch.int64).to('cpu')]     
+        test = self.feats[uniqueList.to(torch.int64).to(self.feats.device)]     
         logger.info("feat merge {}s".format(time.time()-featTime))
         return test
 

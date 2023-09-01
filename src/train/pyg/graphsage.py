@@ -88,7 +88,8 @@ def test(model,evaluator,data,subgraph_loader,split_idx):
 
 def run(args, rank, world_size, dataset,split_idx=None):
     data = dataset[0]
-    data = data.to('cuda:0', 'x', 'y')  # Move to device for faster feature fetch.
+    #data = data.to('cuda:0', 'x', 'y')  # Move to device for faster feature fetch.
+    data = data.to('cuda:0', 'y')
     if args.dataset == 'Reddit':
         train_idx = data.train_mask.nonzero(as_tuple=False).view(-1)
     elif args.dataset == 'ogb-products':
@@ -116,7 +117,7 @@ def run(args, rank, world_size, dataset,split_idx=None):
         startTime = time.time()    
         for batch in train_loader:        
             optimizer.zero_grad()    
-            out = model(batch.x, batch.edge_index.to('cuda:0'))[:batch.batch_size]
+            out = model(batch.x.to('cuda:0'), batch.edge_index.to('cuda:0'))[:batch.batch_size]
             loss = F.cross_entropy(out, batch.y[:batch.batch_size].squeeze())
             loss.backward()
             optimizer.step()
@@ -148,7 +149,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='pyg gcn program')
     parser.add_argument('--fanout', type=ast.literal_eval, default=[25, 10], help='Fanout value')
     parser.add_argument('--layers', type=int, default=2, help='Number of layers')
-    parser.add_argument('--dataset', type=str, default='Reddit', help='Dataset name')
+    parser.add_argument('--dataset', type=str, default='ogb-products', help='Dataset name')
     args = parser.parse_args()
     world_size = 1
     print('Let\'s use', world_size, 'GPUs!')
