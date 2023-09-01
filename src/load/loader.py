@@ -26,8 +26,6 @@ logging.basicConfig(level=logging.INFO,filename='/home/bear/workspace/singleGNN/
                     #format='%(message)s')
 logger = logging.getLogger(__name__)
 
-# TESTNODE = 3000
-#变量控制原则 : 谁用谁负责 
 """
 数据加载的逻辑:@profile
     1.生成训练随机序列
@@ -184,7 +182,7 @@ class CustomDataset(Dataset):
                     tmp.append(chosen_num)
                     used_numbers.add(chosen_num)
                 else:
-                    for i in range(partNUM):
+                    for i in range(self.partNUM):
                         if i not in used_numbers:
                             available_candidates.append(i)
                     chosen_num = random.choice(available_candidates)
@@ -248,9 +246,6 @@ class CustomDataset(Dataset):
         logger.info("当前加载图为:{},下一个图:{},图训练集规模:{},图节点数目:{},图边数目:{},加载耗时:{:.5f}s"\
                         .format(self.trainingGID,self.nextGID,self.subGtrainNodesNUM,\
                         self.graphNodeNUM,self.graphEdgeNUM,time.time()-start))
-        # print("当前加载图为:{},下一个图:{},图训练集规模:{},图节点数目:{},图边数目:{},加载耗时:{:.5f}s"\
-        #                 .format(self.trainingGID,self.nextGID,self.subGtrainNodesNUM,\
-        #                 self.graphNodeNUM,self.graphEdgeNUM,time.time()-start))
 
     def loadingTrainID(self):
         # 加载子图所有训练集
@@ -730,23 +725,10 @@ class CustomDataset(Dataset):
     
     #@profile(precision=4, stream=open('./info.log','w+'))
     # 已经测试，无影响
-    def featMerge(self,uniqueList):    
-        # logger.info("-------------------------------------------------")
-        # toCPUTime = time.time()
-        # nodeids = cacheGraph[0][0]       
-        # nodeids = nodeids.to(device='cpu')
-        # logger.info("to CPU time {}s".format(time.time()-toCPUTime))
-        
-        # catTime = time.time()
-        # self.temp_merge_id[1:] = nodeids
-        # logger.info("cat time {}s".format(time.time()-catTime))
-        
-        featTime = time.time()
-        #test = self.feats[nodeLists.to(torch.int64)]   
+    def featMerge(self,uniqueList):           
+        featTime = time.time() 
         test = self.feats[uniqueList.to(torch.int64).to('cpu')]     
         logger.info("feat merge {}s".format(time.time()-featTime))
-        # logger.info("all merge {}s".format(time.time()-toCPUTime))
-        # logger.info("-------------------------------------------------")
         return test
 
         
