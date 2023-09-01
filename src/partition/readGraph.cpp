@@ -9,9 +9,9 @@ PartitionEngine::PartitionEngine(std::string graphPath)
     dstPath = graphPath + "dstList.bin";
     trainMaskPath = graphPath + "trainIDs.bin";
 
-    int srcFd = open(srcPath.c_str(), O_RDONLY);
-    int dstFd = open(dstPath.c_str(), O_RDONLY);
-    int tidsFd = open(trainMaskPath.c_str(), O_RDONLY);
+    srcFd = open(srcPath.c_str(), O_RDONLY);
+    dstFd = open(dstPath.c_str(), O_RDONLY);
+    tidsFd = open(trainMaskPath.c_str(), O_RDONLY);
     if ((srcFd == -1) || (dstFd == -1) || (tidsFd == -1) ) {
         perror("open");
     }
@@ -30,36 +30,43 @@ PartitionEngine::PartitionEngine(std::string graphPath)
     }
     tidsLength = sb.st_size;
     edgeNUM = srcLength / sizeof(int64_t);
-
-    srcAddr = static_cast<int64_t*>(mmap(nullptr, srcLength, PROT_READ, MAP_SHARED, srcFd, 0));
-    dstAddr = static_cast<int64_t*>(mmap(nullptr, dstLength, PROT_READ, MAP_SHARED, dstFd, 0));
-    tidsAddr = static_cast<int64_t*>(mmap(nullptr, tidsLength, PROT_READ, MAP_SHARED, tidsFd, 0));
-     
-    if((srcAddr == MAP_FAILED) || (dstAddr == MAP_FAILED) || (tidsAddr == MAP_FAILED))
-    {
-        perror("mmap");
-        close(srcFd);close(dstFd);close(tidsFd);
-    }
 }
 
 int PartitionEngine::readline(std::pair<int64_t, int64_t> &edge) {
-    if (readPtr == edgeNUM) 
+    if (readPtr == edgeNUM){
+        unmapBlock(srcAddr,chunkSize);
+        unmapBlock(dstAddr,chunkSize);
         return -1;
-    if (readPtr % 1024 == 0){
-        if(readPtr+1024 < edgeNUM){
-            srcCache.assign(srcAddr+readPtr,srcAddr+readPtr+1024);
-        }
-        else {
-            srcCache.assign(srcAddr+readPtr,srcAddr+edgeNUM);
-        }
-
     }
-    edge.first = srcAddr[readPtr%1024];
-    edge.second = dstAddr[readPtr%1024];
+        
+    if (readPtr % batch == 0){
+        if (chunkSize != 0) {
+            unmapBlock(srcAddr,chunkSize);
+            unmapBlock(dstAddr,chunkSize);
+        }
+        loadingMmapBlock();
+    }
+    edge.first = srcAddr[readPtr%batch];
+    edge.second = dstAddr[readPtr%batch];
     readPtr++;
     return 0;
 }
 
+void PartitionEngine::loadingMmapBlock() {
+    chunkSize = std::min((long)readSize, srcLength - offset);
+    srcAddr = static_cast<int64_t*>(mmap(nullptr, chunkSize, PROT_READ, MAP_SHARED, srcFd, offset));
+    dstAddr = static_cast<int64_t*>(mmap(nullptr, chunkSize, PROT_READ, MAP_SHARED, dstFd, offset));
+    if((srcAddr == MAP_FAILED) || (dstAddr == MAP_FAILED))
+    {
+        perror("mmap");
+        close(srcFd);close(dstFd);close(tidsFd);
+    }
+    offset += chunkSize;
+}
+
+void PartitionEngine::unmapBlock(int64_t* addr, off_t size) {
+    munmap(addr, size);
+}
 
 int main() {
     std::string graphPath = "/raid/bear/papers_bin/";
@@ -69,11 +76,6 @@ int main() {
     while(-1 != engine.readline(edge)){
         count++;
     }
-    // for (int i = 0 ; i < 10 ; i++) {
-        
-        
-    //     // std::cout << edge.first << " --> " << edge.second << std::endl;
-    // }
     std::cout << "edgeNUM :" << count << std::endl;
     return 0;
 }

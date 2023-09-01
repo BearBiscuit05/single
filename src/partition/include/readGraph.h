@@ -32,12 +32,17 @@ public:
 
     int64_t edgeNUM;
     int64_t readPtr=0;
-    size_t readSize = 4096;
-    std::vector<int64_t> srcCache;
-    std::vector<int64_t> dstCache;
+    
+    size_t readSize = 4096 * 16;
+    int batch = readSize / sizeof(int64_t);
+    off_t chunkSize = 0;
+    off_t offset = 0;
+
     PartitionEngine();
     PartitionEngine(std::string graphPath);
     int readline(std::pair<int64_t, int64_t> &edge);
+    void loadingMmapBlock();
+    void unmapBlock(int64_t* addr, off_t size);
 };
 
 
