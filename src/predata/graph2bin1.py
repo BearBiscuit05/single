@@ -13,7 +13,7 @@ import struct
 import sys
 import math
 
-PartNUM = 16
+PartNUM = 32
 
 def load_partition(rank,nodeID):
     graph_dir = 'data_8/'
@@ -181,9 +181,9 @@ if __name__ == '__main__':
     start_rank = int(sys.argv[1])
     end_rank = int(sys.argv[2])
 
-    dataPath = "/raid/bear/raw_papers100M_16"
+    dataPath = "/raid/bear/raw_papers100M_32"
     dataName = "ogb-paper100M"
-    savePath = "./../../data/papers100M/papers100M_16"
+    savePath = "/raid/bear/papers100M_32"
     index = PartNUM
 
     

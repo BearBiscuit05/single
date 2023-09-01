@@ -113,6 +113,8 @@ def train(device, dataset, model):
         total_loss = 0
         model.train()
         for it,(graph,feat,label,number) in enumerate(train_loader):
+            # print(graph)
+            # exit()
             feat = feat.to('cuda:0')
             tmp = copy.deepcopy(graph)
             tmp = [block.to('cuda:0') for block in tmp]

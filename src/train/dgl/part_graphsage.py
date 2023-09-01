@@ -11,6 +11,7 @@ import tqdm
 import argparse
 import sklearn.metrics
 import numpy as np
+partNUM = 4
 
 class SAGE(nn.Module):
     def __init__(self, in_size, hid_size, out_size):
@@ -88,7 +89,7 @@ def train(args, device, g, train_idx,val_idx, model):
     use_uva = (args.mode == 'mixed')
     train_dataloader_list = []
     val_dataloader_list = []
-    for i in range(32):
+    for i in range(partNUM):
         train_dataloader_list.append(
             DataLoader(g[i], train_idx[i], sampler, device=device,
                                   batch_size=1024, shuffle=True,
@@ -105,7 +106,7 @@ def train(args, device, g, train_idx,val_idx, model):
     for epoch in range(10):
         model.train()
         total_loss = 0
-        for i in range(32):
+        for i in range(partNUM):
             train_dataloader = train_dataloader_list[i]
             for it, (input_nodes, output_nodes, blocks) in enumerate(train_dataloader):
                 x = blocks[0].srcdata['feat']
@@ -133,7 +134,7 @@ if __name__ == '__main__':
     
     # load and preprocess dataset
     print('Loading data')
-    graph_dir = '../../../data/data/'#'data_4/'
+    graph_dir = '../../../data/products/raw-products_4/'#'data_4/'
     part_config = graph_dir + 'ogb-product.json'
     print('loading partitions')
     
@@ -142,7 +143,7 @@ if __name__ == '__main__':
     g_list = []
     train_list = []
     val_list = []
-    for i in range(32):
+    for i in range(partNUM):
         subg, node_feat, _, gpb, _, node_type, _ = dgl.distributed.load_partition(part_config, i)
         in_graph = dgl.node_subgraph(subg, subg.ndata['inner_node'].bool())
         in_graph.ndata.clear()
@@ -150,10 +151,10 @@ if __name__ == '__main__':
         in_graph.ndata['feat'] = node_feat['_N/features']
         in_graph.ndata['label'] = node_feat['_N/labels']
         train_mask = node_feat['_N/train_mask']
-        train_idx = [index for index, value in enumerate(train_mask) if value == 1]
+        train_idx = np.nonzero(train_mask).squeeze()
         train_idx = torch.Tensor(train_idx).to(torch.int64).to(device)
         val_mask = node_feat['_N/val_mask']
-        val_idx = [index for index, value in enumerate(val_mask) if value == 1]
+        val_idx = np.nonzero(val_mask).squeeze()
         val_idx = torch.Tensor(val_idx).to(torch.int64).to(device)
         subg = subg.to('cuda' if args.mode == 'puregpu' else 'cpu')
         device = torch.device('cpu' if args.mode == 'cpu' else 'cuda')

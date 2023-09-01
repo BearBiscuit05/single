@@ -19,6 +19,9 @@ void graph_mapping(
     int edgeNUM,int64_t* uniqueNUM
 );
 
-
+void node_mapping(
+    int* nodeList,int* uniqueList,
+    int nodenum,int64_t* uniqueNUM
+);
 
 #endif

@@ -115,7 +115,7 @@ def train(args, device, g, dataset, model,data=None):
 
     opt = torch.optim.Adam(model.parameters(), lr=1e-3, weight_decay=5e-4)
     
-    for epoch in range(5):
+    for epoch in range(20):
         start = time.time()
         model.train()
         total_loss = 0
@@ -167,7 +167,7 @@ if __name__ == '__main__':
                              "'puregpu' for pure-GPU training.")
     parser.add_argument('--fanout', type=ast.literal_eval, default=[3, 3], help='Fanout value')
     parser.add_argument('--layers', type=int, default=2, help='Number of layers')
-    parser.add_argument('--dataset', type=str, default='ogb-papers100M', help='Dataset name')
+    parser.add_argument('--dataset', type=str, default='ogb-products', help='Dataset name')
     args = parser.parse_args()
 
     if not torch.cuda.is_available():
@@ -201,9 +201,9 @@ if __name__ == '__main__':
     model = SAGE(in_size, 256, out_size,args.layers).to(device)
     # model training
     print('Training...')
-    #train(args, device, g, dataset, model,data=data)
-    model = torch.load("save.pt")
-    model = model.to(device) 
+    train(args, device, g, dataset, model,data=data)
+    # model = torch.load("save.pt")
+    # model = model.to(device) 
     #model.load_state_dict(torch.load("model_param.pth"))
     # test the model
     print('Testing...')

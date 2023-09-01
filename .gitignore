@@ -5,7 +5,6 @@
 **/**.csv
 **/*.zip
 **/dataset
-**/**.txt
 **/**.so
 **/**.o
 **/*-INFO
@@ -28,3 +27,5 @@
 **/cmake_install.cmake
 **/**.pth
 **/tmp
+**/log
+build.txt
