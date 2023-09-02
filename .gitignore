@@ -29,3 +29,4 @@
 **/tmp
 **/log
 build.txt
+**/*.egg-info/*.txt

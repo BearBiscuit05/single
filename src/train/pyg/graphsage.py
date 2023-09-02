@@ -111,7 +111,10 @@ def run(args, rank, world_size, dataset,split_idx=None):
     model = SAGE(dataset.num_features, 256, dataset.num_classes,args.layers).to('cuda:0')
     optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
 
-    for epoch in range(1, 11):
+    epochNum = 200
+    epochTime = [0]
+    testEpoch = [5,30,50,100,200]
+    for epoch in range(1, epochNum+1):
         model.train()
         startTime = time.time()    
         for batch in train_loader:        
@@ -120,12 +123,12 @@ def run(args, rank, world_size, dataset,split_idx=None):
             loss = F.cross_entropy(out, batch.y[:batch.batch_size].squeeze())
             loss.backward()
             optimizer.step()
-        runTime = time.time() - startTime
+        eptime = time.time() - startTime
+        totTime = epochTime[epoch-1] + eptime
+        epochTime.append(totTime)
+        print(f'Epoch: {epoch:03d}, Loss: {loss:.4f}, time: {eptime:.5f}')
 
-
-        print(f'Epoch: {epoch:02d}, Loss: {loss:.4f}, time: {runTime:.5f}')
-
-        if rank == 0 and epoch % 5 == 0:  # We evaluate on a single GPU for now
+        if rank == 0 and epoch in testEpoch:  # We evaluate on a single GPU for now
             if args.dataset == 'Reddit':
                 model.eval()
                 with torch.no_grad():
@@ -141,8 +144,8 @@ def run(args, rank, world_size, dataset,split_idx=None):
                 train_acc, val_acc, test_acc = test(model,evaluator,data,subgraph_loader,split_idx)
                 print(f'Train: {train_acc:.4f}, Val: {val_acc:.4f}, '
                             f'Test: {test_acc:.4f}')
-            
-
+    print("Average Training Time of {:d} Epoches:{:.6f}".format(epochNum,epochTime[epochNum]/epochNum))
+    print("Total   Training Time of {:d} Epoches:{:.6f}".format(epochNum,epochTime[epochNum]))
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='pyg gcn program')
