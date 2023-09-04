@@ -115,7 +115,7 @@ def train(args, device, g, dataset, model,data=None):
 
     opt = torch.optim.Adam(model.parameters(), lr=1e-3, weight_decay=5e-4)
     
-    for epoch in range(20):
+    for epoch in range(10):
         start = time.time()
         model.train()
         total_loss = 0
@@ -137,8 +137,6 @@ def train(args, device, g, dataset, model,data=None):
         acc = evaluate(model, g, val_dataloader)
         print("Epoch {:05d} | Loss {:.4f} | Accuracy {:.4f} "
               .format(epoch, total_loss / (it+1), acc.item()))
-        save_path = 'model'+str(epoch)+'.pth'
-        torch.save(model.state_dict(), save_path)
     
 def load_reddit(self_loop=True):
     from dgl.data import RedditDataset
@@ -165,7 +163,7 @@ if __name__ == '__main__':
     parser.add_argument("--mode", default='mixed', choices=['cpu', 'mixed', 'puregpu'],
                         help="Training mode. 'cpu' for CPU training, 'mixed' for CPU-GPU mixed training, "
                              "'puregpu' for pure-GPU training.")
-    parser.add_argument('--fanout', type=ast.literal_eval, default=[3, 3], help='Fanout value')
+    parser.add_argument('--fanout', type=ast.literal_eval, default=[15, 25], help='Fanout value')
     parser.add_argument('--layers', type=int, default=2, help='Number of layers')
     parser.add_argument('--dataset', type=str, default='ogb-products', help='Dataset name')
     args = parser.parse_args()

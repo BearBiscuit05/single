@@ -13,7 +13,7 @@
 #include <cstdint>
 #include <sys/types.h>
 #include <fcntl.h>
-class PartitionEngine {
+class ReadEngine {
 public:
     std::string graphPath;
     std::string srcPath;
@@ -38,11 +38,12 @@ public:
     off_t chunkSize = 0;
     off_t offset = 0;
 
-    PartitionEngine();
-    PartitionEngine(std::string graphPath);
+    ReadEngine();
+    ReadEngine(std::string graphPath);
     int readline(std::pair<int64_t, int64_t> &edge);
     void loadingMmapBlock();
     void unmapBlock(int64_t* addr, off_t size);
+    void readTrainIdx(std::vector<int64_t>& ids);
 };
 
 

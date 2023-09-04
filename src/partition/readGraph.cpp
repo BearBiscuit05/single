@@ -1,8 +1,8 @@
 #include "readGraph.h"
 
-PartitionEngine::PartitionEngine() {}
+ReadEngine::ReadEngine() {}
 
-PartitionEngine::PartitionEngine(std::string graphPath)
+ReadEngine::ReadEngine(std::string graphPath)
 {
     graphPath = graphPath;
     srcPath = graphPath + "srcList.bin";
@@ -32,7 +32,7 @@ PartitionEngine::PartitionEngine(std::string graphPath)
     edgeNUM = srcLength / sizeof(int64_t);
 }
 
-int PartitionEngine::readline(std::pair<int64_t, int64_t> &edge) {
+int ReadEngine::readline(std::pair<int64_t, int64_t> &edge) {
     if (readPtr == edgeNUM){
         unmapBlock(srcAddr,chunkSize);
         unmapBlock(dstAddr,chunkSize);
@@ -52,7 +52,7 @@ int PartitionEngine::readline(std::pair<int64_t, int64_t> &edge) {
     return 0;
 }
 
-void PartitionEngine::loadingMmapBlock() {
+void ReadEngine::loadingMmapBlock() {
     chunkSize = std::min((long)readSize, srcLength - offset);
     srcAddr = static_cast<int64_t*>(mmap(nullptr, chunkSize, PROT_READ, MAP_SHARED, srcFd, offset));
     dstAddr = static_cast<int64_t*>(mmap(nullptr, chunkSize, PROT_READ, MAP_SHARED, dstFd, offset));
@@ -64,18 +64,17 @@ void PartitionEngine::loadingMmapBlock() {
     offset += chunkSize;
 }
 
-void PartitionEngine::unmapBlock(int64_t* addr, off_t size) {
+void ReadEngine::unmapBlock(int64_t* addr, off_t size) {
     munmap(addr, size);
 }
 
-int main() {
-    std::string graphPath = "/raid/bear/papers_bin/";
-    PartitionEngine engine(graphPath);
-    std::pair<int64_t, int64_t> edge;
-    int64_t count = 0;
-    while(-1 != engine.readline(edge)){
-        count++;
+void ReadEngine::readTrainIdx(std::vector<int64_t>& ids) {
+    int tidsNUM = tidsLength / sizeof(int64_t);
+    tidsAddr = static_cast<int64_t*>(mmap(nullptr, tidsLength, PROT_READ, MAP_SHARED, tidsFd, 0));
+    ids.clear();
+    ids.resize(tidsNUM);
+    for (int i = 0; i < tidsNUM; ++i) {
+        ids[i] = tidsAddr[i];
     }
-    std::cout << "edgeNUM :" << count << std::endl;
-    return 0;
 }
+

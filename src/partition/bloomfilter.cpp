@@ -102,30 +102,6 @@ int main(int argc, char** argv)
         printf("edge[%2d->%2d] weight = %d\n",e.u,e.v,e.w);
     }
 
-    // 3. 向BloomFilter中新增数值
-    // char url[128] = {0};
-    // for(int i = 0; i < ADD_ITEMS; i++){
-    //     sprintf(url, "https://blog.csdn.net/qq_41453285/%d.html", i);
-    //     if(0 == BloomFilter_Add(&stBloomFilter, (const void*)url, strlen(url))){
-    //         // printf("add %s success", url);
-    //     }else{
-    //         printf("add %s failed", url);
-    //     }
-    //     memset(url, 0, sizeof(url));
-    // }
-
-    // 4. check url exist or not
-    // char* str = "https://blog.csdn.net/qq_41453285/0.html";
-    // if (0 == BloomFilter_Check(&stBloomFilter, (const void*)str, strlen(str)) ){
-    //     printf("https://blog.csdn.net/qq_41453285/0.html exist\n");
-    // }
-
-    // char* str2 = "https://blog.csdn.net/qq_41453285/10001.html";
-    // if (0 != BloomFilter_Check(&stBloomFilter, (const void*)str2, strlen(str2)) ){
-    //       printf("https://blog.csdn.net/qq_41453285/10001.html not exist\n");
-    // }
-
-    // 5. free bloomfilter
     FreeBloomFilter(&stBloomFilter);
     getchar();
     return 0;

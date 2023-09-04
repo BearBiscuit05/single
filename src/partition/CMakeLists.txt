@@ -21,7 +21,7 @@ include_directories("../../3rdparty/parallel-hashmap")
 # add_executable(bloomfilter bloomfilter.cpp)
 # add_executable(ogb-products-bloomfilter ogb-products-bloomfilter.cpp)
 # add_executable(getEdges getEdges.cpp)
-add_executable(readGraph readGraph.cpp)
+add_executable(readGraph main.cpp readGraph.cpp)
 # add_executable(map_test map_test.cpp)
 # add_executable(unordered_map_test unorder_map_test.cpp)
 # 添加其他的源文件

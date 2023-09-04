@@ -14,6 +14,8 @@
 #include <string.h>
 #include <math.h>
 #include <set>
+#include <vector>
+#include <unistd.h>
 
 #define __BLOOMFILTER_VERSION__ "1.1"
 #define __MGAIC_CODE__          (0x01464C42)
@@ -230,11 +232,6 @@ inline int RealResetBloomFilter(BaseBloomFilter *pstBloomfilter)
     return 0;
 }
 
-///
-///  函数FORCE_INLINE，加速执行
-///
-// MurmurHash2, 64-bit versions, by Austin Appleby
-// https://sites.google.com/site/murmurhash/
 FORCE_INLINE uint64_t MurmurHash2_x64 ( const void * key, int len, uint32_t seed )
 {
     const uint64_t m = 0xc6a4a7935bd1e995;
@@ -470,15 +467,25 @@ inline int LoadBloomFilterFromFile(BaseBloomFilter *pstBloomfilter, char *szFile
 }
 
 // 在bloomfilter中添加n个点
-// FORCE_INLINE int BloomFilter_AddNodes(BaseBloomFilter *pstBloomfilter,std::vector<int> nodes)
-// {
-//     int ret = 0;
-//     for(int i = 0;i < nodes.size();i++)
-//     {
-//         ret += BloomFilter_Add(pstBloomfilter,(const void *)(&nodes[i]),sizeof(int));
-//     }
-//     return ret;
-// }
+FORCE_INLINE int BloomFilter_AddNodes(BaseBloomFilter *pstBloomfilter,std::vector<int> nodes)
+{
+    int ret = 0;
+    for(int i = 0;i < nodes.size();i++)
+    {
+        ret += BloomFilter_Add(pstBloomfilter,(const void *)(&nodes[i]),sizeof(int));
+    }
+    return ret;
+}
+
+FORCE_INLINE int BloomFilter_AddNodes(BaseBloomFilter *pstBloomfilter,std::vector<int64_t> nodes)
+{
+    int ret = 0;
+    for(int i = 0;i < nodes.size();i++)
+    {
+        ret += BloomFilter_Add(pstBloomfilter,(const void *)(&nodes[i]),sizeof(int64_t));
+    }
+    return ret;
+}
 
 FORCE_INLINE int BloomFilter_AddNodes(BaseBloomFilter *pstBloomfilter,std::set<int> nodes)
 {
@@ -497,10 +504,27 @@ FORCE_INLINE int BloomFilter_CheckEdge(BaseBloomFilter *pstBloomfilter,const int
     int ret2 = BloomFilter_Check(pstBloomfilter,(const void *)&dstid,sizeof(int));
     return (ret1 + 2*ret2);
     /*
-        返回0：该边2点都不在bloomfilter中，无需处理
-        返回1：该边的dstid在bloomfilter中，在当前迭代轮次中被选中，需要把srcid加入bloomfilter的点集缓存，更新边权
-        返回2：该边的srcid在bloomfilter中，在当前迭代轮次中被选中，需要把dstid加入bloomfilter的点集缓存，更新边权
-        返回3：该边已经在前面迭代轮次中被加入bloomfilter中，无需处理
+    return :
+        0：该边2点都不在bloomfilter中，无需处理
+        1：该边的dstid在bloomfilter中，在当前迭代轮次中被选中，需要把srcid加入bloomfilter的点集缓存，更新边权
+        2：该边的srcid在bloomfilter中，在当前迭代轮次中被选中，需要把dstid加入bloomfilter的点集缓存，更新边权
+        3：该边已经在前面迭代轮次中被加入bloomfilter中，无需处理
+    */
+}
+
+FORCE_INLINE int BloomFilter_CheckEdge(BaseBloomFilter *pstBloomfilter,std::pair<int64_t,int64_t>& edge)
+{
+    const int64_t srcid = edge.first;
+    const int64_t dstid = edge.second;
+    int ret1 = BloomFilter_Check(pstBloomfilter,(const void *)&srcid,sizeof(int64_t));
+    int ret2 = BloomFilter_Check(pstBloomfilter,(const void *)&dstid,sizeof(int64_t));
+    return (ret1 + 2*ret2);
+    /*
+    return :
+        0：该边2点都不在bloomfilter中，无需处理
+        1：该边的dstid在bloomfilter中，在当前迭代轮次中被选中，需要把srcid加入bloomfilter的点集缓存，更新边权
+        2：该边的srcid在bloomfilter中，在当前迭代轮次中被选中，需要把dstid加入bloomfilter的点集缓存，更新边权
+        3：该边已经在前面迭代轮次中被加入bloomfilter中，无需处理
     */
 }
 
