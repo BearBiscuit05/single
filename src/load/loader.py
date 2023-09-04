@@ -184,7 +184,7 @@ class CustomDataset(Dataset):
                     tmp.append(chosen_num)
                     used_numbers.add(chosen_num)
                 else:
-                    for i in range(partNUM):
+                    for i in range(self.partNUM):
                         if i not in used_numbers:
                             available_candidates.append(i)
                     chosen_num = random.choice(available_candidates)
@@ -311,6 +311,7 @@ class CustomDataset(Dataset):
         self.subGptr += 1
         subGID = self.trainSubGTrack[self.subGptr//self.partNUM][self.subGptr%self.partNUM]
         filePath = self.dataPath + "/part" + str(subGID)
+        # TODO:存在优化/加速加载
         srcdata = np.fromfile(filePath+"/srcList.bin", dtype=np.int32)
         srcdata = torch.tensor(srcdata,device=('cuda:%d'%self.cudaDevice))#.to(device=('cuda:%d'%self.cudaDevice))
         rangedata = np.fromfile(filePath+"/range.bin", dtype=np.int32)
@@ -319,10 +320,11 @@ class CustomDataset(Dataset):
         if merge :
             srcdata = srcdata + self.graphNodeNUM
             rangedata = rangedata + self.graphEdgeNUM
+            # TODO:存在优化
             self.cacheData[0] = torch.cat([self.cacheData[0],srcdata])
             self.cacheData[1] = torch.cat([self.cacheData[1],rangedata])
         else:
-            # 第一次加载
+            # TODO:存在优化
             self.cacheData.append(srcdata)
             self.cacheData.append(rangedata)
         
@@ -444,6 +446,7 @@ class CustomDataset(Dataset):
         cacheGraph[1] = cacheGraph[1][:mapping_ptr[-1]]
         uniqueNUM = torch.Tensor([0]).to(torch.int64).to('cuda:0')
         edgeNUM = mapping_ptr[-1]
+        # TODO: 需要优化
         all_node = torch.cat([cacheGraph[1],cacheGraph[0]])
         unique = torch.zeros(mapping_ptr[-1]*2,dtype=torch.int32).to('cuda:0')
         signn.torch_graph_mapping(all_node,cacheGraph[0],cacheGraph[1],cacheGraph[0],cacheGraph[1],unique,edgeNUM,uniqueNUM)
