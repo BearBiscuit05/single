@@ -306,6 +306,7 @@ class CustomDataset(Dataset):
         self.subGptr += 1
         subGID = self.trainSubGTrack[self.subGptr//self.partNUM][self.subGptr%self.partNUM]
         filePath = self.dataPath + "/part" + str(subGID)
+        # TODO:存在优化/加速加载
         srcdata = np.fromfile(filePath+"/srcList.bin", dtype=np.int32)
         srcdata = torch.tensor(srcdata,device=('cuda:%d'%self.cudaDevice))#.to(device=('cuda:%d'%self.cudaDevice))
         rangedata = np.fromfile(filePath+"/range.bin", dtype=np.int32)
@@ -314,10 +315,11 @@ class CustomDataset(Dataset):
         if merge :
             srcdata = srcdata + self.graphNodeNUM
             rangedata = rangedata + self.graphEdgeNUM
+            # TODO:存在优化
             self.cacheData[0] = torch.cat([self.cacheData[0],srcdata])
             self.cacheData[1] = torch.cat([self.cacheData[1],rangedata])
         else:
-            # 第一次加载
+            # TODO:存在优化
             self.cacheData.append(srcdata)
             self.cacheData.append(rangedata)
         
@@ -439,6 +441,7 @@ class CustomDataset(Dataset):
         cacheGraph[1] = cacheGraph[1][:mapping_ptr[-1]]
         uniqueNUM = torch.Tensor([0]).to(torch.int64).to('cuda:0')
         edgeNUM = mapping_ptr[-1]
+        # TODO: 需要优化
         all_node = torch.cat([cacheGraph[1],cacheGraph[0]])
         unique = torch.zeros(mapping_ptr[-1]*2,dtype=torch.int32).to('cuda:0')
         signn.torch_graph_mapping(all_node,cacheGraph[0],cacheGraph[1],cacheGraph[0],cacheGraph[1],unique,edgeNUM,uniqueNUM)
@@ -627,18 +630,9 @@ class CustomDataset(Dataset):
             batchlen = self.batchsize
             cacheLabel = self.nodeLabels[sampleIDs]
         else:
-            # 最后一个batch
-            # logger.debug("last batch...")
             offset = self.trainptr*self.batchsize
-            # logger.debug("train loop:{} , offset:{} ,subGtrainNodesNUM:{}".format(self.trainLoop,offset,self.subGtrainNodesNUM))
-            #sampleIDs = self.trainNodes[offset:self.subGtrainNodesNUM]
             sampleIDs[:self.subGtrainNodesNUM - offset] = self.trainNodes[offset:self.subGtrainNodesNUM]
-
             batchlen = self.subGtrainNodesNUM - offset
-            #sliceIDs = sampleIDs[0:self.subGtrainNodesNUM - offset].to(torch.long)
-            # print("==================>last batch<===========================")
-            # print("sampleIDs : ",sampleIDs)
-            # print(batchlen)
 
             cacheLabel = self.nodeLabels[sampleIDs[0:self.subGtrainNodesNUM - offset]]
         logger.info("create Data Time cost {:.5f}s".format(time.time()-createDataTime))    
@@ -646,7 +640,6 @@ class CustomDataset(Dataset):
 
         ##
         sampleTime = time.time()
-        # logger.debug("sampleIDs shape:{}".format(len(sampleIDs)))
         if self.train_name == "LP":
             negNUM = 1
             uniqueSeed,raw_edges,src_cat,dst_cat = self.getNegNode(sampleIDs,batchlen,negNUM=negNUM)
@@ -785,93 +778,12 @@ class CustomDataset(Dataset):
         self.loadingMemFeat(self.trainSubGTrack[self.subGptr//self.partNUM][self.subGptr%self.partNUM])
         self.initNextGraphData()
         self.sampleFlagQueue.put(self.executor.submit(self.preGraphBatch)) #发送采样命令
-
-########################## dgl接口 ##########################
-    def genBlockTemplate(self):
-        template = []
-        blocks = []
-        ptr = 0
-        seeds = [i for i in range(1,self.batchsize+1)]
-        for number in self.fanout:
-            dst = copy.deepcopy(seeds)
-            src = copy.deepcopy(seeds)
-            ptr = len(src) + 1    
-            for ids in seeds:
-                for i in range(number-1):
-                    dst.append(ids)
-                    src.append(ptr)
-                    ptr += 1
-            seeds = copy.deepcopy(src)
-            template.insert(0,[torch.tensor(src),torch.tensor(dst)])
-        return template
-        
-    def transGraph2DGLBlock(self,cacheGraph,mapping_ptr):
-        layer = len(mapping_ptr) - 1
-        blocks = []
-        for index in range(1,layer+1):
-            src = cacheGraph[:mapping_ptr[-index]]
-            dst = cacheGraph[:mapping_ptr[-index]]
-            data = (src,dst)
-            block = self.create_dgl_block(data,len(self.templateBlock[index][0])+1,(len(self.templateBlock[index][0])//self.fanout[-(index+1)])+1)
-            blocks.append(block)
-        return blocks
-
+ 
     def create_dgl_block(self, data, num_src_nodes, num_dst_nodes):
         row, col = data
         gidx = dgl.heterograph_index.create_unitgraph_from_coo(2, num_src_nodes, num_dst_nodes, row, col, 'coo')
         g = DGLBlock(gidx, (['_N'], ['_N']), ['_E'])
         return g
-
-    def tmp_create_dgl_block(self,cacheData):
-        blocks = []
-        # 传入数据结构:二维list数组，分别为每一个hop的COO图数据
-        # 输出时，最边缘图在前面
-        for info in cacheData:
-            # info 是每一层的图数据信息
-            src = np.array(info[0],dtype=np.int32)
-            dst = np.array(info[1],dtype=np.int32)
-            block = dgl.graph((src, dst))
-            block = dgl.to_block(block)
-            blocks.insert(0,block)  
-        return blocks
-
-########################## pyg接口 ##########################
-    def genPYGBatchTemplate(self):
-        zeros = torch.tensor([0])
-        template_src = torch.empty(0,dtype=torch.int64)
-        template_dst = torch.empty(0,dtype=torch.int64)
-        ptr = self.batchsize + 1
-        seeds = [i for i in range(1, self.batchsize + 1)]
-        for number in self.fanout:
-            dst = copy.deepcopy(seeds)
-            src = copy.deepcopy(seeds)
-            for ids in seeds:
-                for i in range(number-1):
-                    dst.append(ids)
-                    src.append(ptr)
-                    ptr += 1
-            seeds = copy.deepcopy(src)
-            template_src = torch.cat([template_src,torch.tensor(src,dtype=torch.int64)])
-            template_dst = torch.cat([template_dst,torch.tensor(dst,dtype=torch.int64)])
-        PYGTemplate = torch.stack([template_src,template_dst]).to('cuda:0')
-        return PYGTemplate
-
-    def transGraph2PYGBatch(self,graphdata):
-        # 先生成掩码
-        masks = []
-        for src, dst in graphdata:
-            layer_mask = torch.ge(src, 0)
-            masks.append(layer_mask)        
-        masks = torch.cat(masks)
-        template = copy.deepcopy(self.templateBlock)
-        template = template * masks
-        return template
-
-    def get_test_idx(self,testSize):
-        np.random.seed()  # 设置随机种子，保证每次运行结果相同
-        matrix = np.random.choice(range(0,self.idbound[self.partNUM-1][1]), size=testSize, replace=False)
-        matrix = matrix.reshape(1,testSize)
-        return torch.tensor(matrix).to(device='cpu')
 
 def collate_fn(data):
     """

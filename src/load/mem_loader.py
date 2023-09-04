@@ -16,9 +16,6 @@ import logging
 import signn
 import os
 import gc
-from memory_profiler import profile
-
-
 
 class CustomDataset(Dataset):
     #@profile(precision=4, stream=open('./__init__.log','w+'))
@@ -49,7 +46,6 @@ class CustomDataset(Dataset):
 
         #### 训练记录 ####
         self.trainSubGTrack = self.randomTrainList()    # 训练轨迹
-        print(self.trainSubGTrack)
         self.subGptr = -1                               # 子图训练指针，记录当前训练的位置，在加载图时发生改变
         
         #### 节点类型加载 ####
@@ -82,34 +78,20 @@ class CustomDataset(Dataset):
 
 
         #### 数据预取 ####
-        self.template_cache_graph,self.template_cache_label = self.initCacheData()
+        # self.template_cache_graph,self.template_cache_label = self.initCacheData()
         self.loadingGraph(merge=False)
         self.loadingMemFeat(self.trainSubGTrack[self.subGptr//self.partNUM][self.subGptr%self.partNUM])
+        print("next init graph")
         self.initNextGraphData()
+        #self.sampleFlagQueue.put(self.executor.submit(self.preGraphBatch)) #发送采样命令
         
     def __len__(self):  
         return self.NodeLen
     
     def __getitem__(self, index):
-        # 批数据预取 缓存1个
-        
-        if index % self.preRating == 0:
-            # 调用预取函数
-            self.sampleFlagQueue.put(self.executor.submit(self.preGraphBatch))
-        
-        # 获取采样数据
         if index % self.batchsize == 0:
-            if self.graphPipe.qsize() > 0:
-                self.sampleFlagQueue.get()
-                cacheData = self.graphPipe.get()
-                return cacheData[0],cacheData[1],cacheData[2],cacheData[3]
-                
-            else: #需要等待
-                flag = self.sampleFlagQueue.get()
-                data = flag.result()
-                cacheData = self.graphPipe.get()
-                return cacheData[0],cacheData[1],cacheData[2],cacheData[3]
-        return 0,0,0,0
+            return [],[],[],[]
+        return 0,0
 
 ########################## 初始化训练数据 ##########################
     def readConfig(self,confPath):
@@ -129,53 +111,11 @@ class CustomDataset(Dataset):
         self.framework = config['framework']
         self.mode = config['mode']
         self.classes = config['classes']
-        formatted_data = json.dumps(config, indent=4)
-
-    def custom_sort(self):
-        idMap={}
-        for i in range(self.partNUM):
-            folder_path = self.dataPath+"/part"+str(i)
-            idMap[i] = []
-            for filename in os.listdir(folder_path):
-                if filename.startswith("halo") and filename.endswith(".bin"):
-                    try:
-                        x = int(filename[len("halo"):-len(".bin")])
-                        idMap[i].append(x)
-                    except:
-                        continue
-
-        sorted_numbers = []
-        lastid = 0
-        for loop in range(self.epoch + 1):
-            used_numbers = set()
-            tmp = []
-            for idx in range(0,self.partNUM):
-                if idx == 0:
-                    num = lastid
-                else:
-                    num = tmp[-1]
-                candidates = idMap[num]
-                available_candidates = [int(candidate) for candidate in candidates if int(candidate) not in used_numbers]                
-                if available_candidates:
-                    chosen_num = random.choice(available_candidates)
-                    tmp.append(chosen_num)
-                    used_numbers.add(chosen_num)
-                else:
-                    for i in range(partNUM):
-                        if i not in used_numbers:
-                            available_candidates.append(i)
-                    chosen_num = random.choice(available_candidates)
-                    tmp.append(chosen_num)
-                    used_numbers.add(chosen_num)
-            sorted_numbers.append(tmp)
-            lastid = tmp[-1]
-        print(sorted_numbers)
-        return sorted_numbers
+        #print(formatted_data)
 
     def randomTrainList(self): 
-        #epochList = self.custom_sort()
         epochList = []
-        for i in range(10): # 额外多增加一行
+        for i in range(self.epoch + 1): # 额外多增加一行
             random_array = np.random.choice(np.arange(0, self.partNUM), size=self.partNUM, replace=False)
             if len(epochList) == 0:
                 epochList.append(random_array)
@@ -185,15 +125,17 @@ class CustomDataset(Dataset):
                 while(lastid == random_array[0]):
                     random_array = np.random.choice(np.arange(0, self.partNUM), size=self.partNUM, replace=False)
                 epochList.append(random_array)
-   
+
         return epochList
 
 ########################## 加载/释放 图结构数据 ##########################
     #@profile(precision=4, stream=open('./info.log','w+'))
     def initNextGraphData(self):
         start = time.time()
+        # 查看是否需要释放
         if self.subGptr > 0:
             self.moveGraph()
+        # 对于将要计算的子图(已经加载)，修改相关信息
         self.trainingGID = self.trainSubGTrack[self.subGptr//self.partNUM][self.subGptr%self.partNUM]
         self.graphNodeNUM = int(len(self.cacheData[1]) / 2 )# 获取当前节点数目
         self.graphEdgeNUM = len(self.cacheData[0])
@@ -210,11 +152,11 @@ class CustomDataset(Dataset):
             self.subGtrainNodesNUM = self.testNodeNumbers[self.trainingGID]
         self.trainLoop = ((self.subGtrainNodesNUM - 1) // self.batchsize) + 1
 
+        # 对于辅助计算的子图，进行加载，以及加载融合边
         self.loadingGraph()
         self.nextGID = self.trainSubGTrack[self.subGptr//self.partNUM][self.subGptr%self.partNUM]
         halostart = time.time()
         haloend = time.time()
-        print("loading.....=====================>")
         self.loadingMemFeat(self.nextGID)
 
     def loadingTrainID(self):
@@ -232,7 +174,6 @@ class CustomDataset(Dataset):
             fill_length = self.batchsize - current_length % self.batchsize
             padding = torch.full((fill_length,), -1, dtype=idDict[index].dtype)
             idDict[index] = torch.cat((idDict[index], padding))
-            #logger.debug("subG:{} ,real train len:{}, padding number:{}".format(index,current_length,padding))
             self.trainNUM += idDict[index].shape[0]
         return idDict,numberList
 
@@ -274,17 +215,13 @@ class CustomDataset(Dataset):
     def loadingGraph(self,merge=True):
         # 加载下一个等待训练的图
         self.subGptr += 1
-        # print("self.subGptr:",self.subGptr)
-        # print(self.subGptr//self.partNUM,"  -  ",self.subGptr%self.partNUM)
         subGID = self.trainSubGTrack[self.subGptr//self.partNUM][self.subGptr%self.partNUM]
         filePath = self.dataPath + "/part" + str(subGID)
         srcdata = np.fromfile(filePath+"/srcList.bin", dtype=np.int32)
-        srcdata = torch.tensor(srcdata,device=('cuda:%d'%self.cudaDevice))#.to(device=('cuda:%d'%self.cudaDevice))
+        srcdata = torch.tensor(srcdata,device='cpu')#.to(device=('cuda:%d'%self.cudaDevice))
         rangedata = np.fromfile(filePath+"/range.bin", dtype=np.int32)
-        rangedata = torch.tensor(rangedata,device=('cuda:%d'%self.cudaDevice))#.to(device=('cuda:%d'%self.cudaDevice))
-        
-        #print(type(srcdata))
-        #print(type(rangedata))
+        rangedata = torch.tensor(rangedata,device='cpu')#.to(device=('cuda:%d'%self.cudaDevice))
+
         if merge :
             srcdata = srcdata + self.graphNodeNUM
             rangedata = rangedata + self.graphEdgeNUM
@@ -303,61 +240,16 @@ class CustomDataset(Dataset):
             labels = torch.from_numpy(np.fromfile(filePath+"/label.bin", dtype=np.int32)).to(torch.int64)
         return labels
 
-    #@profile(precision=4, stream=open('./info.log','w+'))
     def moveGraph(self):
+        print("testing")
         self.cacheData[0] = self.cacheData[0][self.graphEdgeNUM:]   # 边
         self.cacheData[1] = self.cacheData[1][self.graphNodeNUM*2:]   # 范围
         self.cacheData[0] = self.cacheData[0] - self.graphNodeNUM   # 边 nodeID
         self.cacheData[1] = self.cacheData[1] - self.graphEdgeNUM
-        self.feats = self.feats[self.graphNodeNUM:]  
+        self.feats = self.feats[self.graphNodeNUM:]   
+        gc.collect()
 
-########################## 采样图结构 ##########################
-    def getNegNode(self,sampleIDs,batchlen,negNUM=1):
-        sampleIDs = sampleIDs.to(torch.int32).to('cuda:0')
-        out_src = torch.zeros(batchlen).to(torch.int32).to('cuda:0')
-        out_dst = torch.zeros(batchlen).to(torch.int32).to('cuda:0')
-        seed_num = batchlen
-        fan_num = 1
-        out_num = torch.Tensor([0]).to(torch.int64).to('cuda:0')
-        # print("sample 1111")
-        # print(sampleIDs)
-        signn.torch_sample_hop(
-                self.cacheData[0][:self.graphEdgeNUM],self.cacheData[1][:self.graphNodeNUM*2],
-                sampleIDs,seed_num,fan_num,
-                out_src,out_dst,out_num)
-        # print("sample 1122")
-        out_src = out_src[:out_num.item()]
-        out_dst = out_dst[:out_num.item()]
-        raw_src = copy.deepcopy(out_src)
-        raw_dst = copy.deepcopy(out_dst)
-        # print(raw_src.shape + raw_src.shape)
 
-        # print()
-        # exit()
-        neg_dst = torch.randint(low=0, high=self.graphNodeNUM, size=raw_src.shape).to(torch.int32).to("cuda:0")
-        
-        all_tensor = torch.cat([raw_src,raw_dst,raw_src,neg_dst])
-        raw_edges = torch.cat([raw_src,raw_dst])
-        src_cat = torch.cat([raw_src,raw_src])
-        dst_cat = torch.cat([raw_dst,neg_dst])
-        raw_src = copy.deepcopy(out_src)
-        raw_dst = copy.deepcopy(out_dst)
-        edgeNUM = len(src_cat)     
-        uniqueNUM = torch.Tensor([0]).to(torch.int64).to('cuda:0')
-        unique = torch.zeros(len(all_tensor),dtype=torch.int32).to('cuda:0')
-
-        # t_min,_ = torch.max(raw_src,dim=0)
-        # t1_max,_ = torch.max(raw_dst,dim=0)
-        # t2_max,_ = torch.max(neg_dst,dim=0)
-        # print("raw_src max :",t_min,"  raw_dst max :",t1_max,"  neg_dst max :",t2_max)
-        # print("all_tensor:",all_tensor," shape :",all_tensor.shape)
-        signn.torch_graph_mapping(all_tensor,src_cat,dst_cat,src_cat,dst_cat,unique,edgeNUM,uniqueNUM)
-        # if uniqueNUM.item() > 
-        # print("uniqueNUM.item():",uniqueNUM.item())
-        # print("unique: ",unique[:uniqueNUM.item()])
-        return unique[:uniqueNUM.item()],raw_edges,src_cat,dst_cat
-    
-    #@profile(precision=4, stream=open('./initCacheData.log','w+'))
     def initCacheData(self):
         if self.train_name == "NC":
             number = self.batchsize
@@ -366,47 +258,25 @@ class CustomDataset(Dataset):
         tmp = number
         cacheGraph = [[],[]]
         for layer, fan in enumerate(self.fanout):
-            dst = torch.full((tmp * fan,), -1, dtype=torch.int32).to("cuda:0")  # 使用PyTorch张量，指定dtype
-            src = torch.full((tmp * fan,), -1, dtype=torch.int32).to("cuda:0")  # 使用PyTorch张量，指定dtype
+            dst = torch.full((tmp * fan,), -1, dtype=torch.int32).to("cpu")  # 使用PyTorch张量，指定dtype
+            src = torch.full((tmp * fan,), -1, dtype=torch.int32).to("cpu")  # 使用PyTorch张量，指定dtype
             cacheGraph[0].append(src)
             cacheGraph[1].append(dst)
-            tmp = tmp * fan
+            tmp = tmp * (fan + 1)
+
+
         cacheLabel = torch.zeros(self.batchsize)
         cacheGraph[0] = torch.cat(cacheGraph[0],dim=0)
         cacheGraph[1] = torch.cat(cacheGraph[1],dim=0)
         return cacheGraph, cacheLabel
 
-    #@profile(precision=4, stream=open('./info.log','w+'))
-    # 无影响
-    def preGraphBatch(self):
-        self.trainptr = 0           
-        self.initNextGraphData()
-
-        # cacheTime = time.time()
-        # cacheGraph = copy.deepcopy(self.template_cache_graph)
-        # cacheLabel = copy.deepcopy(self.template_cache_label)
-        # sampleIDs = -1 * torch.ones(self.batchsize,dtype=torch.int64)
-
-        # createDataTime = time.time()
-        # batchlen = 0
-        # if self.trainptr < self.trainLoop - 1:
-        #     # 完整batch
-        #     sampleIDs = self.trainNodes[self.trainptr*self.batchsize:(self.trainptr+1)*self.batchsize]
-        #     batchlen = self.batchsize
-        #     cacheLabel = self.nodeLabels[sampleIDs]
-        # else:
-        #     offset = self.trainptr*self.batchsize
-        #     sampleIDs[:self.subGtrainNodesNUM - offset] = self.trainNodes[offset:self.subGtrainNodesNUM]
-        #     batchlen = self.subGtrainNodesNUM - offset
-        #     cacheLabel = self.nodeLabels[sampleIDs[0:self.subGtrainNodesNUM - offset]]
-        
-        cacheData = [[],[],[],[]]
-        self.graphPipe.put(cacheData)
-        
-        self.trainptr += 1
-        return 0
-
-
+########################## 特征提取 ##########################
+    def loadingFeatFileHead(self):
+        for index in range(self.partNUM):
+            filePath = self.dataPath + "/part" + str(index)
+            file = open(filePath+"/feat.bin", "r+b")
+            self.readfile.append(file)
+            self.mmapfile.append(mmap.mmap(self.readfile[-1].fileno(), 0, access=mmap.ACCESS_DEFAULT))
 
     def closeMMapFileHead(self):
         for file in self.mmapfile:
@@ -419,19 +289,18 @@ class CustomDataset(Dataset):
         filePath = self.dataPath + "/part" + str(rank)
         tmp_feat = np.fromfile(filePath+"/feat.bin", dtype=np.float32)
         if self.feats == []:
-            self.feats = torch.from_numpy(tmp_feat).reshape(-1,self.featlen)
+            self.feats = torch.from_numpy(tmp_feat).reshape(-1,self.featlen)#.to("cpu")
         else:
-            tmp_feat = torch.from_numpy(tmp_feat).reshape(-1,self.featlen)
-            self.feats = torch.cat([self.feats,tmp_feat])
-    
-    #@profile(precision=4, stream=open('./info.log','w+'))
+            tmp_feat = torch.from_numpy(tmp_feat).reshape(-1,self.featlen)#.to("cpu")
+            #self.feats = torch.cat([self.feats,tmp_feat])
+
     def featMerge(self,uniqueList):    
+        
         featTime = time.time() 
         test = self.feats[uniqueList.to(torch.int64).to('cpu')]     
         return test
     
     def loadModeData(self,mode):
-        #logger.info("loading mode:'{}' data".format(mode))
         if "train" == mode:
             self.trainNodeDict,self.trainNodeNumbers = self.loadingTrainID() # 训练节点字典，训练节点数目
             self.NodeLen = self.trainNUM
@@ -441,6 +310,13 @@ class CustomDataset(Dataset):
         elif "test" == mode:
             self.testNodeDict,self.testNodeNumbers = self.loadingTestID() # 训练节点字典，训练节点数目
             self.NodeLen = self.testNUM
+
+   
+    def create_dgl_block(self, data, num_src_nodes, num_dst_nodes):
+        row, col = data
+        gidx = dgl.heterograph_index.create_unitgraph_from_coo(2, num_src_nodes, num_dst_nodes, row, col, 'coo')
+        g = DGLBlock(gidx, (['_N'], ['_N']), ['_E'])
+        return g
 
 def collate_fn(data):
     """
@@ -452,18 +328,9 @@ def collate_fn(data):
 
 
 if __name__ == "__main__":
-    dataset = CustomDataset("../../config/dgl_papers_graphsage.json")
-    with open("../../config/dgl_papers_graphsage.json", 'r') as f:
+    dataset = CustomDataset("/home/bear/workspace/singleGNN/config/dgl_papers_graphsage.json")
+    with open("/home/bear/workspace/singleGNN/config/dgl_papers_graphsage.json", 'r') as f:
         config = json.load(f)
         batchsize = config['batchsize']
         epoch = config['epoch']
     train_loader = DataLoader(dataset=dataset, batch_size=batchsize,collate_fn=collate_fn)#pin_memory=True)
-    count = 0
-    for index in range(2):
-        start = time.time()
-        loopTime = time.time()
-        for graph,feat,label,number in train_loader:
-            count = count + 1
-            if count % 20 == 0:
-                print("loop time:{:.5f}".format(time.time()-loopTime))
-            loopTime = time.time()
