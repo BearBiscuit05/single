@@ -125,20 +125,24 @@ def run(args,rank, world_size, dataset):
 
     model = Net(feat_size, 256, 47,args.layers).to('cuda:0')
     optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
-    count = 0
-    for epoch in range(1, 11):
+    epochNum = 200
+    epochTime = [0]
+    testEpoch = [5,30,50,100,200]
+    for epoch in range(1, epochNum+1):
         startTime = time.time()
         model.train()
-        for batch in train_loader:        
-            optimizer.zero_grad()    
+        for batch in train_loader:
+            optimizer.zero_grad()
             out = model(batch.x, batch.edge_index.to('cuda:0'))[:batch.batch_size]
             loss = F.cross_entropy(out, batch.y[:batch.batch_size].squeeze())
             loss.backward()
             optimizer.step()
-        runTime = time.time() - startTime
-        print(f'Epoch: {epoch:02d}, Loss: {loss:.4f}, Time: {runTime:.3f}s')
+        eptime = time.time() - startTime
+        totTime = epochTime[epoch-1] + eptime
+        epochTime.append(totTime)
+        print(f'Epoch: {epoch:03d}, Loss: {loss:.4f}, time: {eptime:.5f}')
 
-        if rank == 0 and epoch % 5 == 0:  # We evaluate on a single GPU for now
+        if rank == 0 and epoch in testEpoch:  # We evaluate on a single GPU for now
             if args.dataset == 'Reddit':
                 model.eval()
                 with torch.no_grad():
@@ -153,6 +157,8 @@ def run(args,rank, world_size, dataset):
                 train_acc, val_acc, test_acc = test(model,evaluator,data,subgraph_loader,split_idx)
                 print(f'Train: {train_acc:.4f}, Val: {val_acc:.4f}, '
                             f'Test: {test_acc:.4f}')
+    print("Average Training Time of {:d} Epoches:{:.6f}".format(epochNum,epochTime[epochNum]/epochNum))
+    print("Total   Training Time of {:d} Epoches:{:.6f}".format(epochNum,epochTime[epochNum]))
 
 
 def collate_fn(data):
@@ -187,4 +193,3 @@ if __name__ == '__main__':
         split_idx = dataset.get_idx_split()
 
     run(args,0, world_size, dataset)
-

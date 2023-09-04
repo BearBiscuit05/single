@@ -87,7 +87,7 @@ def layerwise_infer(device, graph, nid, model, batch_size):
         label = graph.ndata['label'][nid].to(pred.device)
     return sklearn.metrics.accuracy_score(label.cpu().numpy(), pred.argmax(1).cpu().numpy())
 
-def train(args, device, g, dataset, model,data=None):
+def train(args, device, g, dataset, model,test_idx,data=None):
     # create sampler & dataloader
     if data != None:
         train_idx,val_idx,test_idx = data 
@@ -115,12 +115,13 @@ def train(args, device, g, dataset, model,data=None):
 
     opt = torch.optim.Adam(model.parameters(), lr=1e-3, weight_decay=5e-4)
     
-    for epoch in range(10):
-        start = time.time()
+    epochNum = 200
+    epochTime = [0]
+    testEpoch = [5,30,50,100,200]
+    for epoch in range(1,epochNum+1):
         model.train()
         total_loss = 0
         startTime = time.time()
-        count = 0
         for it, (input_nodes, output_nodes, blocks) in enumerate(train_dataloader):
             x = blocks[0].srcdata['feat']
             y = blocks[-1].dstdata['label']
@@ -131,13 +132,19 @@ def train(args, device, g, dataset, model,data=None):
             loss.backward()
             opt.step()
             total_loss += loss.item()
-            count = it
-        print("count=",count)
-        print("time=",time.time()-startTime)
+        eptime = time.time() - startTime
+        totTime = epochTime[epoch-1] + eptime
+        epochTime.append(totTime)
         acc = evaluate(model, g, val_dataloader)
-        print("Epoch {:05d} | Loss {:.4f} | Accuracy {:.4f} "
-              .format(epoch, total_loss / (it+1), acc.item()))
-    
+        print("Epoch {:03d} | Loss {:.4f} | Accuracy {:.4f} | Time {:.6f}"
+              .format(epoch, total_loss / (it+1), acc.item(),eptime))
+        #save_path = 'model'+str(epoch)+'.pth'
+        #torch.save(model.state_dict(), save_path)
+        if epoch in testEpoch:
+            run_test(args,device,g,dataset,model,test_idx)
+    print("Average Time of {:d} Epoches:{:.6f}".format(epochNum,epochTime[epochNum]/epochNum))
+    print("Total   Time of {:d} Epoches:{:.6f}".format(epochNum,epochTime[epochNum]))
+
 def load_reddit(self_loop=True):
     from dgl.data import RedditDataset
     data = RedditDataset(self_loop=self_loop,raw_dir='../../../data/dataset/')
@@ -157,6 +164,31 @@ def load_reddit(self_loop=True):
         if g.ndata['test_mask'][index] == 1:
             test_idx.append(index)
     return g, data,train_idx,val_idx,test_idx
+
+def run_test(args,device,g,dataset,model,test_idx):
+    print('Testing...')
+    if args.dataset == 'ogb-products':
+        begTime = time.time()
+        acc = layerwise_infer(device, g, dataset.test_idx, model, batch_size=4096)
+        endTime = time.time()
+    elif args.dataset == 'Reddit':
+        begTime = time.time()
+        acc = layerwise_infer(device, g, test_idx, model, batch_size=4096)
+        endTime = time.time()
+    elif args.dataset == 'ogb-papers100M':
+        model.eval()
+        sampler_test = NeighborSampler([100,100],  # fanout for [layer-0, layer-1, layer-2]
+                            prefetch_node_feats=['feat'],
+                            prefetch_labels=['label'])
+        test_dataloader = DataLoader(g, dataset.test_idx, sampler_test, device=device,
+                                batch_size=4096, shuffle=True,
+                                drop_last=False, num_workers=0,
+                                use_uva=True)
+        begTime = time.time()
+        acc = evaluate(model, g, test_dataloader)
+        endTime = time.time()
+    print("Test Accuracy {:.4f}".format(acc.item()))
+    print('Test Time:',endTime-begTime)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -182,6 +214,7 @@ if __name__ == '__main__':
         dataset = AsNodePredDataset(DglNodePropPredDataset('ogbn-products',root="/home/bear/workspace/singleGNN/data/dataset"))
         g = dataset[0]
         data = None
+        test_idx = None
     elif args.dataset == 'Reddit':
         g, dataset,train_idx,val_idx,test_idx= load_reddit()
         data = (train_idx,val_idx,test_idx)
@@ -199,24 +232,8 @@ if __name__ == '__main__':
     model = SAGE(in_size, 256, out_size,args.layers).to(device)
     # model training
     print('Training...')
-    train(args, device, g, dataset, model,data=data)
+    train(args,device,g,dataset,model,test_idx,data=data)
     # model = torch.load("save.pt")
     # model = model.to(device) 
     #model.load_state_dict(torch.load("model_param.pth"))
     # test the model
-    print('Testing...')
-    if args.dataset == 'ogb-products':
-        acc = layerwise_infer(device, g, dataset.test_idx, model, batch_size=4096)
-    elif args.dataset == 'Reddit':
-        acc = layerwise_infer(device, g, test_idx, model, batch_size=4096) 
-    elif args.dataset == 'ogb-papers100M':
-        model.eval()
-        sampler_test = NeighborSampler([100,100],  # fanout for [layer-0, layer-1, layer-2]
-                            prefetch_node_feats=['feat'],
-                            prefetch_labels=['label'])
-        test_dataloader = DataLoader(g, dataset.test_idx, sampler_test, device=device,
-                                batch_size=4096, shuffle=True,
-                                drop_last=False, num_workers=0,
-                                use_uva=True)
-        acc = evaluate(model, g, test_dataloader)
-    print("Test Accuracy {:.4f}".format(acc.item()))
