@@ -458,13 +458,6 @@ class CustomDataset(Dataset):
                 src = cacheGraph[0][:mapping_ptr[-index]]
                 dst = cacheGraph[1][:mapping_ptr[-index]]
                 data = (src,dst)
-                # print(data)
-                # block = dgl.create_block(data)
-
-
-                # g = dgl.graph(data)
-                # block = dgl.to_block(g)
-
                 if index == 1:
                     save_num,_ = torch.max(dst,dim=0)
                     save_num += 1
@@ -473,7 +466,6 @@ class CustomDataset(Dataset):
                     tmp_num = save_num
                     save_num,_ = torch.max(dst,dim=0)
                     save_num += 1
-                    #block = self.create_dgl_block(data,save_num,batch)
                     block = self.create_dgl_block(data,tmp_num,save_num)
                 else:
                     tmp_num = save_num
@@ -481,9 +473,6 @@ class CustomDataset(Dataset):
                     save_num += 1
                     block = self.create_dgl_block(data,tmp_num,save_num)
                 blocks.append(block)
-            # print(blocks)
-            # exit()
-            # print(blocks)
         elif self.framework == "pyg":
             src = cacheGraph[0][:mapping_ptr[-1]].to(torch.int64)
             dst = cacheGraph[1][:mapping_ptr[-1]].to(torch.int64)
@@ -618,6 +607,7 @@ class CustomDataset(Dataset):
         cacheTime = time.time()
         cacheGraph = copy.deepcopy(self.template_cache_graph)
         cacheLabel = copy.deepcopy(self.template_cache_label)
+        # TODO: 
         sampleIDs = -1 * torch.ones(self.batchsize,dtype=torch.int64)
         logger.info("cache copy graph and label cost {:.5f}s".format(time.time()-cacheTime))
         
@@ -691,6 +681,7 @@ class CustomDataset(Dataset):
 
     #@profile(precision=4, stream=open('./info.log','w+'))
     def loadingMemFeat(self,rank):
+        # TODO:
         filePath = self.dataPath + "/part" + str(rank)
         tmp_feat = np.fromfile(filePath+"/feat.bin", dtype=np.float32)
         if self.feats == []:
