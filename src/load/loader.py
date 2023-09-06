@@ -36,12 +36,18 @@ logger = logging.getLogger(__name__)
 """
 class CustomDataset(Dataset):
     #@profile(precision=4, stream=open('./__init__.log','w+'))
-    def __init__(self,confPath):
+    def __init__(self,confPath,pre_fetch=False):
+        self.pre_fetch = pre_fetch
+        
         #### 采样资源 ####
         self.cacheData = []     # 子图存储部分
         self.graphPipe = Queue()    # 采样存储管道
         self.sampleFlagQueue = Queue()
         self.executor = concurrent.futures.ThreadPoolExecutor(1) # 线程池
+        
+        if self.pre_fetch == True:
+            self.preFetchExecutor = concurrent.futures.ThreadPoolExecutor(1) # 线程池
+            self.preFetchFlagQueue = Queue()
         
         #### config json 部分 ####
         self.dataPath = ''
@@ -58,6 +64,7 @@ class CustomDataset(Dataset):
         self.mode = ""
         self.dataset = ""
         self.classes = 0
+        
         self.readConfig(confPath)
         # ================
 
@@ -332,6 +339,7 @@ class CustomDataset(Dataset):
         return labels
 
     def moveGraph(self):
+        # TODO: 数据预取需要修改,在此处调整位置
         logger.debug("move last graph {},and now graph {}".format(self.trainingGID,self.nextGID))
         logger.debug("befor move srclist len:{}".format(len(self.cacheData[0])))
         logger.debug("befor move range len:{}".format(len(self.cacheData[1])))
@@ -344,7 +352,6 @@ class CustomDataset(Dataset):
         logger.debug("after move range len:{}".format(len(self.cacheData[1])))     
         gc.collect()
 
-    #@profile(precision=4, stream=open('./loadingHalo.log','w+'))
     def loadingHalo(self):
         # 要先加载下一个子图，然后再加载halo( 当前<->下一个 )
         filePath = self.dataPath + "/part" + str(self.trainingGID)
@@ -397,7 +404,6 @@ class CustomDataset(Dataset):
             info[0] = torch.tensor(info[0])
             info[1] = torch.tensor(info[1])
 
-    #@profile(precision=4, stream=open('./sampleNeigGPU_NC.log','w+'))
     def sampleNeigGPU_NC(self,sampleIDs,cacheGraph,batchlen):     
         sampleIDs = sampleIDs.to(torch.int32).to('cuda:0')
         ptr = 0
@@ -567,7 +573,6 @@ class CustomDataset(Dataset):
         logger.info("trans Time {:.5f}s".format(time.time()-transTime))
         return blocks,unique
 
-    #@profile(precision=4, stream=open('./initCacheData.log','w+'))
     def initCacheData(self):
         if self.train_name == "NC":
             number = self.batchsize
@@ -588,8 +593,6 @@ class CustomDataset(Dataset):
         cacheGraph[1] = torch.cat(cacheGraph[1],dim=0)
         return cacheGraph, cacheLabel
 
-    #@profile(precision=4, stream=open('./info.log','w+'))
-    # 无影响
     def preGraphBatch(self):
         # 如果当前管道已经被充满，则不采样，该函数直接返回
         logger.info("===============================================")
@@ -688,6 +691,7 @@ class CustomDataset(Dataset):
             self.feats = torch.from_numpy(tmp_feat).reshape(-1,self.featlen).to("cuda:0")
         else:
             tmp_feat = torch.from_numpy(tmp_feat).reshape(-1,self.featlen).to("cuda:0")
+            print(self.feats)
             self.feats = torch.cat([self.feats,tmp_feat])
     
     #@profile(precision=4, stream=open('./info.log','w+'))
@@ -786,7 +790,7 @@ def collate_fn(data):
 
 
 if __name__ == "__main__":
-    dataset = CustomDataset("../../config/dgl_products_graphsage.json")
+    dataset = CustomDataset("../../config/dgl_products_graphsage.json",pre_fetch=True)
     with open("../../config/dgl_products_graphsage.json", 'r') as f:
         config = json.load(f)
         batchsize = config['batchsize']
