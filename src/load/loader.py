@@ -51,20 +51,11 @@ class CustomDataset(Dataset):
         
         #### config json 部分 ####
         self.dataPath = ''
-        self.batchsize = 0
-        self.cacheNUM = 0
-        self.partNUM = 0
-        self.epoch = 0
-        self.preRating = 0
+        self.batchsize,self.cacheNUM,self.partNUM = 0,0,0
+        self.epoch,self.preRating,self.classes = 0,0,0
         self.featlen = 0
-        self.idbound = []
-        self.fanout = []
-        self.train_name = ""
-        self.framework = ""
-        self.mode = ""
-        self.dataset = ""
-        self.classes = 0
-        
+        self.idbound,self.fanout = [],[]
+        self.train_name,self.framework,self.mode,self.dataset = "","","",""
         self.readConfig(confPath)
         # ================
 
@@ -345,8 +336,10 @@ class CustomDataset(Dataset):
         logger.debug("befor move range len:{}".format(len(self.cacheData[1])))
         self.cacheData[0] = self.cacheData[0][self.graphEdgeNUM:]   # 边
         self.cacheData[1] = self.cacheData[1][self.graphNodeNUM*2:]   # 范围
-        self.cacheData[0] = self.cacheData[0] - self.graphNodeNUM   # 边 nodeID
-        self.cacheData[1] = self.cacheData[1] - self.graphEdgeNUM
+        torch.sub(self.cacheData[0] , self.graphNodeNUM,out=self.cacheData[0])
+        torch.sub(self.cacheData[1] , self.graphEdgeNUM,out=self.cacheData[1])
+        #self.cacheData[0] = self.cacheData[0] - self.graphNodeNUM   # 边 nodeID
+        #self.cacheData[1] = self.cacheData[1] - self.graphEdgeNUM
         self.feats = self.feats[self.graphNodeNUM:]
         logger.debug("after move srclist len:{}".format(len(self.cacheData[0])))
         logger.debug("after move range len:{}".format(len(self.cacheData[1])))     

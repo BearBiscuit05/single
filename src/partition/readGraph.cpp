@@ -52,6 +52,21 @@ int ReadEngine::readline(std::pair<int64_t, int64_t> &edge) {
     return 0;
 }
 
+int ReadEngine::readlines(std::vector<std::pair<int64_t, int64_t>> &edges,std::vector<int64_t>& eids,int& edgesNUM) {
+    if (readPtr == edgeNUM)
+        return -1;
+    std::pair<int64_t, int64_t> edge;
+    int i = 0;
+    for ( ; i < edgesNUM ; i++) {
+        if(-1 != this->readline(edge)) {
+            eids[i] = this->readPtr - 1;
+            edges[i] = edge;
+        }
+    }
+    return i;
+    
+}
+
 void ReadEngine::loadingMmapBlock() {
     chunkSize = std::min((long)readSize, srcLength - offset);
     srcAddr = static_cast<int64_t*>(mmap(nullptr, chunkSize, PROT_READ, MAP_SHARED, srcFd, offset));
