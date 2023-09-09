@@ -40,15 +40,22 @@ class CustomDataset(Dataset):
         self.pre_fetch = pre_fetch
         
         #### 采样资源 ####
-        self.cacheData = []     # 子图存储部分
-        self.graphPipe = Queue()    # 采样存储管道
+        self.cacheData = []  # 子图存储部分
+        self.graphPipe = Queue()  # 采样存储管道
         self.sampleFlagQueue = Queue()
-        self.executor = concurrent.futures.ThreadPoolExecutor(1) # 线程池
-        
+        self.executor = concurrent.futures.ThreadPoolExecutor(1) # 线程池      
+
         if self.pre_fetch == True:
-            self.preFetchExecutor = concurrent.futures.ThreadPoolExecutor(1) # 线程池
+            self.preFetchExecutor = concurrent.futures.ThreadPoolExecutor(1)  # 线程池
             self.preFetchFlagQueue = Queue()
-        
+            self.preFetchDataCache = Queue()
+            self.pre_fetchGID = 0
+            self.pregraph_src = 0
+            self.pregraph_range = 0
+            self.prefeat = 0
+            self.preFetchPtr = 0  # 数据预取位置
+            self.preFetchNUM = 0  # 数据预取数目
+
         #### config json 部分 ####
         self.dataPath = ''
         self.batchsize,self.cacheNUM,self.partNUM = 0,0,0
@@ -61,7 +68,7 @@ class CustomDataset(Dataset):
 
         #### 训练记录 ####
         self.trainSubGTrack = self.randomTrainList()    # 训练轨迹
-        self.subGptr = -1                               # 子图训练指针，记录当前训练的位置，在加载图时发生改变
+        self.subGptr = -1  # 子图训练指针，记录当前训练的位置，在加载图时发生改变
         
         #### 节点类型加载 ####
         self.NodeLen = 0        # 用于记录数据集中节点的数目，默认为train节点个数
@@ -73,21 +80,19 @@ class CustomDataset(Dataset):
         self.loadModeData(self.mode)
 
         #### 图结构信息 ####
-        self.graphNodeNUM = 0           # 当前训练子图节点数目
-        self.graphEdgeNUM = 0           # 当前训练子图边数目
+        self.graphNodeNUM = 0  # 当前训练子图节点数目
+        self.graphEdgeNUM = 0          # 当前训练子图边数目
         self.trainingGID = 0            # 当前训练子图的ID
         self.subGtrainNodesNUM = 0      # 当前训练子图训练节点数目
         self.trainNodes = []            # 训练子图训练节点记录   
         self.nodeLabels = []            # 子图标签
         self.nextGID = 0                # 下一个训练子图
         self.trainptr = 0               # 当前训练集读取位置
-        self.trainLoop = 0              # 当前子图可读取次数
-        
+        self.trainLoop = 0              # 当前子图可读取次数      
         #### mmap 特征部分 ####
-        self.readfile = []              # 包含两个句柄/可能有三个句柄
-        self.mmapfile = []  
+        self.readfile = []  # 包含两个句柄/可能有三个句柄
+        self.mmapfile = []
         self.feats = []
-        self.loadingFeatFileHead()      # 读取特征文件
         
         #### 规定用哪张卡单独跑 ####
         self.cudaDevice = 0

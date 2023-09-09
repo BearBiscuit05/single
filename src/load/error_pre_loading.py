@@ -85,8 +85,6 @@ class CustomDataset(Dataset):
         #### 图结构信息 ####
         self.graphNodeNUM = 0  # 当前训练子图节点数目
         self.graphEdgeNUM = 0  # 当前训练子图边数目
-        self.nextGraphNodeNUM = 0  # 下一训练子图节点数目
-        self.nextGraphEdgeNUM = 0  # 下一训练子图边数目
         self.trainingGID = 0  # 当前训练子图的ID
         self.subGtrainNodesNUM = 0  # 当前训练子图训练节点数目
         self.trainNodes = []  # 训练子图训练节点记录
@@ -94,7 +92,6 @@ class CustomDataset(Dataset):
         self.nextGID = 0  # 下一个训练子图
         self.trainptr = 0  # 当前训练集读取位置
         self.trainLoop = 0  # 当前子图可读取次数
-
         #### mmap 特征部分 ####
         self.readfile = []  # 包含两个句柄/可能有三个句柄
         self.mmapfile = []
@@ -114,34 +111,34 @@ class CustomDataset(Dataset):
 
     def __getitem__(self, index):
         # 批数据预取 缓存1个
-        # if index % self.preRating == 0:
-        #     self.sampleFlagQueue.put(self.executor.submit(self.preGraphBatch))
+        if index % self.preRating == 0:
+            self.sampleFlagQueue.put(self.executor.submit(self.preGraphBatch))
 
         # 获取采样数据
-        # if index % self.batchsize == 0:
-        #     # 调用实际数据
-        #     if self.graphPipe.qsize() > 0:
-        #         self.sampleFlagQueue.get()
-        #         cacheData = self.graphPipe.get()
-        #         if self.train_name == "LP":
-        #             return cacheData[0], cacheData[1], cacheData[2], cacheData[3], cacheData[4], cacheData[5]
-        #         else:
-        #             return cacheData[0], cacheData[1], cacheData[2], cacheData[3]
-        #     else:  # 需要等待
-        #         flag = self.sampleFlagQueue.get()
-        #         data = flag.result()
-        #         cacheData = self.graphPipe.get()
-        #         if self.train_name == "LP":
-        #             return cacheData[0], cacheData[1], cacheData[2], cacheData[3], cacheData[4], cacheData[5]
-        #         else:
-        #             return cacheData[0], cacheData[1], cacheData[2], cacheData[3]
-        # return 0, 0
-
         if index % self.batchsize == 0:
-            self.preGraphBatch()
-            cacheData = self.graphPipe.get()
-            return cacheData[0], cacheData[1], cacheData[2], cacheData[3]
+            # 调用实际数据
+            if self.graphPipe.qsize() > 0:
+                self.sampleFlagQueue.get()
+                cacheData = self.graphPipe.get()
+                if self.train_name == "LP":
+                    return cacheData[0], cacheData[1], cacheData[2], cacheData[3], cacheData[4], cacheData[5]
+                else:
+                    return cacheData[0], cacheData[1], cacheData[2], cacheData[3]
+            else:  # 需要等待
+                flag = self.sampleFlagQueue.get()
+                data = flag.result()
+                cacheData = self.graphPipe.get()
+                if self.train_name == "LP":
+                    return cacheData[0], cacheData[1], cacheData[2], cacheData[3], cacheData[4], cacheData[5]
+                else:
+                    return cacheData[0], cacheData[1], cacheData[2], cacheData[3]
         return 0, 0
+
+        # if index % self.batchsize == 0:
+        #     self.preGraphBatch()
+        #     cacheData = self.graphPipe.get()
+        #     return cacheData[0], cacheData[1], cacheData[2], cacheData[3]
+        # return 0, 0
 
 
     ########################## 初始化训练数据 ##########################
@@ -252,26 +249,25 @@ class CustomDataset(Dataset):
         # TODO:此处合并
         # 加载数据预取结果
         prefetch = False
-        # if self.preFetchFlagQueue.qsize() > 0:
-        if self.preFetchDataCache.qsize() > 0:
+        if self.preFetchFlagQueue.qsize() > 0:
+        # if self.preFetchDataCache.qsize() > 0:
             prefetch = True
-            #taskFlag = self.preFetchFlagQueue.get()
-            #flag = taskFlag.result()
+            taskFlag = self.preFetchFlagQueue.get()
+            flag = taskFlag.result()
+            print("flag:=======> ",flag)
             preCacheData = self.preFetchDataCache.get()   
             # self.loadingGraph(preFetch=True)
             self.loadingGraph(preFetch=True,srcList=preCacheData[0],rangeList=preCacheData[1])
         else:
             self.loadingGraph()
-
+        
         self.nextGID = self.trainSubGTrack[self.subGptr // self.partNUM][self.subGptr % self.partNUM]
         halostart = time.time()
         self.loadingHalo()
         logger.info("loadingHalo time: %g" % (time.time() - halostart))
         haloend = time.time()
         
-        print("after prefetch feats:", self.feats)
         if prefetch:
-            # self.loadingMemFeat(self.nextGID, preFetch=True)
             self.loadingMemFeat(self.nextGID,preFetch=True,preFeat=preCacheData[2])
             prefetch = False
         else:
@@ -283,9 +279,8 @@ class CustomDataset(Dataset):
                             self.graphNodeNUM, self.graphEdgeNUM, time.time() - start))
 
         # 发送预取命令,存储在指定位置,(此处数据的预加载已经完成)
-
-        # self.preFetchFlagQueue.put(self.preFetchExecutor.submit(self.preloadingGraphData))
-        # print("self.preFetchFlagQueue.qsize() :", self.preFetchFlagQueue.qsize())
+        self.preFetchFlagQueue.put(self.preFetchExecutor.submit(self.preloadingGraphData))
+        print("self.preFetchFlagQueue.qsize() :", self.preFetchFlagQueue.qsize())
 
     def loadingTrainID(self):
         # 加载子图所有训练集
@@ -349,6 +344,7 @@ class CustomDataset(Dataset):
         rangedata = np.fromfile(filePath + "/range.bin", dtype=np.int32)
         tmp_feat = np.fromfile(filePath + "/feat.bin", dtype=np.float32)
         self.preFetchDataCache.put([srcdata,rangedata,tmp_feat])
+        return 0
 
     def loadingGraph(self, merge=True, preFetch=False,srcList=None,rangeList=None):
         """
@@ -380,6 +376,8 @@ class CustomDataset(Dataset):
         else:
             srcList = torch.tensor(srcList, device=('cuda:%d' % self.cudaDevice))
             rangeList = torch.tensor(rangeList, device=('cuda:%d' % self.cudaDevice))
+            srcList = srcList + self.graphNodeNUM
+            rangeList = rangeList + self.graphEdgeNUM
             self.cacheData[0] = torch.cat([self.cacheData[0], srcList])
             self.cacheData[1] = torch.cat([self.cacheData[1], rangeList])
 
