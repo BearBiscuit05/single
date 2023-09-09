@@ -98,13 +98,57 @@ def test(model,evaluator,data,subgraph_loader,split_idx):
 
     return train_acc, val_acc, test_acc
 
-
-def run(rank, model, world_size, dataset):
+def run_test(arg_dataset,model):
+    if arg_dataset == 'ogb-products':
+        root = osp.join(osp.dirname(osp.realpath(__file__)), '.', 'dataset')
+        dataset = PygNodePropPredDataset('ogbn-products', root)
+        split_idx = dataset.get_idx_split()
+        evaluator = Evaluator(name='ogbn-products')
+        data = dataset[0].to("cuda:0", 'x', 'y')
+        subgraph_loader = NeighborLoader(
+            data,
+            input_nodes=None,
+            num_neighbors=[-1],
+            batch_size=4096,
+            num_workers=8,#此处A100可设置12，V100设置为8否则warning
+            persistent_workers=True,
+        )
+        begTime = time.time()
+        train_acc, val_acc, test_acc = test(model,evaluator,data,subgraph_loader,split_idx)
+        endTime = time.time()
+        print(f'Train: {train_acc:.4f}, Val: {val_acc:.4f}, Test: {test_acc:.4f}')
+        print('Test Time:',endTime-begTime)
+    elif arg_dataset == 'Reddit':
+        model.eval()
+        dataset = Reddit('../../../data/reddit/pyg_reddit')
+        data = dataset[0]
+        data = data.to('cuda:0', 'x', 'y')
+        subgraph_loader = NeighborLoader(
+            data,
+            input_nodes=None,
+            num_neighbors=[-1],
+            batch_size=4096,
+            num_workers=8,#此处A100可设置12，V100设置为8否则warning
+            persistent_workers=True,
+        )
+        begTime = time.time()
+        with torch.no_grad():
+            out = model.inference(data.x, subgraph_loader)
+        endTime = time.time()
+        res = out.argmax(dim=-1) == data.y.to(out.device)
+        acc1 = int(res[data.train_mask].sum()) / int(data.train_mask.sum())
+        acc2 = int(res[data.val_mask].sum()) / int(data.val_mask.sum())
+        acc3 = int(res[data.test_mask].sum()) / int(data.test_mask.sum())
+        print(f'Train: {acc1:.4f}, Val: {acc2:.4f}, Test: {acc3:.4f}')
+        print('Test Time:',endTime-begTime)
+    
+def run(arg_dataset,rank, model, world_size, dataset):
     train_loader = DataLoader(dataset=dataset, batch_size=dataset.batchsize, collate_fn=collate_fn)#,pin_memory=True)
     torch.manual_seed(12345)
-    
     optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
-    for epoch in range(0, dataset.epoch):
+    epochTime = [0]
+    testEpoch = [5,30,50,100,200]
+    for epoch in range(1,dataset.epoch+1):
         startTime = time.time()
         total_loss = 0
         model.train()
@@ -115,8 +159,14 @@ def run(rank, model, world_size, dataset):
             loss.backward()
             optimizer.step()
             total_loss += loss.item()
-        runTime = time.time() - startTime
-        print(f'Epoch: {epoch:02d}, Loss: {total_loss / (it+1):.4f}, Time: {runTime:.3f}s')
+        eptime = time.time() - startTime
+        totTime = epochTime[epoch-1] + eptime
+        epochTime.append(totTime)
+        print(f'Epoch: {epoch:03d}, Loss: {total_loss / (it+1):.4f}, Time: {eptime:.6f}s')
+        if rank == 0 and epoch in testEpoch:
+            run_test(arg_dataset,model)
+    print("Average Training Time of {:d} Epoches:{:.6f}".format(dataset.epoch,epochTime[dataset.epoch]/dataset.epoch))
+    print("Total   Training Time of {:d} Epoches:{:.6f}".format(dataset.epoch,epochTime[dataset.epoch]))
 
 
 def collate_fn(data):
@@ -152,42 +202,6 @@ if __name__ == '__main__':
     print('Let\'s use', world_size, 'GPUs!')
     dataset = CustomDataset(args.json_path)    
     model = Net(data['featlen'], 256, data['classes'],arg_layers).to('cuda:0')
-    run( 0, model ,world_size, dataset)
+    run(arg_dataset,0, model ,world_size, dataset)
     
-    if arg_dataset == 'ogb-products':
-        root = osp.join(osp.dirname(osp.realpath(__file__)), '.', 'dataset')
-        dataset = PygNodePropPredDataset('ogbn-products', root)
-        split_idx = dataset.get_idx_split()
-        evaluator = Evaluator(name='ogbn-products')
-        data = dataset[0].to("cuda:0", 'x', 'y')
-        subgraph_loader = NeighborLoader(
-            data,
-            input_nodes=None,
-            num_neighbors=[-1],
-            batch_size=4096,
-            num_workers=12,
-            persistent_workers=True,
-        )
-        train_acc, val_acc, test_acc = test(model,evaluator,data,subgraph_loader,split_idx)
-        print(f'Train: {train_acc:.4f}, Val: {val_acc:.4f}, '
-                    f'Test: {test_acc:.4f}')
-    elif arg_dataset == 'Reddit':
-        model.eval()
-        dataset = Reddit('../../../data/pyg_reddit')
-        data = dataset[0]
-        data = data.to('cuda:0', 'x', 'y')
-        subgraph_loader = NeighborLoader(
-            data,
-            input_nodes=None,
-            num_neighbors=[-1],
-            batch_size=4096,
-            num_workers=12,
-            persistent_workers=True,
-        )
-        with torch.no_grad():
-            out = model.inference(data.x, subgraph_loader)
-        res = out.argmax(dim=-1) == data.y.to(out.device)
-        acc1 = int(res[data.train_mask].sum()) / int(data.train_mask.sum())
-        acc2 = int(res[data.val_mask].sum()) / int(data.val_mask.sum())
-        acc3 = int(res[data.test_mask].sum()) / int(data.test_mask.sum())
-        print(f'Train: {acc1:.4f}, Val: {acc2:.4f}, Test: {acc3:.4f}')
+    
