@@ -36,34 +36,39 @@ logger = logging.getLogger(__name__)
 """
 class CustomDataset(Dataset):
     #@profile(precision=4, stream=open('./__init__.log','w+'))
-    def __init__(self,confPath):
-        #### 采样资源 ####
-        self.cacheData = []     # 子图存储部分
-        self.graphPipe = Queue()    # 采样存储管道
-        self.sampleFlagQueue = Queue()
-        self.executor = concurrent.futures.ThreadPoolExecutor(1) # 线程池
+    def __init__(self,confPath,pre_fetch=False):
+        self.pre_fetch = pre_fetch
         
+        #### 采样资源 ####
+        self.cacheData = []  # 子图存储部分
+        self.graphPipe = Queue()  # 采样存储管道
+        self.sampleFlagQueue = Queue()
+        self.executor = concurrent.futures.ThreadPoolExecutor(1) # 线程池      
+
+        if self.pre_fetch == True:
+            self.preFetchExecutor = concurrent.futures.ThreadPoolExecutor(1)  # 线程池
+            self.preFetchFlagQueue = Queue()
+            self.preFetchDataCache = Queue()
+            self.pre_fetchGID = 0
+            self.pregraph_src = 0
+            self.pregraph_range = 0
+            self.prefeat = 0
+            self.preFetchPtr = 0  # 数据预取位置
+            self.preFetchNUM = 0  # 数据预取数目
+
         #### config json 部分 ####
         self.dataPath = ''
-        self.batchsize = 0
-        self.cacheNUM = 0
-        self.partNUM = 0
-        self.epoch = 0
-        self.preRating = 0
+        self.batchsize,self.cacheNUM,self.partNUM = 0,0,0
+        self.epoch,self.preRating,self.classes = 0,0,0
         self.featlen = 0
-        self.idbound = []
-        self.fanout = []
-        self.train_name = ""
-        self.framework = ""
-        self.mode = ""
-        self.dataset = ""
-        self.classes = 0
+        self.idbound,self.fanout = [],[]
+        self.train_name,self.framework,self.mode,self.dataset = "","","",""
         self.readConfig(confPath)
         # ================
 
         #### 训练记录 ####
         self.trainSubGTrack = self.randomTrainList()    # 训练轨迹
-        self.subGptr = -1                               # 子图训练指针，记录当前训练的位置，在加载图时发生改变
+        self.subGptr = -1  # 子图训练指针，记录当前训练的位置，在加载图时发生改变
         
         #### 节点类型加载 ####
         self.NodeLen = 0        # 用于记录数据集中节点的数目，默认为train节点个数
@@ -75,21 +80,19 @@ class CustomDataset(Dataset):
         self.loadModeData(self.mode)
 
         #### 图结构信息 ####
-        self.graphNodeNUM = 0           # 当前训练子图节点数目
-        self.graphEdgeNUM = 0           # 当前训练子图边数目
+        self.graphNodeNUM = 0  # 当前训练子图节点数目
+        self.graphEdgeNUM = 0          # 当前训练子图边数目
         self.trainingGID = 0            # 当前训练子图的ID
         self.subGtrainNodesNUM = 0      # 当前训练子图训练节点数目
         self.trainNodes = []            # 训练子图训练节点记录   
         self.nodeLabels = []            # 子图标签
         self.nextGID = 0                # 下一个训练子图
         self.trainptr = 0               # 当前训练集读取位置
-        self.trainLoop = 0              # 当前子图可读取次数
-        
+        self.trainLoop = 0              # 当前子图可读取次数      
         #### mmap 特征部分 ####
-        self.readfile = []              # 包含两个句柄/可能有三个句柄
-        self.mmapfile = []  
+        self.readfile = []  # 包含两个句柄/可能有三个句柄
+        self.mmapfile = []
         self.feats = []
-        self.loadingFeatFileHead()      # 读取特征文件
         
         #### 规定用哪张卡单独跑 ####
         self.cudaDevice = 0
@@ -102,7 +105,7 @@ class CustomDataset(Dataset):
         self.initNextGraphData()
         #self.sampleFlagQueue.put(self.executor.submit(self.preGraphBatch)) #发送采样命令
         
-    def __len__(self):  
+    def __len__(self):
         return self.NodeLen
     
     def __getitem__(self, index):
@@ -131,6 +134,12 @@ class CustomDataset(Dataset):
                 else:
                     return cacheData[0],cacheData[1],cacheData[2],cacheData[3]
         return 0,0
+    
+        # if index % self.batchsize == 0:
+        #     self.preGraphBatch()
+        #     cacheData = self.graphPipe.get()
+        #     return cacheData[0], cacheData[1], cacheData[2], cacheData[3]
+        # return 0, 0
 
 ########################## 初始化训练数据 ##########################
     def readConfig(self,confPath):
@@ -235,17 +244,34 @@ class CustomDataset(Dataset):
         self.trainLoop = ((self.subGtrainNodesNUM - 1) // self.batchsize) + 1
 
         # 对于辅助计算的子图，进行加载，以及加载融合边
-        self.loadingGraph()
+
+        # TODO:此处合并
+        # 加载数据预取结果
+        prefetch = False
+        if self.pre_fetch and self.preFetchFlagQueue.qsize() > 0:
+            prefetch = True
+            taskFlag = self.preFetchFlagQueue.get()
+            flag = taskFlag.result()
+            preCacheData = self.preFetchDataCache.get()   
+            self.loadingGraph(preFetch=True,srcList=preCacheData[0],rangeList=preCacheData[1])
+        else:
+            self.loadingGraph()
         self.nextGID = self.trainSubGTrack[self.subGptr//self.partNUM][self.subGptr%self.partNUM]
         halostart = time.time()
         self.loadingHalo()
         logger.info("loadingHalo time: %g"%(time.time()-halostart))
         haloend = time.time()
-        self.loadingMemFeat(self.nextGID)
+        if prefetch:
+            self.loadingMemFeat(self.nextGID,preFetch=True,preFeat=preCacheData[2])
+            prefetch = False
+        else:
+            self.loadingMemFeat(self.nextGID)
         logger.info("loadingHalo time: %g"%(time.time()-haloend))
         logger.info("当前加载图为:{},下一个图:{},图训练集规模:{},图节点数目:{},图边数目:{},加载耗时:{:.5f}s"\
                         .format(self.trainingGID,self.nextGID,self.subGtrainNodesNUM,\
                         self.graphNodeNUM,self.graphEdgeNUM,time.time()-start))
+        if self.pre_fetch:
+            self.preFetchFlagQueue.put(self.preFetchExecutor.submit(self.preloadingGraphData))
 
     def loadingTrainID(self):
         # 加载子图所有训练集
@@ -300,28 +326,51 @@ class CustomDataset(Dataset):
             self.testNUM += idDict[index].shape[0]
         return idDict,numberList
 
-    #@profile(precision=4, stream=open('./info.log','w+'))
-    def loadingGraph(self,merge=True):
+    def preloadingGraphData(self):
+        # 暂时只转换为numpy格式
+        ptr = self.subGptr + 1
+        rank = self.trainSubGTrack[ptr // self.partNUM][ptr % self.partNUM]
+        filePath = self.dataPath + "/part" + str(rank)
+        srcdata = np.fromfile(filePath + "/srcList.bin", dtype=np.int32)
+        rangedata = np.fromfile(filePath + "/range.bin", dtype=np.int32)
+        tmp_feat = np.fromfile(filePath + "/feat.bin", dtype=np.float32)
+        self.preFetchDataCache.put([srcdata,rangedata,tmp_feat])
+        return 0
+
+    def loadingGraph(self, merge=True, preFetch=False,srcList=None,rangeList=None):
+        """
+        merge 表示此处需要融合两个图结构
+        preFetch 表示下一需要融合的图已经被加载
+        """
         # 加载下一个等待训练的图
         self.subGptr += 1
-        subGID = self.trainSubGTrack[self.subGptr//self.partNUM][self.subGptr%self.partNUM]
+        subGID = self.trainSubGTrack[self.subGptr // self.partNUM][self.subGptr % self.partNUM]
         filePath = self.dataPath + "/part" + str(subGID)
         # TODO:存在优化/加速加载
-        srcdata = np.fromfile(filePath+"/srcList.bin", dtype=np.int32)
-        srcdata = torch.tensor(srcdata,device=('cuda:%d'%self.cudaDevice))#.to(device=('cuda:%d'%self.cudaDevice))
-        rangedata = np.fromfile(filePath+"/range.bin", dtype=np.int32)
-        rangedata = torch.tensor(rangedata,device=('cuda:%d'%self.cudaDevice))#.to(device=('cuda:%d'%self.cudaDevice))
 
-        if merge :
-            srcdata = srcdata + self.graphNodeNUM
-            rangedata = rangedata + self.graphEdgeNUM
-            # TODO:存在优化
-            self.cacheData[0] = torch.cat([self.cacheData[0],srcdata])
-            self.cacheData[1] = torch.cat([self.cacheData[1],rangedata])
+        if preFetch == False:
+            srcdata = np.fromfile(filePath + "/srcList.bin", dtype=np.int32)
+            srcdata = torch.tensor(srcdata, device=('cuda:%d' % self.cudaDevice))
+            rangedata = np.fromfile(filePath + "/range.bin", dtype=np.int32)
+            rangedata = torch.tensor(rangedata, device=('cuda:%d' % self.cudaDevice))
+            if merge:
+                srcdata = srcdata + self.graphNodeNUM
+                rangedata = rangedata + self.graphEdgeNUM
+                # TODO:存在优化
+                self.cacheData[0] = torch.cat([self.cacheData[0], srcdata])
+                self.cacheData[1] = torch.cat([self.cacheData[1], rangedata])
+            else:
+                # TODO:存在优化
+                self.cacheData.append(srcdata)
+                self.cacheData.append(rangedata)
+
         else:
-            # TODO:存在优化
-            self.cacheData.append(srcdata)
-            self.cacheData.append(rangedata)
+            srcList = torch.tensor(srcList, device=('cuda:%d' % self.cudaDevice))
+            rangeList = torch.tensor(rangeList, device=('cuda:%d' % self.cudaDevice))
+            srcList = srcList + self.graphNodeNUM
+            rangeList = rangeList + self.graphEdgeNUM
+            self.cacheData[0] = torch.cat([self.cacheData[0], srcList])
+            self.cacheData[1] = torch.cat([self.cacheData[1], rangeList])
         
     def loadingLabels(self,rank):
         filePath = self.dataPath + "/part" + str(rank)
@@ -332,19 +381,21 @@ class CustomDataset(Dataset):
         return labels
 
     def moveGraph(self):
+        # TODO: 数据预取需要修改,在此处调整位置
         logger.debug("move last graph {},and now graph {}".format(self.trainingGID,self.nextGID))
         logger.debug("befor move srclist len:{}".format(len(self.cacheData[0])))
         logger.debug("befor move range len:{}".format(len(self.cacheData[1])))
         self.cacheData[0] = self.cacheData[0][self.graphEdgeNUM:]   # 边
         self.cacheData[1] = self.cacheData[1][self.graphNodeNUM*2:]   # 范围
-        self.cacheData[0] = self.cacheData[0] - self.graphNodeNUM   # 边 nodeID
-        self.cacheData[1] = self.cacheData[1] - self.graphEdgeNUM
+        torch.sub(self.cacheData[0] , self.graphNodeNUM,out=self.cacheData[0])
+        torch.sub(self.cacheData[1] , self.graphEdgeNUM,out=self.cacheData[1])
+        #self.cacheData[0] = self.cacheData[0] - self.graphNodeNUM   # 边 nodeID
+        #self.cacheData[1] = self.cacheData[1] - self.graphEdgeNUM
         self.feats = self.feats[self.graphNodeNUM:]
         logger.debug("after move srclist len:{}".format(len(self.cacheData[0])))
         logger.debug("after move range len:{}".format(len(self.cacheData[1])))     
         gc.collect()
 
-    #@profile(precision=4, stream=open('./loadingHalo.log','w+'))
     def loadingHalo(self):
         # 要先加载下一个子图，然后再加载halo( 当前<->下一个 )
         filePath = self.dataPath + "/part" + str(self.trainingGID)
@@ -397,7 +448,6 @@ class CustomDataset(Dataset):
             info[0] = torch.tensor(info[0])
             info[1] = torch.tensor(info[1])
 
-    #@profile(precision=4, stream=open('./sampleNeigGPU_NC.log','w+'))
     def sampleNeigGPU_NC(self,sampleIDs,cacheGraph,batchlen):     
         sampleIDs = sampleIDs.to(torch.int32).to('cuda:0')
         ptr = 0
@@ -458,13 +508,6 @@ class CustomDataset(Dataset):
                 src = cacheGraph[0][:mapping_ptr[-index]]
                 dst = cacheGraph[1][:mapping_ptr[-index]]
                 data = (src,dst)
-                # print(data)
-                # block = dgl.create_block(data)
-
-
-                # g = dgl.graph(data)
-                # block = dgl.to_block(g)
-
                 if index == 1:
                     save_num,_ = torch.max(dst,dim=0)
                     save_num += 1
@@ -473,7 +516,6 @@ class CustomDataset(Dataset):
                     tmp_num = save_num
                     save_num,_ = torch.max(dst,dim=0)
                     save_num += 1
-                    #block = self.create_dgl_block(data,save_num,batch)
                     block = self.create_dgl_block(data,tmp_num,save_num)
                 else:
                     tmp_num = save_num
@@ -481,9 +523,6 @@ class CustomDataset(Dataset):
                     save_num += 1
                     block = self.create_dgl_block(data,tmp_num,save_num)
                 blocks.append(block)
-            # print(blocks)
-            # exit()
-            # print(blocks)
         elif self.framework == "pyg":
             src = cacheGraph[0][:mapping_ptr[-1]].to(torch.int64)
             dst = cacheGraph[1][:mapping_ptr[-1]].to(torch.int64)
@@ -578,7 +617,6 @@ class CustomDataset(Dataset):
         logger.info("trans Time {:.5f}s".format(time.time()-transTime))
         return blocks,unique
 
-    #@profile(precision=4, stream=open('./initCacheData.log','w+'))
     def initCacheData(self):
         if self.train_name == "NC":
             number = self.batchsize
@@ -599,11 +637,9 @@ class CustomDataset(Dataset):
         cacheGraph[1] = torch.cat(cacheGraph[1],dim=0)
         return cacheGraph, cacheLabel
 
-    #@profile(precision=4, stream=open('./info.log','w+'))
-    # 无影响
     def preGraphBatch(self):
         # 如果当前管道已经被充满，则不采样，该函数直接返回
-        logger.info("===============================================")
+        logger.info("-"*20)
         preBatchTime = time.time()
         if self.graphPipe.qsize() >= self.cacheNUM:
             return 0
@@ -618,6 +654,7 @@ class CustomDataset(Dataset):
         cacheTime = time.time()
         cacheGraph = copy.deepcopy(self.template_cache_graph)
         cacheLabel = copy.deepcopy(self.template_cache_label)
+        # TODO: 
         sampleIDs = -1 * torch.ones(self.batchsize,dtype=torch.int64)
         logger.info("cache copy graph and label cost {:.5f}s".format(time.time()-cacheTime))
         
@@ -690,14 +727,21 @@ class CustomDataset(Dataset):
             file.close()
 
     #@profile(precision=4, stream=open('./info.log','w+'))
-    def loadingMemFeat(self,rank):
+    def loadingMemFeat(self, rank, preFetch=False,preFeat=None):
+        # TODO:如果preFetch为True,则直接从指定位置加载
         filePath = self.dataPath + "/part" + str(rank)
-        tmp_feat = np.fromfile(filePath+"/feat.bin", dtype=np.float32)
+        if preFetch == False:
+            tmp_feat = np.fromfile(filePath + "/feat.bin", dtype=np.float32)
+
         if self.feats == []:
-            self.feats = torch.from_numpy(tmp_feat).reshape(-1,self.featlen).to("cuda:0")
+            self.feats = torch.from_numpy(tmp_feat).reshape(-1, self.featlen).to("cuda:0")
         else:
-            tmp_feat = torch.from_numpy(tmp_feat).reshape(-1,self.featlen).to("cuda:0")
-            self.feats = torch.cat([self.feats,tmp_feat])
+            if preFetch == False:
+                tmp_feat = torch.from_numpy(tmp_feat).reshape(-1, self.featlen).to("cuda:0")
+                self.feats = torch.cat([self.feats, tmp_feat])
+            else:
+                preFeat = torch.from_numpy(preFeat).reshape(-1, self.featlen).to("cuda:0")
+                self.feats = torch.cat([self.feats, preFeat])
     
     #@profile(precision=4, stream=open('./info.log','w+'))
     # 已经测试，无影响
@@ -795,7 +839,8 @@ def collate_fn(data):
 
 
 if __name__ == "__main__":
-    dataset = CustomDataset("../../config/dgl_products_graphsage.json")
+    dataset = CustomDataset("../../config/dgl_products_graphsage.json",pre_fetch=True)
+    # dataset = CustomDataset("../../config/dgl_products_graphsage.json")
     with open("../../config/dgl_products_graphsage.json", 'r') as f:
         config = json.load(f)
         batchsize = config['batchsize']
