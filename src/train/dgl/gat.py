@@ -86,7 +86,7 @@ def layerwise_infer(device, graph, nid, model, batch_size):
         label = graph.ndata['label'][nid].to(pred.device)
     return sklearn.metrics.accuracy_score(label.cpu().numpy(), pred.argmax(1).cpu().numpy())
 
-def train(args, device, g, dataset, model,data=None):
+def train(args, device, g, dataset, model,data=None ,basicLoop=0,loop=10):
     if data != None:
         train_idx,val_idx,test_idx = data 
     else:
@@ -109,29 +109,30 @@ def train(args, device, g, dataset, model,data=None):
 
     opt = torch.optim.Adam(model.parameters(), lr=1e-3, weight_decay=5e-4)
     
-    for epoch in range(10):
-        start = time.time()
+    for epoch in range(loop):
+        startTime = time.time()
         model.train()
         total_loss = 0
-
         for it, (input_nodes, output_nodes, blocks) in enumerate(train_dataloader):
             x = blocks[0].srcdata['feat']
             y = blocks[-1].dstdata['label']
             y_hat = model(blocks, x)
+            y = y.to(torch.int64)
             loss = F.cross_entropy(y_hat, y)
             opt.zero_grad()
             loss.backward()
             opt.step()
             total_loss += loss.item()
         
+        trainTime = time.time()-startTime
         acc = evaluate(model, g, val_dataloader)
-        print("Epoch {:05d} | Loss {:.4f} | Accuracy {:.4f} "
-              .format(epoch, total_loss / (it+1), acc.item()))
-        print("time :",time.time()-start)
+        print("| Epoch {:05d} | Loss {:.4f} | Accuracy {:.4f} | Time {:.3f}s | Count {} |"
+              .format(basicLoop+epoch, total_loss / (it+1), acc.item(), trainTime, count))
+    
 
 def load_reddit(self_loop=True):
     from dgl.data import RedditDataset
-    data = RedditDataset(self_loop=self_loop,raw_dir='../../../data/dataset/')
+    data = RedditDataset(self_loop=self_loop,raw_dir='/home/bear/workspace/singleGNN/data/dataset/')
     g = data[0]
     g.ndata['feat'] = g.ndata.pop('feat')
     g.ndata['label'] = g.ndata.pop('label')
@@ -177,16 +178,31 @@ if __name__ == '__main__':
     # create GraphSAGE model
     in_size = g.ndata['feat'].shape[1]
     out_size = dataset.num_classes
-    model = GAT(in_size, 256, out_size,heads=[8,1]).to(device)
+    model = GAT(in_size, 256, out_size,heads=[4,1]).to(device)
 
     # model training
     print('Training...')
-    train(args, device, g, dataset, model,data=data)
+    loopList = [0,10,20,30,50,100,150,200]
+    for index in range(1,len(loopList)):
+        if loopList[index] > args.maxloop:
+            break
+        _loop = loopList[index] - loopList[index - 1]
+        train(args, device, g, dataset, model,data=data,basicLoop=loopList[index - 1],loop=_loop)
 
-    # test the model
-    print('Testing...')
-    if args.dataset == 'ogb-products':
-        acc = layerwise_infer(device, g, dataset.test_idx, model, batch_size=4096)
-    elif args.dataset == 'Reddit':
-        acc = layerwise_infer(device, g, test_idx, model, batch_size=4096) 
-    print("Test Accuracy {:.4f}".format(acc.item()))
+        print('---> Testing with after loop {}:...'.format(loopList[index]))
+        if args.dataset == 'ogb-products':
+            acc = layerwise_infer(device, g, dataset.test_idx, model, batch_size=4096)
+        elif args.dataset == 'Reddit':
+            acc = layerwise_infer(device, g, test_idx, model, batch_size=4096) 
+        elif args.dataset == 'ogb-papers100M':
+            model.eval()
+            sampler_test = NeighborSampler([100,100],  # fanout for [layer-0, layer-1, layer-2]
+                                prefetch_node_feats=['feat'],
+                                prefetch_labels=['label'])
+            test_dataloader = DataLoader(g, dataset.test_idx, sampler_test, device=device,
+                                    batch_size=4096, shuffle=True,
+                                    drop_last=False, num_workers=0,
+                                    use_uva=True)
+            acc = evaluate(model, g, test_dataloader)
+        print("Test Accuracy {:.4f}".format(acc.item()))
+        print("-"*20)

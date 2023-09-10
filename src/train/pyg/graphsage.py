@@ -86,7 +86,8 @@ def test(model,evaluator,data,subgraph_loader,split_idx):
 
     return train_acc, val_acc, test_acc
 
-def run(args, rank, world_size, dataset,split_idx=None):
+def run(args, dataset,split_idx=None):
+    loopList = [0,10,20,30,50,100,150,200]
     data = dataset[0]
     #data = data.to('cuda:0', 'x', 'y')  # Move to device for faster feature fetch.
     data = data.to('cuda:0', 'y')
@@ -102,46 +103,60 @@ def run(args, rank, world_size, dataset,split_idx=None):
                                   num_neighbors=args.fanout, shuffle=True,
                                   drop_last=True, **kwargs)
 
-    if rank == 0:  # Create single-hop evaluation neighbor loader:
-        subgraph_loader = NeighborLoader(copy.copy(data), num_neighbors=[-1],
-                                         shuffle=False, **kwargs)
-        del subgraph_loader.data.x, subgraph_loader.data.y
-        subgraph_loader.data.node_id = torch.arange(data.num_nodes)
+
+    subgraph_loader = NeighborLoader(copy.copy(data), num_neighbors=[-1],
+                                        shuffle=False, **kwargs)
+    del subgraph_loader.data.x, subgraph_loader.data.y
+    subgraph_loader.data.node_id = torch.arange(data.num_nodes)
 
     torch.manual_seed(12345)
-    model = SAGE(dataset.num_features, 256, dataset.num_classes,args.layers).to('cuda:0')
+    if args.dataset == 'Reddit':
+        feat_size,classNUM = 602,41
+    elif args.dataset == 'ogb-products':
+        feat_size,classNUM = 100,47
+    model = SAGE(feat_size, 256, classNUM,args.layers).to('cuda:0')
     optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
 
-    for epoch in range(1, 11):
-        model.train()
-        startTime = time.time()    
-        for batch in train_loader:        
-            optimizer.zero_grad()    
-            out = model(batch.x.to('cuda:0'), batch.edge_index.to('cuda:0'))[:batch.batch_size]
-            loss = F.cross_entropy(out, batch.y[:batch.batch_size].squeeze())
-            loss.backward()
-            optimizer.step()
-        runTime = time.time() - startTime
+    for index in range(1,len(loopList)):
+        if loopList[index] > args.maxloop:
+            break
+        _loop = loopList[index] - loopList[index - 1]
+        basicLoop = loopList[index - 1]
+        for epoch in range(_loop):
+            model.train()
+            startTime = time.time() 
+            total_loss = 0   
+            count = 0
+            for it, batch in enumerate(train_loader):        
+                optimizer.zero_grad()    
+                out = model(batch.x.to('cuda:0'), batch.edge_index.to('cuda:0'))[:batch.batch_size]
+                loss = F.cross_entropy(out, batch.y[:batch.batch_size].squeeze())
+                loss.backward()
+                optimizer.step()
+                total_loss += loss.item()
+                count = it
+            trainTime = time.time() - startTime
 
 
-        print(f'Epoch: {epoch:02d}, Loss: {loss:.4f}, time: {runTime:.5f}')
+            print("| Epoch {:05d} | Loss {:.4f} | Time {:.3f}s | Count {} |"
+              .format(basicLoop+epoch, total_loss / (it+1), trainTime, count))
 
-        if rank == 0 and epoch % 5 == 0:  # We evaluate on a single GPU for now
-            if args.dataset == 'Reddit':
-                model.eval()
-                with torch.no_grad():
-                    out = model.inference(data.x, rank, subgraph_loader)
-                res = out.argmax(dim=-1) == data.y.to(out.device)
-                acc1 = int(res[data.train_mask].sum()) / int(data.train_mask.sum())
-                acc2 = int(res[data.val_mask].sum()) / int(data.val_mask.sum())
-                acc3 = int(res[data.test_mask].sum()) / int(data.test_mask.sum())
-                print(f'Train: {acc1:.4f}, Val: {acc2:.4f}, Test: {acc3:.4f}')
+            if (epoch+1) in loopList :  # We evaluate on a single GPU for now
+                if args.dataset == 'Reddit':
+                    model.eval()
+                    with torch.no_grad():
+                        out = model.inference(data.x, "cuda:0", subgraph_loader)
+                    res = out.argmax(dim=-1) == data.y.to(out.device)
+                    acc1 = int(res[data.train_mask].sum()) / int(data.train_mask.sum())
+                    acc2 = int(res[data.val_mask].sum()) / int(data.val_mask.sum())
+                    acc3 = int(res[data.test_mask].sum()) / int(data.test_mask.sum())
+                    print(f'Train: {acc1:.4f}, Val: {acc2:.4f}, Test: {acc3:.4f}')
 
-            elif args.dataset == 'ogb-products':
-                evaluator = Evaluator(name='ogbn-products')
-                train_acc, val_acc, test_acc = test(model,evaluator,data,subgraph_loader,split_idx)
-                print(f'Train: {train_acc:.4f}, Val: {val_acc:.4f}, '
-                            f'Test: {test_acc:.4f}')
+                elif args.dataset == 'ogb-products':
+                    evaluator = Evaluator(name='ogbn-products')
+                    train_acc, val_acc, test_acc = test(model,evaluator,data,subgraph_loader,split_idx)
+                    print(f'Train: {train_acc:.4f}, Val: {val_acc:.4f}, '
+                                f'Test: {test_acc:.4f}')
             
 
 
@@ -150,6 +165,8 @@ if __name__ == '__main__':
     parser.add_argument('--fanout', type=ast.literal_eval, default=[25, 10], help='Fanout value')
     parser.add_argument('--layers', type=int, default=2, help='Number of layers')
     parser.add_argument('--dataset', type=str, default='ogb-products', help='Dataset name')
+    parser.add_argument('--maxloop', type=int, default=50, help='max loop number')
+
     args = parser.parse_args()
     world_size = 1
     print('Let\'s use', world_size, 'GPUs!')
@@ -161,15 +178,13 @@ if __name__ == '__main__':
 
     # world_size = torch.cuda.device_count()
     if args.dataset == 'Reddit':
-        dataset = Reddit('../../../data/pyg_reddit')
-        run(args,0, world_size, dataset,split_idx=None)
+        dataset = Reddit('/home/bear/workspace/singleGNN/data/reddit/pyg_reddit')
+        run(args, dataset,split_idx=None)
     elif args.dataset == 'ogb-products':
-        root = osp.join(osp.dirname(osp.realpath(__file__)), '.', 'dataset')
+        root = osp.join(osp.dirname(osp.realpath(__file__)), '/home/bear/workspace/singleGNN/data/', 'dataset')
         dataset = PygNodePropPredDataset('ogbn-products', root)
         split_idx = dataset.get_idx_split()
         evaluator = Evaluator(name='ogbn-products')
-        run(args,0, world_size, dataset,split_idx)
+        run(args, dataset,split_idx)
     else:
         raise ValueError(f"Unsupported dataset: {args.dataset}")
-    
-    #mp.spawn(run, args=(world_size, dataset), nprocs=world_size, join=True)
