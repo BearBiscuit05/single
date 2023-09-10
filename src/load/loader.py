@@ -248,14 +248,11 @@ class CustomDataset(Dataset):
         # TODO:此处合并
         # 加载数据预取结果
         prefetch = False
-        if self.preFetchFlagQueue.qsize() > 0:
-        # if self.preFetchDataCache.qsize() > 0:
+        if self.pre_fetch and self.preFetchFlagQueue.qsize() > 0:
             prefetch = True
             taskFlag = self.preFetchFlagQueue.get()
             flag = taskFlag.result()
-            print("flag:=======> ",flag)
             preCacheData = self.preFetchDataCache.get()   
-            # self.loadingGraph(preFetch=True)
             self.loadingGraph(preFetch=True,srcList=preCacheData[0],rangeList=preCacheData[1])
         else:
             self.loadingGraph()
@@ -273,8 +270,8 @@ class CustomDataset(Dataset):
         logger.info("当前加载图为:{},下一个图:{},图训练集规模:{},图节点数目:{},图边数目:{},加载耗时:{:.5f}s"\
                         .format(self.trainingGID,self.nextGID,self.subGtrainNodesNUM,\
                         self.graphNodeNUM,self.graphEdgeNUM,time.time()-start))
-        self.preFetchFlagQueue.put(self.preFetchExecutor.submit(self.preloadingGraphData))
-        print("self.preFetchFlagQueue.qsize() :", self.preFetchFlagQueue.qsize())
+        if self.pre_fetch:
+            self.preFetchFlagQueue.put(self.preFetchExecutor.submit(self.preloadingGraphData))
 
     def loadingTrainID(self):
         # 加载子图所有训练集
@@ -843,6 +840,7 @@ def collate_fn(data):
 
 if __name__ == "__main__":
     dataset = CustomDataset("../../config/dgl_products_graphsage.json",pre_fetch=True)
+    # dataset = CustomDataset("../../config/dgl_products_graphsage.json")
     with open("../../config/dgl_products_graphsage.json", 'r') as f:
         config = json.load(f)
         batchsize = config['batchsize']

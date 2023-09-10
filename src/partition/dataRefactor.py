@@ -4,12 +4,16 @@ import numpy as np
 import mmap
 
 #data = np.arange(1000).reshape(100, 10)
+
 array_file = "./part2bin/numpy_array_data.bin"
+
 #data.tofile(array_file)
+
 fpr = np.memmap(array_file, dtype='int64', mode='r', shape=(100,10))
 indices = [1, 3, 5, 7]
 get = fpr[indices]
 print(get)
+
 # print("Array data saved to:", array_file)
 
 # 打开二进制文件，并使用 mmap 访问数据
@@ -40,11 +44,17 @@ print(get)
 def fetchFeat(featFilePath,nodeNUM,FeatLen,indices):
     fpr = np.memmap(featFilePath, dtype='float64', mode='r', shape=(nodeNUM,FeatLen))
     feats = fpr[indices]
+    return feats
      
-def featLabel(labelFilePath,indices):
+def fetchLabel(labelFilePath,indices):
     label_data = np.fromfile(labelFilePath, dtype=np.int64)
     label_selected_data = label_data[indices]
+    return label_selected_data
 
-def saveNodeId():
+def fetchNodeClass():
+    # 需要从mask中进行提取
     pass
 
+
+if __name__ == '__main__':
+    pass
