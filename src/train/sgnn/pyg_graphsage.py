@@ -114,7 +114,7 @@ def run_test(arg_dataset,model):
         print('Test Time:',endTime-begTime)
     elif arg_dataset == 'Reddit':
         model.eval()
-        dataset = Reddit('../../../data/pyg_reddit')
+        dataset = Reddit('../../../data/reddit/pyg_reddit')
         data = dataset[0]
         data = data.to('cuda:0', 'x', 'y')
         subgraph_loader = NeighborLoader(
@@ -139,7 +139,6 @@ def run_test(arg_dataset,model):
 def run(arg_dataset,rank,model,world_size,dataset):
     train_loader = DataLoader(dataset=dataset, batch_size=dataset.batchsize, collate_fn=collate_fn)#,pin_memory=True)
     torch.manual_seed(12345)
-
     optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
     epochTime = [0]
     testEpoch = [5,30,50,100,200]

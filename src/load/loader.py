@@ -21,7 +21,7 @@ from memory_profiler import profile
 #                     format='%(asctime)s-%(levelname)s-%(message)s',datefmt='%H:%M:%S')
                     #format='%(message)s')
 
-logging.basicConfig(level=logging.INFO,filename='/home/bear/workspace/singleGNN/log/loader.log',filemode='w',
+logging.basicConfig(level=logging.INFO,filename='./log/loader.log',filemode='w',
                     format='%(message)s',datefmt='%H:%M:%S')
                     #format='%(message)s')
 logger = logging.getLogger(__name__)

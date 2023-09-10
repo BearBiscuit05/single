@@ -19,9 +19,6 @@ from torch.utils.data import Dataset, DataLoader
 from torch_geometric.datasets import Reddit
 from torch_geometric.nn import GCNConv
 from torch import Tensor
-current_folder = os.path.abspath(os.path.dirname(__file__))
-sys.path.append(current_folder+"/../../"+"load")
-from loader import CustomDataset
 
 class Net(torch.nn.Module):
     def __init__(self, in_channels: int, hidden_channels: int,
@@ -185,7 +182,7 @@ if __name__ == '__main__':
 
     # Load the dataset based on the provided dataset name
     if args.dataset == 'Reddit':
-        dataset = Reddit('../../../data/pyg_reddit')
+        dataset = Reddit('../../../data/reddit/pyg_reddit')
         split_idx = None
     elif args.dataset == 'ogb-products':
         root = osp.join(osp.dirname(osp.realpath(__file__)), '.', 'dataset')
