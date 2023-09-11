@@ -110,7 +110,7 @@ def run(args, dataset,split_idx=None):
         feat_size,classNUM = 602,41
     elif args.dataset == 'ogb-products':
         feat_size,classNUM = 100,47
-    model = GAT(feat_size, 256, 256, 4).to('cuda:0')
+    model = GAT(feat_size, 256, classNUM, 4).to('cuda:0')
     optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
     
     for index in range(1,len(loopList)):
