@@ -7,64 +7,15 @@ import dgl.nn as dglnn
 from dgl.data import AsNodePredDataset
 from dgl.dataloading import DataLoader, NeighborSampler, MultiLayerFullNeighborSampler
 from ogb.nodeproppred import DglNodePropPredDataset
+from dgl_model import SAGE, GCN, GAT
 import tqdm
 import argparse
 import ast
 import sklearn.metrics
 import numpy as np
 import time
+import sys
 
-class SAGE(nn.Module):
-    def __init__(self, in_size, hid_size, out_size,num_layers=2):
-        super().__init__()
-        self.layers = nn.ModuleList()
-        # three-layer GraphSAGE-mean
-        self.layers.append(dglnn.SAGEConv(in_size, hid_size, 'mean'))
-        for _ in range(num_layers - 2):
-            self.layers.append(dglnn.SAGEConv(hid_size, hid_size, 'mean'))
-        self.layers.append(dglnn.SAGEConv(hid_size, out_size, 'mean'))
-        self.dropout = nn.Dropout(0.5)
-        self.hid_size = hid_size
-        self.out_size = out_size
-
-    def forward(self, blocks, x):
-        h = x
-        for l, (layer, block) in enumerate(zip(self.layers, blocks)):
-            h = layer(block, h)
-            if l != len(self.layers) - 1:
-                h = F.relu(h)
-                h = self.dropout(h)
-        return h
-
-    def inference(self, g,device, batch_size):
-        """Conduct layer-wise inference to get all the node embeddings."""
-        feat = g.ndata['feat']
-        sampler = MultiLayerFullNeighborSampler(1, prefetch_node_feats=['feat'])
-        # sampler = NeighborSampler([15],  # fanout for [layer-0, layer-1, layer-2]
-        #                     prefetch_node_feats=['feat'],
-        #                     prefetch_labels=['label'])
-        dataloader = DataLoader(
-                g, torch.arange(g.num_nodes()).to(g.device), sampler, device=device,
-                batch_size=batch_size, shuffle=False, drop_last=False,
-                num_workers=0)
-        buffer_device = torch.device('cpu')
-        pin_memory = (buffer_device != device)
-
-        for l, layer in enumerate(self.layers):
-            y = torch.empty(
-                g.num_nodes(), self.hid_size if l != len(self.layers) - 1 else self.out_size,
-                device=buffer_device, pin_memory=pin_memory)
-            feat = feat.to(device)
-            for input_nodes, output_nodes, blocks in tqdm.tqdm(dataloader):
-                x = feat[input_nodes]
-                h = layer(blocks[0], x) # len(blocks) = 1
-                if l != len(self.layers) - 1:
-                    h = F.relu(h)
-                    h = self.dropout(h)
-                # by design, our output nodes are contiguous
-                y[output_nodes[0]:output_nodes[-1]+1] = h.to(buffer_device)
-            feat = y
-        return y
 
 def evaluate(model, graph, dataloader):
     model.eval()
@@ -98,7 +49,6 @@ def train(args, device, g, dataset, model,data=None ,basicLoop=0,loop=10):
     sampler = NeighborSampler(args.fanout,  # fanout for [layer-0, layer-1, layer-2]
                             prefetch_node_feats=['feat'],
                             prefetch_labels=['label'])
-    
     use_uva = (args.mode == 'mixed')
     train_dataloader = DataLoader(g, train_idx, sampler, device=device,
                                   batch_size=1024, shuffle=True,
@@ -161,17 +111,15 @@ if __name__ == '__main__':
     parser.add_argument('--fanout', type=ast.literal_eval, default=[15, 25], help='Fanout value')
     parser.add_argument('--layers', type=int, default=2, help='Number of layers')
     parser.add_argument('--dataset', type=str, default='ogb-products', help='Dataset name')
-    parser.add_argument('--maxloop', type=int, default=200, help='max loop number')
+    parser.add_argument('--maxloop', type=int, default=20, help='max loop number')
+    parser.add_argument('--model', type=str, default="SAGE", help='train model')
     args = parser.parse_args()
-
     if not torch.cuda.is_available():
         args.mode = 'cpu'
     print(f'Training in {args.mode} mode.')
     
     # load and preprocess dataset
     print('Loading data')
-    
-    # create GraphSAGE model
     if args.dataset == 'ogb-products':
         dataset = AsNodePredDataset(DglNodePropPredDataset('ogbn-products',root="/home/bear/workspace/singleGNN/data/dataset"))
         g = dataset[0]
@@ -190,7 +138,18 @@ if __name__ == '__main__':
 
     in_size = g.ndata['feat'].shape[1]
     out_size = dataset.num_classes
-    model = SAGE(in_size, 256, out_size,args.layers).to(device)
+    if args.model == "SAGE":
+        model = SAGE(in_size, 256, out_size,args.layers).to(device)
+    elif args.model == "GCN":
+        model = GCN(in_size, 256, out_size,args.layers,F.relu,0.5).to(device)
+    elif args.model == "GAT":
+        model = GAT(in_size, 256, out_size,heads=[4,1]).to(device)
+    else:
+        # 如果 args.model 不是有效的模型选项，触发错误并退出程序
+        print("Invalid model option. Please choose from 'SAGE', 'GCN', or 'GAT'.")
+        sys.exit(1)  # 使用 sys.exit(1) 退出程序并返回错误状态码
+   
+
     # model training
     print('Training...')
     loopList = [0,10,20,30,50,100,150,200]
@@ -205,7 +164,7 @@ if __name__ == '__main__':
     # test the model
     
     
-        print('---> Testing with after loop {}:...'.format(loopList[index]))
+        print('Testing with after loop {}:...'.format(loopList[index]))
         if args.dataset == 'ogb-products':
             acc = layerwise_infer(device, g, dataset.test_idx, model, batch_size=4096)
         elif args.dataset == 'Reddit':

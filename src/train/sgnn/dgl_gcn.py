@@ -188,7 +188,6 @@ if __name__ == '__main__':
     device = torch.device('cpu' if args.mode == 'cpu' else 'cuda')
     model = GCN(data['featlen'], 256, data['classes'] ,arg_layers,F.relu,0.5).to('cuda:0')
 
-    # model training
     print('Training...')
     dataset = CustomDataset(args.json_path)  # 使用 args.json_path 作为 JSON 文件路径
     train(device, dataset, model)

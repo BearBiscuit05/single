@@ -19,10 +19,10 @@ import json
 from dgl.data import AsNodePredDataset
 from ogb.nodeproppred import DglNodePropPredDataset
 from dgl.dataloading import NeighborSampler, MultiLayerFullNeighborSampler
+from sgnn_model import DGL_SAGE, DGL_GCN, DGL_GAT
 
 current_folder = os.path.abspath(os.path.dirname(__file__))
 sys.path.append(current_folder+"/../../"+"load")
-#from loader_dgl import CustomDataset
 from loader import CustomDataset
 
 class SAGE(nn.Module):
@@ -93,16 +93,7 @@ def layerwise_infer(device, graph, nid, model, batch_size):
         pred = model.inference(graph, device, batch_size) # pred in buffer_device
         pred = pred[nid]
         label = graph.ndata['label'][nid].to(pred.device)
-    #label = label.squeeze()
-    #pred = pred.squeeze()
     return sklearn.metrics.accuracy_score(label.cpu().numpy(), pred.argmax(1).cpu().numpy())
-
-def collate_fn(data):
-    """
-    data 输入结构介绍：
-        [graph,feat]
-    """
-    return data[0]
 
 def train(device, dataset, model):
     opt = torch.optim.Adam(model.parameters(), lr=1e-3, weight_decay=5e-4)
@@ -129,6 +120,13 @@ def train(device, dataset, model):
             total_loss += loss.item()
         print("Epoch {:05d} | Loss {:.4f} | Time {:.3f}s"
               .format(epoch, total_loss / (it+1), time.time()-start))
+
+def collate_fn(data):
+    """
+    data 输入结构介绍：
+        [graph,feat]
+    """
+    return data[0]
 
 def load_reddit(self_loop=True):
     from dgl.data import RedditDataset
@@ -163,13 +161,12 @@ if __name__ == '__main__':
 
     if not torch.cuda.is_available():
         args.mode = 'cpu'
+    print(f'Training in {args.mode} mode.')
     
     data = None
     with open(args.json_path, 'r') as json_file:
         data = json.load(json_file)
 
-
-    print(f'Training in {args.mode} mode.')
     print('Loading data')
     if data["dataset"] == "products_4":
         arg_dataset = 'ogb-products'
@@ -179,9 +176,18 @@ if __name__ == '__main__':
     arg_layers = len(arg_fanout)
 
     device = torch.device('cpu' if args.mode == 'cpu' else 'cuda:0')
-    model = SAGE(data['featlen'], 256, data['classes'],arg_layers).to('cuda:0')  # 请确保 SAGE 模型的参数正确
-    dataset = CustomDataset(args.json_path)  # 使用 args.json_path 作为 JSON 文件路径
+    if data["model"] == "SAGE":
+        model = DGL_SAGE(data['featlen'], 256, data['classes'],arg_layers).to('cuda:0')  # 请确保 SAGE 模型的参数正确
+    elif data["model"] == "GCN":
+        model = DGL_GCN(data['featlen'], 256, data['classes'] ,arg_layers,F.relu,0.5).to('cuda:0')
+    elif data["model"] == "GAT":
+        model = DGL_GAT(data['featlen'], 256, data['classes'], heads=[4,1]).to('cuda:0')
+    else:
+        print("Invalid model option. Please choose from 'SAGE', 'GCN', or 'GAT'.")
+        sys.exit(1)
+    
     print('Training...')
+    dataset = CustomDataset(args.json_path)  # 使用 args.json_path 作为 JSON 文件路径
     train(device, dataset, model)
 
     # 指定要保存的文件路径
@@ -191,7 +197,7 @@ if __name__ == '__main__':
     # torch.save(model.state_dict(), save_path)
 
     if arg_dataset == 'ogb-products':
-        dataset = AsNodePredDataset(DglNodePropPredDataset('ogbn-products'))
+        dataset = AsNodePredDataset(DglNodePropPredDataset('ogbn-products',root="/home/bear/workspace/singleGNN/data/dataset"))
         g = dataset[0]
         data = None
     elif arg_dataset == 'Reddit':

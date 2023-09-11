@@ -1,61 +1,23 @@
 import copy
 import os
-import sys
-import argparse
+import time
 import torch
 import torch.distributed as dist
 import torch.multiprocessing as mp
 import torch.nn.functional as F
 from torch import Tensor
-import time
+from torch.nn.parallel import DistributedDataParallel
+from tqdm import tqdm
 import argparse
 import ast
 import os.path as osp
 from ogb.nodeproppred import Evaluator, PygNodePropPredDataset
-from torch.nn.parallel import DistributedDataParallel
-from tqdm import tqdm
-from torch.utils.data import Dataset, DataLoader
 from torch_geometric.datasets import Reddit
 from torch_geometric.loader import NeighborLoader
-from torch_geometric.nn import SAGEConv,GATConv
+from torch_geometric.nn import SAGEConv
+import sys
+from pyg_model import SAGE, GCN, GAT
 
-
-class GAT(torch.nn.Module):
-    def __init__(self, in_channels, hidden_channels, out_channels, heads, num_layers=2):
-        super().__init__()
-        self.conv1 = GATConv(in_channels, hidden_channels, heads, dropout=0.6)
-        # On the Pubmed dataset, use `heads` output heads in `conv2`.
-        self.conv2 = GATConv(hidden_channels * heads, out_channels, heads=8,
-                             concat=False, dropout=0.6)
-        self.convs = [self.conv1,self.conv2]
-
-    def forward(self, x, edge_index):
-        x = F.dropout(x, p=0.6, training=self.training)
-        x = F.elu(self.conv1(x, edge_index))
-        x = F.dropout(x, p=0.6, training=self.training)
-        x = self.conv2(x, edge_index)
-        return x
-
-    @torch.no_grad()
-    def inference(self, x_all: Tensor, device: torch.device,
-                  subgraph_loader: NeighborLoader) -> Tensor:
-
-        pbar = tqdm(total=len(subgraph_loader) * len(self.convs))
-        pbar.set_description('Evaluating')
-        for i, conv in enumerate(self.convs):
-            xs = []
-            for batch in subgraph_loader:
-                x = x_all[batch.node_id.to(x_all.device)].to(device)
-                x = conv(x, batch.edge_index.to(device))
-                x = x[:batch.batch_size]
-                if i < len(self.convs) - 1:
-                    x = x.relu_()
-                xs.append(x.cpu())
-                pbar.update(1)
-            x_all = torch.cat(xs, dim=0)
-
-        pbar.close()
-        return x_all
 
 
 @torch.no_grad()
@@ -82,11 +44,11 @@ def test(model,evaluator,data,subgraph_loader,split_idx):
 
     return train_acc, val_acc, test_acc
 
-
 def run(args, dataset,split_idx=None):
     loopList = [0,10,20,30,50,100,150,200]
     data = dataset[0]
-    data = data.to('cuda:0', 'x', 'y')
+    #data = data.to('cuda:0', 'x', 'y')  # Move to device for faster feature fetch.
+    data = data.to('cuda:0', 'y')
     if args.dataset == 'Reddit':
         train_idx = data.train_mask.nonzero(as_tuple=False).view(-1)
     elif args.dataset == 'ogb-products':
@@ -98,41 +60,50 @@ def run(args, dataset,split_idx=None):
     train_loader = NeighborLoader(data, input_nodes=train_idx,
                                   num_neighbors=args.fanout, shuffle=True,
                                   drop_last=True, **kwargs)
+
+
     subgraph_loader = NeighborLoader(copy.copy(data), num_neighbors=[-1],
                                         shuffle=False, **kwargs)
-    # No need to maintain these features during evaluation:
     del subgraph_loader.data.x, subgraph_loader.data.y
-    # Add global node index information:
     subgraph_loader.data.node_id = torch.arange(data.num_nodes)
-    
+
     torch.manual_seed(12345)
     if args.dataset == 'Reddit':
         feat_size,classNUM = 602,41
     elif args.dataset == 'ogb-products':
         feat_size,classNUM = 100,47
-    model = GAT(feat_size, 256, classNUM, 4).to('cuda:0')
+
+    if args.model == "SAGE":
+        model = SAGE(feat_size, 256, classNUM,args.layers).to('cuda:0')
+    elif args.model == "GCN":
+        model = GCN(feat_size, 256,classNUM,args.layers).to('cuda:0')
+    elif args.model == "GAT":
+        model = GAT(feat_size, 256, classNUM, 4).to('cuda:0')
+    else:
+        print("Invalid model option. Please choose from 'SAGE', 'GCN', or 'GAT'.")
+        sys.exit(1)
+
     optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
-    
+
     for index in range(1,len(loopList)):
         if loopList[index] > args.maxloop:
             break
         _loop = loopList[index] - loopList[index - 1]
         basicLoop = loopList[index - 1]
-        for epoch in range(_loop): 
+        for epoch in range(_loop):
             model.train()
             startTime = time.time() 
             total_loss = 0   
-            count = 0 
-            for it, batch in enumerate(train_loader):         
+            count = 0
+            for it, batch in enumerate(train_loader):        
                 optimizer.zero_grad()    
-                out = model(batch.x, batch.edge_index.to('cuda:0'))[:batch.batch_size]
+                out = model(batch.x.to('cuda:0'), batch.edge_index.to('cuda:0'))[:batch.batch_size]
                 loss = F.cross_entropy(out, batch.y[:batch.batch_size].squeeze())
                 loss.backward()
                 optimizer.step()
                 total_loss += loss.item()
                 count = it
             trainTime = time.time() - startTime
-
             print("| Epoch {:05d} | Loss {:.4f} | Time {:.3f}s | Count {} |"
               .format(basicLoop+epoch, total_loss / (it+1), trainTime, count))
 
@@ -152,18 +123,18 @@ def run(args, dataset,split_idx=None):
                     print(f'Train: {train_acc:.4f}, Val: {val_acc:.4f}, '
                                 f'Test: {test_acc:.4f}')
 
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='pyg gcn program')
     parser.add_argument('--fanout', type=ast.literal_eval, default=[25, 10], help='Fanout value')
     parser.add_argument('--layers', type=int, default=2, help='Number of layers')
-    parser.add_argument('--dataset', type=str, default='Reddit', help='Dataset name')
-    parser.add_argument('--maxloop', type=int, default=50, help='max loop number')
+    parser.add_argument('--dataset', type=str, default='ogb-products', help='Dataset name')
+    parser.add_argument('--maxloop', type=int, default=20, help='max loop number')
+    parser.add_argument('--model', type=str, default="SAGE", help='train model')
 
     args = parser.parse_args()
     world_size = 1
     print('Let\'s use', world_size, 'GPUs!')
-    
-    # Print the parsed arguments
     print('Fanout:', args.fanout)
     print('Layers:', args.layers)
     print('Dataset:', args.dataset)
