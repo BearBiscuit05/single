@@ -31,19 +31,19 @@ for model in "${modelList[@]}"; do
             FeatLen="${FeatLenList[i]}"
             Classes="${ClassesList[i]}"
 
-            echo "Executing: '${ExecutePath}' --file '${ConfigPath}' --key_value \\
-                fanout=[${fanout}] model=${model} partNUM=${num} datasetpath=${datasetPath} \\
-                dataset=${datasetName} featlen=${FeatLen} classes=${Classes}"
+            # echo "python '${ExecutePath}' --file '${ConfigPath}' --key_value \\
+            #     fanout=[${fanout}] model=${model} partNUM=${num} datasetpath=${datasetPath} \\
+            #     dataset=${datasetName} featlen=${FeatLen} classes=${Classes}"
             
             echo "==============================================================" >> "$output_file"
-            echo "Executing: '${ExecutePath}' --file '${ConfigPath}' --key_value \\
+            echo "'${ExecutePath}' --file '${ConfigPath}' --key_value \\
                 fanout=[${fanout}] model=${model} partNUM=${num} datasetpath=${datasetPath} \\
-                dataset=${datasetName} featlen=${FeatLen} classes=${Classes}"
+                dataset=${datasetName} featlen=${FeatLen} classes=${Classes}" >> "$output_file"
             echo "--------------------------------------------------------------" >> "$output_file"
 
-            python ${ExecutePath} --file ${ConfigPath} --key_value \
-                "fanout=[${fanout}]" "model='${model}'" "partNUM=${num}" "dataset='${datasetName}'" \
-                "featlen=${FeatLen}" "classes=${Classes}" "datasetpath='${datasetPath}'" >> "$output_file"
+            # python ${ExecutePath} --file ${ConfigPath} --key_value \
+            #     "fanout=[${fanout}]" "model='${model}'" "partNUM=${num}" "dataset='${datasetName}'" \
+            #     "featlen=${FeatLen}" "classes=${Classes}" "datasetpath='${datasetPath}'" >> "$output_file"
 
         done
     done
@@ -51,32 +51,32 @@ done
 
 
 # pyg
-python ../config/modify.py --file ${ConfigPath} --key_value \
-        "framework='pyg'"
+# python ../config/modify.py --file ${ConfigPath} --key_value \
+#         "framework='pyg'"
+# fanoutList=("25,10" "15,10,5" "15,10" "10,10,10")
+# for model in "${modelList[@]}"; do
+#     for fanout in "${fanoutList[@]}"; do
+#         for ((i = 0; i < length; i++)); do
+#             datasetPath="${datasetPathList[i]}"
+#             num="${PartNUM[i]}"
+#             datasetName="${datasetNameList[i]}"
+#             FeatLen="${FeatLenList[i]}"
+#             Classes="${ClassesList[i]}"
 
-for model in "${modelList[@]}"; do
-    for fanout in "${fanoutList[@]}"; do
-        for ((i = 0; i < length; i++)); do
-            datasetPath="${datasetPathList[i]}"
-            num="${PartNUM[i]}"
-            datasetName="${datasetNameList[i]}"
-            FeatLen="${FeatLenList[i]}"
-            Classes="${ClassesList[i]}"
-
-            echo "Executing: '${ExecutePath}' --file '${ConfigPath}' --key_value \\
-                fanout=[${fanout}] model=${model} partNUM=${num} datasetpath=${datasetPath} \\
-                dataset=${datasetName} featlen=${FeatLen} classes=${Classes}"
+#             echo "'${ExecutePath}' --file '${ConfigPath}' --key_value \\
+#                 fanout=[${fanout}] model=${model} partNUM=${num} datasetpath=${datasetPath} \\
+#                 dataset=${datasetName} featlen=${FeatLen} classes=${Classes}"
             
-            echo "==============================================================" >> "$output_file"
-            echo "Executing: '${ExecutePath}' --file '${ConfigPath}' --key_value \\
-                fanout=[${fanout}] model=${model} partNUM=${num} datasetpath=${datasetPath} \\
-                dataset=${datasetName} featlen=${FeatLen} classes=${Classes}"
-            echo "--------------------------------------------------------------" >> "$output_file"
+#             echo "==============================================================" >> "$output_file"
+#             echo "'${ExecutePath}' --file '${ConfigPath}' --key_value \\
+#                 fanout=[${fanout}] model=${model} partNUM=${num} datasetpath=${datasetPath} \\
+#                 dataset=${datasetName} featlen=${FeatLen} classes=${Classes}"
+#             echo "--------------------------------------------------------------" >> "$output_file"
 
-            python ${ExecutePath} --file ${ConfigPath} --key_value \
-                "fanout=[${fanout}]" "model='${model}'" "partNUM=${num}" "dataset='${datasetName}'" \
-                "featlen=${FeatLen}" "classes=${Classes}" "datasetpath='${datasetPath}'" >> "$output_file"
+#             python ${ExecutePath} --file ${ConfigPath} --key_value \
+#                 "fanout=[${fanout}]" "model='${model}'" "partNUM=${num}" "dataset='${datasetName}'" \
+#                 "featlen=${FeatLen}" "classes=${Classes}" "datasetpath='${datasetPath}'" >> "$output_file"
 
-        done
-    done
-done
+#         done
+#     done
+# done
