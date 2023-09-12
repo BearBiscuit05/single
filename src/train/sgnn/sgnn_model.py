@@ -42,9 +42,6 @@ class DGL_SAGE(nn.Module):
         """Conduct layer-wise inference to get all the node embeddings."""
         feat = g.ndata['feat']
         sampler = MultiLayerFullNeighborSampler(1, prefetch_node_feats=['feat'])
-        # sampler = NeighborSampler([15],  # fanout for [layer-0, layer-1, layer-2]
-        #                     prefetch_node_feats=['feat'],
-        #                     prefetch_labels=['label'])
         dataloader = DataLoader(
                 g, torch.arange(g.num_nodes()).to(g.device), sampler, device=device,
                 batch_size=batch_size, shuffle=False, drop_last=False,
@@ -171,3 +168,125 @@ class DGL_GAT(nn.Module):
                 y[output_nodes[0]:output_nodes[-1]+1] = h.to(buffer_device)
             feat = y
         return y
+    
+import os
+import torch.multiprocessing as mp
+from torch import Tensor
+from tqdm import tqdm
+from torch.utils.data import Dataset, DataLoader
+from torch_geometric.nn import SAGEConv,GATConv,GCNConv
+
+class PYG_GCN(torch.nn.Module):
+    def __init__(self, in_channels: int, hidden_channels: int,
+                 out_channels: int, num_layers: int = 2):
+        super(PYG_GCN, self).__init__()
+        self.convs = torch.nn.ModuleList()
+        self.convs.append(GCNConv(in_channels, hidden_channels))
+        for _ in range(num_layers - 2):
+            self.convs.append(GCNConv(hidden_channels, hidden_channels))
+        self.convs.append(GCNConv(hidden_channels, out_channels))
+        self.num_layers = num_layers
+
+    def forward(self, x, edge_index):
+        for i, conv in enumerate(self.convs):
+            x = conv(x, edge_index)
+            if i < len(self.convs) - 1:
+                x = x.relu_()
+                x = F.dropout(x, p=0.5, training=self.training)
+        return F.log_softmax(x, dim=1)
+
+    def inference(self, x_all,subgraph_loader):
+        pbar = tqdm(total=x_all.size(0) * self.num_layers)
+        pbar.set_description('Evaluating')
+        for i in range(self.num_layers):
+            xs = []
+            for batch in subgraph_loader:
+                x = x_all[batch.n_id].to("cuda:0")
+                edge_index = batch.edge_index.to("cuda:0")
+                x = self.convs[i](x, edge_index)
+                x = x[:batch.batch_size]
+                if i != self.num_layers - 1:
+                    x = x.relu()
+                xs.append(x.cpu())
+                pbar.update(batch.batch_size)
+            x_all = torch.cat(xs, dim=0)
+        pbar.close()
+        return x_all
+
+class PYG_SAGE(torch.nn.Module):
+    def __init__(self, in_channels: int, hidden_channels: int,
+                 out_channels: int, num_layers: int = 2):
+        super().__init__()
+
+        self.convs = torch.nn.ModuleList()
+        self.convs.append(SAGEConv(in_channels, hidden_channels))
+        for _ in range(num_layers - 2):
+            self.convs.append(SAGEConv(hidden_channels, hidden_channels))
+        self.convs.append(SAGEConv(hidden_channels, out_channels))
+        self.num_layers = num_layers
+
+    def forward(self, x: Tensor, edge_index: Tensor) -> Tensor:
+        for i, conv in enumerate(self.convs):
+            x = conv(x, edge_index)
+            if i < len(self.convs) - 1:
+                x = x.relu_()
+                x = F.dropout(x, p=0.5, training=self.training)
+        return x
+
+    def inference(self, x_all,subgraph_loader):
+        pbar = tqdm(total=x_all.size(0) * self.num_layers)
+        pbar.set_description('Evaluating')
+
+        for i in range(self.num_layers):
+            xs = []
+            for batch in subgraph_loader:
+                x = x_all[batch.n_id].to("cuda:0")
+                edge_index = batch.edge_index.to("cuda:0")
+                x = self.convs[i](x, edge_index)
+                x = x[:batch.batch_size]
+                if i != self.num_layers - 1:
+                    x = x.relu()
+                xs.append(x.cpu())
+                pbar.update(batch.batch_size)
+            x_all = torch.cat(xs, dim=0)
+        pbar.close()
+        return x_all
+
+class PYG_GAT(torch.nn.Module):
+    def __init__(self, in_channels, hidden_channels, out_channels, heads, num_layers=2):
+        super().__init__()
+        self.convs = torch.nn.ModuleList()
+        self.conv1 = GATConv(in_channels, hidden_channels, heads, dropout=0.6)
+        # On the Pubmed dataset, use `heads` output heads in `conv2`.
+        self.conv2 = GATConv(hidden_channels * heads, out_channels, heads=8,
+                             concat=False, dropout=0.6)
+        self.convs.append(self.conv1)
+        self.convs.append(self.conv2)
+        self.num_layers = num_layers
+        
+    def forward(self, x, edge_index):
+        x = F.dropout(x, p=0.6, training=self.training)
+        x = F.elu(self.conv1(x, edge_index))
+        x = F.dropout(x, p=0.6, training=self.training)
+        x = self.conv2(x, edge_index)
+        return x
+
+    def inference(self, x_all,subgraph_loader):
+        pbar = tqdm(total=x_all.size(0) * self.num_layers)
+        pbar.set_description('Evaluating')
+
+        for i in range(self.num_layers):
+            xs = []
+            for batch in subgraph_loader:
+                x = x_all[batch.n_id].to("cuda:0")
+                edge_index = batch.edge_index.to("cuda:0")
+                x = self.convs[i](x, edge_index)
+                x = x[:batch.batch_size]
+                if i != self.num_layers - 1:
+                    x = x.relu()
+                xs.append(x.cpu())
+                pbar.update(batch.batch_size)
+            x_all = torch.cat(xs, dim=0)
+        pbar.close()
+        return x_all
+
