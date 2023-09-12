@@ -53,7 +53,7 @@ if __name__ == "__main__":
 
     if process:
         # 设置监测时间间隔（秒）
-        interval_seconds = 5  # 替换成你需要的时间间隔
+        interval_seconds = 3  # 替换成你需要的时间间隔
         # 设置输出文件路径
         output_file = "memory_usage.txt"  # 替换成你希望的文件路径
         monitor_memory_usage_and_write_to_file(process, interval_seconds, output_file)
