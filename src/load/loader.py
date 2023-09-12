@@ -61,7 +61,7 @@ class CustomDataset(Dataset):
         self.batchsize,self.cacheNUM,self.partNUM = 0,0,0
         self.epoch,self.preRating,self.classes = 0,0,0
         self.featlen = 0
-        self.idbound,self.fanout = [],[]
+        self.fanout = []
         self.train_name,self.framework,self.mode,self.dataset = "","","",""
         self.readConfig(confPath)
         # ================
@@ -155,7 +155,6 @@ class CustomDataset(Dataset):
         self.preRating = config['preRating']
         self.featlen = config['featlen']
         self.fanout = config['fanout']
-        self.idbound = config['idbound']
         self.framework = config['framework']
         self.mode = config['mode']
         self.classes = config['classes']

@@ -41,6 +41,22 @@ print(get)
 # print("Loaded selected data array:\n", loaded_selected_data)
 
 # 构建子图内部特征
+
+"""
+--part0
+----inter edges
+----cut edges  --> 需要按照另外一个分区来对应id
+----inter nodes
+--part1
+...
+--result:记录了每个分区的节点数目
+
+转换过程:
+1.part-n来说,global id被修改为part-(n-1)范围的最大--part-n的范围
+2.此时需要存储一个映射表-->mapping文件
+3.修改cut edges中一边的id内容 --> lid
+4.按照mapping对应并修改到另外一个id(要匹配到) --> nodeNUM + lid 
+"""
 def fetchFeat(featFilePath,nodeNUM,FeatLen,indices):
     fpr = np.memmap(featFilePath, dtype='float64', mode='r', shape=(nodeNUM,FeatLen))
     feats = fpr[indices]

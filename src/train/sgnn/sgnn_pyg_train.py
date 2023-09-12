@@ -21,52 +21,8 @@ from loader import CustomDataset
 import argparse
 import ast
 import json
+from sgnn_model import PYG_SAGE,PYG_GCN,PYG_GAT
 
-class SAGE(torch.nn.Module):
-    def __init__(self, in_channels: int, hidden_channels: int,
-                 out_channels: int, num_layers: int = 2):
-        super().__init__()
-
-        self.convs = torch.nn.ModuleList()
-        self.convs.append(SAGEConv(in_channels, hidden_channels))
-        for _ in range(num_layers - 2):
-            self.convs.append(SAGEConv(hidden_channels, hidden_channels))
-        self.convs.append(SAGEConv(hidden_channels, out_channels))
-        self.num_layers = num_layers
-
-    def forward(self, x: Tensor, edge_index: Tensor) -> Tensor:
-        for i, conv in enumerate(self.convs):
-            x = conv(x, edge_index)
-            if i < len(self.convs) - 1:
-                x = x.relu_()
-                x = F.dropout(x, p=0.5, training=self.training)
-        return x
-
-    def inference(self, x_all,subgraph_loader):
-        pbar = tqdm(total=x_all.size(0) * self.num_layers)
-        pbar.set_description('Evaluating')
-
-        # Compute representations of nodes layer by layer, using *all*
-        # available edges. This leads to faster computation in contrast to
-        # immediately computing the final representations of each batch.
-        for i in range(self.num_layers):
-            xs = []
-            for batch in subgraph_loader:
-                x = x_all[batch.n_id].to("cuda:0")
-                edge_index = batch.edge_index.to("cuda:0")
-                x = self.convs[i](x, edge_index)
-                x = x[:batch.batch_size]
-                if i != self.num_layers - 1:
-                    x = x.relu()
-                xs.append(x.cpu())
-
-                pbar.update(batch.batch_size)
-
-            x_all = torch.cat(xs, dim=0)
-
-        pbar.close()
-
-        return x_all
 
 @torch.no_grad()
 def test(model,evaluator,data,subgraph_loader,split_idx):
@@ -145,7 +101,7 @@ def run(arg_dataset,rank,model,world_size,dataset):
     for epoch in range(1,dataset.epoch+1):
         startTime = time.time()
         total_loss = 0
-        model.train()    
+        model.train()
         for it,(graph,feat,label,number) in enumerate(train_loader):
             optimizer.zero_grad()     
             out = model(feat.to('cuda:0'), graph)[:number]
@@ -161,9 +117,6 @@ def run(arg_dataset,rank,model,world_size,dataset):
             run_test(arg_dataset,model)
     print("Average Training Time of {:d} Epoches:{:.6f}".format(dataset.epoch,epochTime[dataset.epoch]/dataset.epoch))
     print("Total   Training Time of {:d} Epoches:{:.6f}".format(dataset.epoch,epochTime[dataset.epoch]))
-
-
-
 
 
 def collate_fn(data):
@@ -193,8 +146,52 @@ if __name__ == '__main__':
     arg_fanout = data["fanout"]
     arg_layers = len(arg_fanout)
 
-    model = SAGE(data['featlen'], 256, data['classes'],arg_layers).to('cuda:0')
-    world_size = 1
-    print('Let\'s use', world_size, 'GPUs!')
     dataset = CustomDataset(args.json_path)
-    run(arg_dataset,0,model,world_size,dataset)
+    if data['model'] == "SAGE":
+        model = PYG_SAGE(data['featlen'], 256, data['classes'],arg_layers).to('cuda:0')
+    elif data['model'] == "GCN":
+        model = PYG_GCN(data['featlen'], 256, data['classes'],arg_layers).to('cuda:0')
+    elif data["model"] == "GAT":
+        model = PYG_GAT(data['featlen'], 256, data['classes'], 4).to('cuda:0')
+    else:
+        print("Invalid model option. Please choose from 'SAGE', 'GCN', or 'GAT'.")
+        sys.exit(1)
+    
+    run(model,dataset)
+    if arg_dataset == 'ogb-products':
+        root = osp.join(osp.dirname(osp.realpath(__file__)), '/home/bear/workspace/singleGNN/data/', 'dataset')
+        dataset = PygNodePropPredDataset('ogbn-products', root)
+        split_idx = dataset.get_idx_split()
+        evaluator = Evaluator(name='ogbn-products')
+        data = dataset[0].to("cuda:0", 'x', 'y')
+        subgraph_loader = NeighborLoader(
+            data,
+            input_nodes=None,
+            num_neighbors=[-1],
+            batch_size=4096,
+            num_workers=12,
+            persistent_workers=True,
+        )
+        train_acc, val_acc, test_acc = test(model,evaluator,data,subgraph_loader,split_idx)
+        print(f'Train: {train_acc:.4f}, Val: {val_acc:.4f}, '
+                    f'Test: {test_acc:.4f}')
+    elif arg_dataset == 'Reddit':
+        model.eval()
+        dataset = Reddit('/home/bear/workspace/singleGNN/data/reddit/pyg_reddit')
+        data = dataset[0]
+        data = data.to('cuda:0', 'x', 'y')
+        subgraph_loader = NeighborLoader(
+            data,
+            input_nodes=None,
+            num_neighbors=[-1],
+            batch_size=4096,
+            num_workers=12,
+            persistent_workers=True,
+        )
+        with torch.no_grad():
+            out = model.inference(data.x, subgraph_loader)
+        res = out.argmax(dim=-1) == data.y.to(out.device)
+        acc1 = int(res[data.train_mask].sum()) / int(data.train_mask.sum())
+        acc2 = int(res[data.val_mask].sum()) / int(data.val_mask.sum())
+        acc3 = int(res[data.test_mask].sum()) / int(data.test_mask.sum())
+        print(f'Train: {acc1:.4f}, Val: {acc2:.4f}, Test: {acc3:.4f}')
