@@ -17,11 +17,12 @@ import signn
 import os
 import gc
 from memory_profiler import profile
-# logging.basicConfig(level=logging.INFO,filename='../../log/loader.log',filemode='w',
-#                     format='%(asctime)s-%(levelname)s-%(message)s',datefmt='%H:%M:%S')
-                    #format='%(message)s')
 
-logging.basicConfig(level=logging.INFO,filename='./log/loader.log',filemode='w',
+curFilePath = os.path.abspath(__file__)
+curDir = os.path.dirname(curFilePath)
+
+
+logging.basicConfig(level=logging.INFO,filename=curDir+'/log/loader.log',filemode='w',
                     format='%(message)s',datefmt='%H:%M:%S')
                     #format='%(message)s')
 logger = logging.getLogger(__name__)
@@ -35,7 +36,6 @@ logger = logging.getLogger(__name__)
     4.当图采样完成后释放当前子图,加载下一个图
 """
 class CustomDataset(Dataset):
-    #@profile(precision=4, stream=open('./__init__.log','w+'))
     def __init__(self,confPath,pre_fetch=False):
         self.pre_fetch = pre_fetch
         
@@ -681,7 +681,6 @@ class CustomDataset(Dataset):
             blocks,uniqueList = self.sampleNeigGPU_LP(uniqueSeed,raw_edges,cacheGraph,batchlen)
         else:
             blocks,uniqueList = self.sampleNeigGPU_NC(sampleIDs,cacheGraph,batchlen)
-        # logger.debug("cacheGraph shape:{}, first graph shape:{}".format(len(cacheGraph),len(cacheGraph[0][0])))
         logger.info("sample subG all cost {:.5f}s".format(time.time()-sampleTime))
         ##
 
@@ -836,15 +835,15 @@ def collate_fn(data):
 
 
 if __name__ == "__main__":
-    dataset = CustomDataset("../../config/train_config.json",pre_fetch=True)
+    dataset = CustomDataset(curDir+"/../../config/train_config.json",pre_fetch=True)
     # dataset = CustomDataset("../../config/dgl_products_graphsage.json")
-    with open("../../config/train_config.json", 'r') as f:
+    with open(curDir+"/../../config/train_config.json", 'r') as f:
         config = json.load(f)
         batchsize = config['batchsize']
         epoch = config['maxEpoch']
     train_loader = DataLoader(dataset=dataset, batch_size=batchsize,collate_fn=collate_fn)#pin_memory=True)
     count = 0
-    for index in range(3):
+    for index in range(1):
         start = time.time()
         loopTime = time.time()
         for graph,feat,label,number in train_loader:

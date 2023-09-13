@@ -38,7 +38,7 @@ class DGL_SAGE(nn.Module):
                 h = self.dropout(h)
         return h
 
-    def inference(self, g,device, batch_size):
+    def inference(self, g, device, batch_size):
         """Conduct layer-wise inference to get all the node embeddings."""
         feat = g.ndata['feat']
         sampler = MultiLayerFullNeighborSampler(1, prefetch_node_feats=['feat'])
@@ -169,11 +169,7 @@ class DGL_GAT(nn.Module):
             feat = y
         return y
     
-import os
-import torch.multiprocessing as mp
 from torch import Tensor
-from tqdm import tqdm
-from torch.utils.data import Dataset, DataLoader
 from torch_geometric.nn import SAGEConv,GATConv,GCNConv
 
 class PYG_GCN(torch.nn.Module):
@@ -196,7 +192,7 @@ class PYG_GCN(torch.nn.Module):
         return F.log_softmax(x, dim=1)
 
     def inference(self, x_all,subgraph_loader):
-        pbar = tqdm(total=x_all.size(0) * self.num_layers)
+        pbar = tqdm.tqdm(total=x_all.size(0) * self.num_layers)
         pbar.set_description('Evaluating')
         for i in range(self.num_layers):
             xs = []
@@ -234,7 +230,7 @@ class PYG_SAGE(torch.nn.Module):
         return x
 
     def inference(self, x_all,subgraph_loader):
-        pbar = tqdm(total=x_all.size(0) * self.num_layers)
+        pbar = tqdm.tqdm(total=x_all.size(0) * self.num_layers)
         pbar.set_description('Evaluating')
 
         for i in range(self.num_layers):
@@ -272,7 +268,7 @@ class PYG_GAT(torch.nn.Module):
         return x
 
     def inference(self, x_all,subgraph_loader):
-        pbar = tqdm(total=x_all.size(0) * self.num_layers)
+        pbar = tqdm.tqdm(total=x_all.size(0) * self.num_layers)
         pbar.set_description('Evaluating')
 
         for i in range(self.num_layers):
