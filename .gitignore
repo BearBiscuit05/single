@@ -30,3 +30,4 @@
 **/log
 build.txt
 **/*.egg-info/*.txt
+**/**_log.txt

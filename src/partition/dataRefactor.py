@@ -3,44 +3,6 @@ import dgl
 import numpy as np
 import mmap
 
-#data = np.arange(1000).reshape(100, 10)
-
-array_file = "./part2bin/numpy_array_data.bin"
-
-#data.tofile(array_file)
-
-fpr = np.memmap(array_file, dtype='int64', mode='r', shape=(100,10))
-indices = [1, 3, 5, 7]
-get = fpr[indices]
-print(get)
-
-# print("Array data saved to:", array_file)
-
-# 打开二进制文件，并使用 mmap 访问数据
-# with open(array_file, "rb") as f:
-#     with mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ) as mmapped_data:
-#         # 根据需要的索引读取数据
-#         indices = [1, 3, 5, 7]
-#         selected_rows = [np.frombuffer(mmapped_data[idx * data.itemsize * data.shape[1]:
-#                                                       (idx + 1) * data.itemsize * data.shape[1]],
-#                                        dtype=data.dtype) for idx in indices]
-
-# # 将选定的行存储到一个新的数组中
-# selected_data_array = np.stack(selected_rows)
-
-# print("Selected data array:\n", selected_data_array)
-
-# # 将选定的数据存储到另一个文件中
-# selected_data_file = "./part2bin/selected_data.npy"
-# np.save(selected_data_file, selected_data_array)
-
-# print("Selected data saved to:", selected_data_file)
-# # 重新读取保存的选定数据数组
-# loaded_selected_data = np.load(selected_data_file)
-
-# print("Loaded selected data array:\n", loaded_selected_data)
-
-# 构建子图内部特征
 
 """
 --part0
@@ -57,20 +19,77 @@ print(get)
 3.修改cut edges中一边的id内容 --> lid
 4.按照mapping对应并修改到另外一个id(要匹配到) --> nodeNUM + lid 
 """
-def fetchFeat(featFilePath,nodeNUM,FeatLen,indices):
-    fpr = np.memmap(featFilePath, dtype='float64', mode='r', shape=(nodeNUM,FeatLen))
-    feats = fpr[indices]
-    return feats
-     
-def fetchLabel(labelFilePath,indices):
-    label_data = np.fromfile(labelFilePath, dtype=np.int64)
-    label_selected_data = label_data[indices]
-    return label_selected_data
+class DataAdapter:
+    def __init__(self, FilePath, PartNUM ,nodeNUM, FeatLen):
+        # "/raid/bear/test_part_dataset/"
+        self.raw_path = FilePath
+        self.nodeNUM = nodeNUM
+        self.FeatLen = FeatLen
+        self.fpr = self.fetchFeatPtr()
+        self.PartNUM = PartNUM
+        self.GMap=torch.Tensor(nodeNUM).to(torch.int64)
 
-def fetchNodeClass():
-    # 需要从mask中进行提取
-    pass
+    def fetchFeatPtr(self):
+        featFilePath = self.raw_path + "raw/feats.bin"
+        self.fpr = np.memmap(featFilePath, dtype='float32', mode='r', shape=(self.nodeNUM, self.FeatLen))
 
+    def fetchLabel(self, labelFilePath, indices):
+        label_data = np.fromfile(labelFilePath, dtype=np.int64)
+        label_selected_data = label_data[indices]
+        return label_selected_data
+
+    def fetchFeat(self, indices):
+        feats = self.fpr[indices]
+        return feats
+
+    def loadingHalo(self, rank1, rank2):
+        HaloFilePath = self.raw_path + "part" + str(rank1) + "/halo_" + str(rank2) + ".bin"
+        HaloList = self.bin2tensor(HaloFilePath, datatype=np.int64)
+        return HaloList
+    
+    def loadingPartNode(self, rank):
+        NodeFilePath = self.raw_path + "part" + str(rank) + "/NodeIds.bin"
+        NodeList = self.bin2tensor(NodeFilePath, datatype=np.int64)
+        return NodeList
+
+    def TransEngine(self):
+        # 1.构建映射表，顺序加载图的node和edge
+        # 2.构建全局map,调整局部id
+        for rank in range(self.PartNUM):
+            nodeids=self.loadingPartNode(rank)
+            nodeNUM = len(nodeids)
+            newIndex = torch.arange(nodeNUM) + sum
+            sum += nodeNUM
+            self.GMap[nodeids]=newIndex
+        
+        # 3.调整分割边
+        for rank1 in range(self.PartNUM):
+            for rank2 in range(self.PartNUM):
+                if rank1 == rank2:
+                    continue
+                HaloList = self.loadingHalo(raw_path,rank1,rank2)
+                HaloList = self.GMap[HaloList]
+        # 4.抽取指定特征
+        feats=self.fetchFeat(self.fpr,self.GMap[:50])
+        
+
+    def bin2tensor(self, filePath, datatype=np.int64):
+        tensor = np.fromfile(filePath, dtype=datatype)
+        return tensor
+    
+    def tensor2bin(self, variable, fileSavePath):
+        if torch.is_tensor(variable):
+            variable = variable.numpy()
+        elif isinstance(variable, np.ndarray):
+            pass
+        else:
+            raise ValueError("Input variable must be a PyTorch tensor or a NumPy array")
+
+            
+        tensor = np.fromfile(fileSavePath, dtype=variable.dtype)
+        return tensor
 
 if __name__ == '__main__':
-    pass
+    raw_path="/raid/bear/test_part_dataset/"
+    adapter = DataAdapter(raw_path,4,200,100)
+    

@@ -59,7 +59,7 @@ class CustomDataset(Dataset):
         #### config json 部分 ####
         self.dataPath = ''
         self.batchsize,self.cacheNUM,self.partNUM = 0,0,0
-        self.epoch,self.preRating,self.classes = 0,0,0
+        self.maxEpoch,self.preRating,self.classes,self.epochInterval = 0,0,0,0
         self.featlen = 0
         self.fanout = []
         self.train_name,self.framework,self.mode,self.dataset = "","","",""
@@ -151,13 +151,14 @@ class CustomDataset(Dataset):
         self.batchsize = config['batchsize']
         self.cacheNUM = config['cacheNUM']
         self.partNUM = config['partNUM']
-        self.epoch = config['epoch']
+        self.maxEpoch = config['maxEpoch']
         self.preRating = config['preRating']
         self.featlen = config['featlen']
         self.fanout = config['fanout']
         self.framework = config['framework']
         self.mode = config['mode']
         self.classes = config['classes']
+        self.epochInterval = config['epochInterval']
         #print(formatted_data)
 
     def custom_sort(self):
@@ -175,7 +176,7 @@ class CustomDataset(Dataset):
 
         sorted_numbers = []
         lastid = 0
-        for loop in range(self.epoch + 1):
+        for loop in range(self.maxEpoch + 1):
             used_numbers = set()
             tmp = []
             for idx in range(0,self.partNUM):
@@ -204,7 +205,7 @@ class CustomDataset(Dataset):
     def randomTrainList(self): 
         #epochList = self.custom_sort()
         epochList = []
-        for i in range(self.epoch + 1): # 额外多增加一行
+        for i in range(self.maxEpoch + 1): # 额外多增加一行
             random_array = np.random.choice(np.arange(0, self.partNUM), size=self.partNUM, replace=False)
             if len(epochList) == 0:
                 epochList.append(random_array)
@@ -481,8 +482,6 @@ class CustomDataset(Dataset):
 
             ptr=ptr+out_num.item()
             mapping_ptr.append(ptr)
-        #     print("-"*25)
-        # exit()
         logger.info("sample Time {:.5f}s".format(time.time()-sampleStart))
 
         mappingTime = time.time()        
@@ -540,7 +539,6 @@ class CustomDataset(Dataset):
                 self.cacheData[0][:self.graphEdgeNUM],self.cacheData[1][:self.graphNodeNUM*2],
                 sampleIDs,seed_num,fan_num,
                 out_src,out_dst,out_num)
-        # print("sample 1122")
         out_src = out_src[:out_num.item()]
         out_dst = out_dst[:out_num.item()]
         raw_src = copy.deepcopy(out_src)
@@ -838,12 +836,12 @@ def collate_fn(data):
 
 
 if __name__ == "__main__":
-    dataset = CustomDataset("../../config/dgl_products_graphsage.json",pre_fetch=True)
+    dataset = CustomDataset("../../config/train_config.json",pre_fetch=True)
     # dataset = CustomDataset("../../config/dgl_products_graphsage.json")
-    with open("../../config/dgl_products_graphsage.json", 'r') as f:
+    with open("../../config/train_config.json", 'r') as f:
         config = json.load(f)
         batchsize = config['batchsize']
-        epoch = config['epoch']
+        epoch = config['maxEpoch']
     train_loader = DataLoader(dataset=dataset, batch_size=batchsize,collate_fn=collate_fn)#pin_memory=True)
     count = 0
     for index in range(3):
