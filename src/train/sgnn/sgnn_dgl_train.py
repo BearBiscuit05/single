@@ -47,7 +47,6 @@ def layerwise_infer(device, graph, nid, model, batch_size):
         label = graph.ndata['label'][nid].to(pred.device)
     return sklearn.metrics.accuracy_score(label.cpu().numpy(), pred.argmax(1).cpu().numpy())
 
-
 def train(dataset, model,basicLoop=0,loop=10):
     opt = torch.optim.Adam(model.parameters(), lr=1e-3, weight_decay=5e-4)
     train_loader = torch.utils.data.DataLoader(dataset=dataset, batch_size=1024, collate_fn=collate_fn)#,pin_memory=True)
@@ -71,10 +70,6 @@ def train(dataset, model,basicLoop=0,loop=10):
         print("| Epoch {:03d} | Loss {:.4f} | Time {:.3f}s |".format(basicLoop+epoch, total_loss / (it+1), time.time()-startTime))
 
 def collate_fn(data):
-    """
-    data 输入结构介绍：
-        [graph,feat]
-    """
     return data[0]
 
 def load_reddit(self_loop=True):
