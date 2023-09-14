@@ -30,7 +30,7 @@ class DataAdapter:
         self.PartNUM = PartNUM
         self.GMap=torch.Tensor(nodeNUM).to(torch.int64)
         self.nodeNUMs = []
-
+        self.sumNodeNUM = []
 
     def fetchLabel(self, labelFilePath, indices):
         label_data = np.fromfile(labelFilePath, dtype=np.int64)
@@ -43,6 +43,7 @@ class DataAdapter:
         return feats
 
     def loadingHalo(self, rank1, rank2):
+        # halo以src1,dst1,src2,dst2的方式顺序存储，并且每个id都至少有一个
         HaloFilePath = self.raw_path + "part" + str(rank1) + "/halo_" + str(rank2) + ".bin"
         HaloList = self.bin2tensor(HaloFilePath, datatype=np.int64)
         return HaloList
@@ -55,18 +56,18 @@ class DataAdapter:
     def TransEngine(self):
         # 1.构建映射表，顺序加载图的node和edge
         # 2.构建全局map,调整局部id
-        sumNodeNUM = 0
+        sumNUM = 0
         for rank in range(self.PartNUM):
             partPath = self.raw_path + "part" + str(rank) + "/"
             nodeids=self.loadingPartNode(rank)
             nodeNUM = len(nodeids)
             self.nodeNUMs.append(nodeNUM)
-            
+            self.sumNodeNUM.append(sumNUM)
             # 存储newIndex
-            newIndex = torch.arange(nodeNUM) + sumNodeNUM
+            newIndex = torch.arange(nodeNUM) + sumNUM
             newIndexPath = partPath+"new_nodeId.bin"
             self.tensor2bin(newIndex,newIndexPath)
-            sumNodeNUM += nodeNUM
+            sumNUM += nodeNUM
             
             self.GMap[nodeids]=newIndex
 
@@ -79,16 +80,33 @@ class DataAdapter:
 
         print("creat GMap success...")
 
-        # 3.调整分割边
-        for rank1 in range(self.PartNUM):
-            for rank2 in range(self.PartNUM):
-                if rank1 == rank2:
+        # 3.调整分割边(halo)
+        self.transHalo()
+    
+    def transHalo(self):
+        # halon.bin
+        # halon_bound.bin
+        for dst_rank in range(self.PartNUM):
+            for src_rank in range(self.PartNUM):
+                if dst_rank == src_rank:
                     continue
-                HaloList = self.loadingHalo(rank1,rank2)
+                HaloList = self.loadingHalo(dst_rank,src_rank)
                 HaloList = self.GMap[HaloList]
-                haloPath="/raid/bear/test_part_dataset/part"+str(rank1)+"/new_halo"+str(rank2)+".bin"
+                # 对奇数索引和偶数索引进行处理 映射不同分区
+                # 抽取偶数,表示dst,映射到lid中
+                # 抽取奇数,表示src,映射到dstGNUM+lid中
+                srcList = HaloList[::2]
+                dstList = HaloList[1::2]
+                torch.sub(srcList,self.sumNodeNUM[src_rank])
+                torch.add(srcList,self.sumNodeNUM[dst_rank])
+                torch.sub(dstList,self.sumNodeNUM[dst_rank])
+                
+                # 将dst部分转换为bound
+                
+                # 对应存储
+                haloPath="/raid/bear/test_part_dataset/part"+str(dst_rank)+"/new_halo"+str(src_rank)+".bin"
+                boundPath="/raid/bear/test_part_dataset/part"+str(dst_rank)+"/new_halo"+str(src_rank)+"_bound.bin"
                 self.tensor2bin(HaloList,haloPath)
-        
 
     def bin2tensor(self, filePath, datatype=np.int64):
         tensor = np.fromfile(filePath, dtype=datatype)
