@@ -10,7 +10,7 @@ void sample_hop(
 
 void graph_halo_merge(
     int* edge,int* bound,
-    int* halos,int* halo_bound,int nodeNUM);
+    int* halos,int* halo_bound,int nodeNUM,int gap);
 
 void graph_mapping(
     int* nodeList,int* nodeSRC,

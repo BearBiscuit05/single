@@ -407,7 +407,8 @@ class CustomDataset(Dataset):
             bound = torch.tensor(bound,device=deviceName,dtype=torch.int32).contiguous()
             self.cacheData[0] = self.cacheData[0].contiguous()
             self.cacheData[1] = self.cacheData[1].contiguous()
-            signn.torch_graph_halo_merge(self.cacheData[0],self.cacheData[1],edges,bound,self.graphNodeNUM)
+            gap = 0
+            signn.torch_graph_halo_merge(self.cacheData[0],self.cacheData[1],edges,bound,self.graphNodeNUM,gap)
         except:
             logger.info("graph {} has no halo file with {}...".format(self.trainingGID,self.nextGID))
             print("graph {} has no halo file with {}...".format(self.trainingGID,self.nextGID))
@@ -492,7 +493,9 @@ class CustomDataset(Dataset):
         # TODO: 需要优化
         all_node = torch.cat([cacheGraph[1],cacheGraph[0]])
         unique = torch.zeros(mapping_ptr[-1]*2,dtype=torch.int32).to('cuda:0')
+        t = time.time()  
         signn.torch_graph_mapping(all_node,cacheGraph[0],cacheGraph[1],cacheGraph[0],cacheGraph[1],unique,edgeNUM,uniqueNUM)
+        logger.info("-->cuda mapping Time {:.5f}s".format(time.time()-t))
         unique = unique[:uniqueNUM.item()]
         logger.info("mapping Time {:.5f}s".format(time.time()-mappingTime))
 

@@ -15,11 +15,11 @@ void torch_sample_hop(
 
 void torch_graph_halo_merge(
     torch::Tensor &edge,torch::Tensor &bound,
-    torch::Tensor &halos,torch::Tensor &halo_bound,int nodeNUM
+    torch::Tensor &halos,torch::Tensor &halo_bound,int nodeNUM,int gap
 ) {
     graph_halo_merge(
         (int*) edge.data_ptr(),(int*) bound.data_ptr(),
-        (int*) halos.data_ptr(),(int*) halo_bound.data_ptr(),nodeNUM
+        (int*) halos.data_ptr(),(int*) halo_bound.data_ptr(),nodeNUM,gap
     );
 }
 

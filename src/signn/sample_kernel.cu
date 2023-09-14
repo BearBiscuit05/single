@@ -138,8 +138,8 @@ __global__ void sample_compact_edge(const int *tmp_src, const int *tmp_dst,
 template <int BLOCK_SIZE, int TILE_SIZE>
 __global__ void graph_halo_merge_kernel(
     int* edge,int* bound,
-    int* halos,int* halo_bound,
-    int nodeNUM,unsigned long random_states
+    int* halos,int* halo_bound,int nodeNUM,
+    int gap,unsigned long random_states
 ) {
     const size_t block_start = TILE_SIZE * blockIdx.x;
     const size_t block_end = TILE_SIZE * (blockIdx.x + 1);
@@ -153,8 +153,8 @@ __global__ void graph_halo_merge_kernel(
             int startptr = bound[index*2+1];
             int endptr = bound[index*2+2];
             int space = endptr - startptr;
-            int off = halo_bound[rid];
-            int len = halo_bound[rid+1] - halo_bound[rid];
+            int off = halo_bound[rid] + gap;
+            int len = halo_bound[rid+1] - off;
             if (len > 0) {
                 // 存在可以补充的位置
                 if (space < len) {
@@ -248,7 +248,7 @@ void sample_hop(
 
 void graph_halo_merge(
     int* edge,int* bound,
-    int* halos,int* halo_bound,int nodeNUM) {
+    int* halos,int* halo_bound,int nodeNUM,int gap) {
     
     const int slice = 1024;
     const int blockSize = 256;
@@ -259,7 +259,7 @@ void graph_halo_merge(
     unsigned long timeseed =
         std::chrono::system_clock::now().time_since_epoch().count();
     graph_halo_merge_kernel<blockSize, slice>
-    <<<grid,block>>>(edge,bound,halos,halo_bound,nodeNUM,timeseed);
+    <<<grid,block>>>(edge,bound,halos,halo_bound,nodeNUM,gap,timeseed);
     cudaDeviceSynchronize();
     
 }
