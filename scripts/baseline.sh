@@ -15,6 +15,7 @@ length=${#fanoutList[@]}
 for ((i = 0; i < length; i++)); do
     fanout="${fanoutList[i]}"
     layerNUM="${layerList[i]}"
+    {
     echo "==============================================================" >> "$output_file"
     echo "${ExecuteDGLPath} --model ${MODELNAME} --fanout ${fanout} --layers ${layerNUM} \\
             --maxloop ${MAXLOOP} --dataset ogb-products" #>> "$output_file"
@@ -28,7 +29,11 @@ for ((i = 0; i < length; i++)); do
     echo "--------------------------------------------------------------" >> "$output_file"
     python ${ExecuteDGLPath} --model ${MODELNAME} --fanout ${fanout} --layers ${layerNUM} \
             --maxloop ${MAXLOOP} --dataset Reddit #>> "$output_file"
-    
+    } >> "$output_file" &
+
+    last_pid=$!
+
+    echo "last pid : '${last_pid}'"
     # echo "==============================================================" >> "$output_file"
     # echo "${ExecuteDGLPath} --model ${MODELNAME} --fanout ${fanout} --layers ${layerNUM} \
     #         --maxloop ${MAXLOOP} --dataset ogb-papers100M" #>> "$output_file"
@@ -37,28 +42,28 @@ for ((i = 0; i < length; i++)); do
     #         --maxloop ${MAXLOOP} --dataset ogb-papers100M #>> "$output_file"
 done
 
-fanoutList=("25,10" "15,10" "15,10,5" "10,10,10")
-for ((i = 0; i < length; i++)); do
-    fanout="${fanoutList[i]}"
-    layerNUM="${layerList[i]}"
-    echo "==============================================================" >> "$output_file"
-    echo "${ExecutePYGPath} --model ${MODELNAME} --fanout ${fanout} --layers ${layerNUM} \\
-            --maxloop ${MAXLOOP} --dataset ogb-products" #>> "$output_file"
-    echo "--------------------------------------------------------------" >> "$output_file"
-    python ${ExecutePYGPath} --model ${MODELNAME} --fanout ${fanout} --layers ${layerNUM} \
-            --maxloop ${MAXLOOP} --dataset ogb-products #>> "$output_file"
+# fanoutList=("25,10" "15,10" "15,10,5" "10,10,10")
+# for ((i = 0; i < length; i++)); do
+#     fanout="${fanoutList[i]}"
+#     layerNUM="${layerList[i]}"
+#     echo "==============================================================" >> "$output_file"
+#     echo "${ExecutePYGPath} --model ${MODELNAME} --fanout ${fanout} --layers ${layerNUM} \\
+#             --maxloop ${MAXLOOP} --dataset ogb-products" #>> "$output_file"
+#     echo "--------------------------------------------------------------" >> "$output_file"
+#     python ${ExecutePYGPath} --model ${MODELNAME} --fanout ${fanout} --layers ${layerNUM} \
+#             --maxloop ${MAXLOOP} --dataset ogb-products #>> "$output_file"
     
-    echo "==============================================================" >> "$output_file"
-    echo "${ExecutePYGPath} --model ${MODELNAME} --fanout ${fanout} --layers ${layerNUM} \
-            --maxloop ${MAXLOOP} --dataset Reddit" #>> "$output_file"
-    echo "--------------------------------------------------------------" >> "$output_file"
-    python ${ExecutePYGPath} --model ${MODELNAME} --fanout ${fanout} --layers ${layerNUM} \
-            --maxloop ${MAXLOOP} --dataset Reddit #>> "$output_file"
+#     echo "==============================================================" >> "$output_file"
+#     echo "${ExecutePYGPath} --model ${MODELNAME} --fanout ${fanout} --layers ${layerNUM} \
+#             --maxloop ${MAXLOOP} --dataset Reddit" #>> "$output_file"
+#     echo "--------------------------------------------------------------" >> "$output_file"
+#     python ${ExecutePYGPath} --model ${MODELNAME} --fanout ${fanout} --layers ${layerNUM} \
+#             --maxloop ${MAXLOOP} --dataset Reddit #>> "$output_file"
     
-    # echo "==============================================================" >> "$output_file"
-    # echo "${ExecutePYGPath} --model ${MODELNAME} --fanout ${fanout} --layers ${layerNUM} \
-    #         --maxloop ${MAXLOOP} --dataset ogb-papers100M" #>> "$output_file"
-    # echo "--------------------------------------------------------------" >> "$output_file"
-    # python ${ExecutePYGPath} --model ${MODELNAME} --fanout ${fanout} --layers ${layerNUM} \
-    #         --maxloop ${MAXLOOP} --dataset ogb-papers100M #>> "$output_file"
-done
+#     # echo "==============================================================" >> "$output_file"
+#     # echo "${ExecutePYGPath} --model ${MODELNAME} --fanout ${fanout} --layers ${layerNUM} \
+#     #         --maxloop ${MAXLOOP} --dataset ogb-papers100M" #>> "$output_file"
+#     # echo "--------------------------------------------------------------" >> "$output_file"
+#     # python ${ExecutePYGPath} --model ${MODELNAME} --fanout ${fanout} --layers ${layerNUM} \
+#     #         --maxloop ${MAXLOOP} --dataset ogb-papers100M #>> "$output_file"
+# done
