@@ -34,43 +34,52 @@ length=${#datasetPathList[@]}
 python ${ExecutePath} --file ${ConfigPath} --key_value \
         "framework='dgl'"
 
-# for model in "${modelList[@]}"; do
-#     for fanout in "${fanoutList[@]}"; do
-#         for ((i = 0; i < length; i++)); do
-#             datasetPath="${datasetPathList[i]}"
-#             num="${PartNUM[i]}"
-#             datasetName="${datasetNameList[i]}"
-#             FeatLen="${FeatLenList[i]}"
-#             Classes="${ClassesList[i]}"
+for model in "${modelList[@]}"; do
+    for fanout in "${fanoutList[@]}"; do
+        if [[ "$model" == "GAT" && ("$fanout" == "10,10,10" || "$fanout" == "5,10,15") ]]; then
+            continue 
+        fi
 
-#             echo "'${ExecutePath}' --file '${ConfigPath}' --key_value \\
-#                 fanout=[${fanout}] model=${model} partNUM=${num} datasetpath=${datasetPath} \\
-#                 dataset=${datasetName} featlen=${FeatLen} classes=${Classes}"
+        for ((i = 0; i < length; i++)); do
+            datasetPath="${datasetPathList[i]}"
+            num="${PartNUM[i]}"
+            datasetName="${datasetNameList[i]}"
+            FeatLen="${FeatLenList[i]}"
+            Classes="${ClassesList[i]}"
+
+            echo "'${ExecutePath}' --file '${ConfigPath}' --key_value \\
+                fanout=[${fanout}] model=${model} partNUM=${num} datasetpath=${datasetPath} \\
+                dataset=${datasetName} featlen=${FeatLen} classes=${Classes}"
             
-#             echo "==============================================================" >> "$output_file"
-#             echo "'${ExecutePath}' --file '${ConfigPath}' --key_value \\
-#                 fanout=[${fanout}] model=${model} partNUM=${num} datasetpath=${datasetPath} \\
-#                 dataset=${datasetName} featlen=${FeatLen} classes=${Classes}" >> "$output_file"
-#             echo "--------------------------------------------------------------" >> "$output_file"
+            echo "==============================================================" >> "$output_file"
+            echo "'${ExecutePath}' --file '${ConfigPath}' --key_value \\
+                fanout=[${fanout}] model=${model} partNUM=${num} datasetpath=${datasetPath} \\
+                dataset=${datasetName} featlen=${FeatLen} classes=${Classes}" >> "$output_file"
+            echo "--------------------------------------------------------------" >> "$output_file"
 
-#             python ${ExecutePath} --file ${ConfigPath} --key_value \
-#                 "fanout=[${fanout}]" "model='${model}'" "partNUM=${num}" "dataset='${datasetName}'" \
-#                 "featlen=${FeatLen}" "classes=${Classes}" "datasetpath='${datasetPath}'" >> "$output_file"
-#             echo "--------------------------------------------------------------" >> "$output_file"
+            python ${ExecutePath} --file ${ConfigPath} --key_value \
+                "fanout=[${fanout}]" "model='${model}'" "partNUM=${num}" "dataset='${datasetName}'" \
+                "featlen=${FeatLen}" "classes=${Classes}" "datasetpath='${datasetPath}'" >> "$output_file"
+            echo "--------------------------------------------------------------" >> "$output_file"
             
-#             python ${SGNN_DGL_RUN} --json_path ${ConfigPath}
+            python ${SGNN_DGL_RUN} --json_path ${ConfigPath}
 
-#         done
-#     done
-# done
+        done
+    done
+done
 
 
 # pyg
 python ../config/modify.py --file ${ConfigPath} --key_value \
         "framework='pyg'"
-fanoutList=("25,10" "15,10,5" "15,10" "10,10,10")
+#fanoutList=("25,10" "15,10,5" "15,10" "10,10,10")
+fanoutList=("25,10")
 for model in "${modelList[@]}"; do
     for fanout in "${fanoutList[@]}"; do
+        if [[ "$model" == "GAT" && ("$fanout" == "10,10,10" || "$fanout" == "15,10,5") ]]; then
+            continue 
+        fi
+
         for ((i = 0; i < length; i++)); do
             datasetPath="${datasetPathList[i]}"
             num="${PartNUM[i]}"

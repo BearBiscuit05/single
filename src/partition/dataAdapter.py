@@ -23,15 +23,14 @@ class DataAdapter:
     def __init__(self, FilePath, PartNUM ,nodeNUM, FeatLen):
         # "/raid/bear/test_part_dataset/"
         self.raw_path = FilePath
+        self.featFilePath = self.raw_path + "raw/feats.bin"
         self.nodeNUM = nodeNUM
         self.FeatLen = FeatLen
-        self.fpr = self.fetchFeatPtr()
+        # self.fpr = self.fetchFeatPtr()
         self.PartNUM = PartNUM
         self.GMap=torch.Tensor(nodeNUM).to(torch.int64)
+        self.nodeNUMs = []
 
-    def fetchFeatPtr(self):
-        featFilePath = self.raw_path + "raw/feats.bin"
-        self.fpr = np.memmap(featFilePath, dtype='float32', mode='r', shape=(self.nodeNUM, self.FeatLen))
 
     def fetchLabel(self, labelFilePath, indices):
         label_data = np.fromfile(labelFilePath, dtype=np.int64)
@@ -39,7 +38,8 @@ class DataAdapter:
         return label_selected_data
 
     def fetchFeat(self, indices):
-        feats = self.fpr[indices]
+        fpr = np.memmap(self.featFilePath, dtype='float32', mode='r', shape=(self.nodeNUM, self.FeatLen))
+        feats = fpr[indices]
         return feats
 
     def loadingHalo(self, rank1, rank2):
@@ -55,22 +55,39 @@ class DataAdapter:
     def TransEngine(self):
         # 1.构建映射表，顺序加载图的node和edge
         # 2.构建全局map,调整局部id
+        sumNodeNUM = 0
         for rank in range(self.PartNUM):
+            partPath = self.raw_path + "part" + str(rank) + "/"
             nodeids=self.loadingPartNode(rank)
             nodeNUM = len(nodeids)
-            newIndex = torch.arange(nodeNUM) + sum
-            sum += nodeNUM
+            self.nodeNUMs.append(nodeNUM)
+            
+            # 存储newIndex
+            newIndex = torch.arange(nodeNUM) + sumNodeNUM
+            newIndexPath = partPath+"new_nodeId.bin"
+            self.tensor2bin(newIndex,newIndexPath)
+            sumNodeNUM += nodeNUM
+            
             self.GMap[nodeids]=newIndex
-        
+
+            # 抽取存储特征
+            feats=self.fetchFeat(nodeids)
+            featPath=partPath+"feats.bin"
+            self.tensor2bin(feats,featPath)
+
+            # 抽取指定训练标签
+
+        print("creat GMap success...")
+
         # 3.调整分割边
         for rank1 in range(self.PartNUM):
             for rank2 in range(self.PartNUM):
                 if rank1 == rank2:
                     continue
-                HaloList = self.loadingHalo(raw_path,rank1,rank2)
+                HaloList = self.loadingHalo(rank1,rank2)
                 HaloList = self.GMap[HaloList]
-        # 4.抽取指定特征
-        feats=self.fetchFeat(self.fpr,self.GMap[:50])
+                haloPath="/raid/bear/test_part_dataset/part"+str(rank1)+"/new_halo"+str(rank2)+".bin"
+                self.tensor2bin(HaloList,haloPath)
         
 
     def bin2tensor(self, filePath, datatype=np.int64):
@@ -83,13 +100,10 @@ class DataAdapter:
         elif isinstance(variable, np.ndarray):
             pass
         else:
-            raise ValueError("Input variable must be a PyTorch tensor or a NumPy array")
-
-            
-        tensor = np.fromfile(fileSavePath, dtype=variable.dtype)
-        return tensor
+            raise ValueError("Input variable must be a PyTorch tensor or a NumPy array")     
+        variable.tofile(fileSavePath)
 
 if __name__ == '__main__':
     raw_path="/raid/bear/test_part_dataset/"
     adapter = DataAdapter(raw_path,4,200,100)
-    
+    adapter.TransEngine()
