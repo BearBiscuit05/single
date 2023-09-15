@@ -57,7 +57,7 @@ class SAGE(nn.Module):
                 g.num_nodes(), self.hid_size if l != len(self.layers) - 1 else self.out_size,
                 device=buffer_device, pin_memory=pin_memory)
             feat = feat.to(device)
-            for input_nodes, output_nodes, blocks in tqdm.tqdm(dataloader):
+            for input_nodes, output_nodes, blocks in tqdm.tqdm(dataloader, position=0):
                 x = feat[input_nodes]
                 h = layer(blocks[0], x) # len(blocks) = 1
                 if l != len(self.layers) - 1:
@@ -112,7 +112,7 @@ class GCN(nn.Module):
                 g.num_nodes(), self.hid_size if l != len(self.layers) - 1 else self.out_size,
                 device=buffer_device, pin_memory=pin_memory)
             feat = feat.to(device)
-            for input_nodes, output_nodes, blocks in tqdm.tqdm(dataloader):
+            for input_nodes, output_nodes, blocks in tqdm.tqdm(dataloader, position=0):
                 x = feat[input_nodes]
                 h = layer(blocks[0], x) # len(blocks) = 1
                 if l != len(self.layers) - 1:
@@ -160,7 +160,7 @@ class GAT(nn.Module):
                 g.num_nodes(), self.hid_size*self.heads[0] if l != len(self.layers) - 1 else self.out_size,
                 device=buffer_device, pin_memory=pin_memory)
             feat = feat.to(device)
-            for input_nodes, output_nodes, blocks in tqdm.tqdm(dataloader):
+            for input_nodes, output_nodes, blocks in tqdm.tqdm(dataloader, position=0):
                 x = feat[input_nodes]
                 h = layer(blocks[0], x) # len(blocks) = 1
                 if l == 1:  # last layer 

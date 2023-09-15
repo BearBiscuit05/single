@@ -43,7 +43,7 @@ class SAGE(torch.nn.Module):
     def inference(self, x_all: Tensor, device: torch.device,
                   subgraph_loader: NeighborLoader) -> Tensor:
 
-        pbar = tqdm(total=len(subgraph_loader) * len(self.convs))
+        pbar = tqdm(total=len(subgraph_loader) * len(self.convs), position=0)
         pbar.set_description('Evaluating')
 
         # Compute representations of nodes layer by layer, using *all*
@@ -92,7 +92,7 @@ class GCN(torch.nn.Module):
     def inference(self, x_all: Tensor, device: torch.device,
                   subgraph_loader: NeighborLoader) -> Tensor:
 
-        pbar = tqdm(total=len(subgraph_loader) * len(self.convs))
+        pbar = tqdm(total=len(subgraph_loader) * len(self.convs), position=0)
         pbar.set_description('Evaluating')
         for i, conv in enumerate(self.convs):
             xs = []
@@ -129,7 +129,7 @@ class GAT(torch.nn.Module):
     def inference(self, x_all: Tensor, device: torch.device,
                   subgraph_loader: NeighborLoader) -> Tensor:
 
-        pbar = tqdm(total=len(subgraph_loader) * len(self.convs))
+        pbar = tqdm(total=len(subgraph_loader) * len(self.convs), position=0)
         pbar.set_description('Evaluating')
         for i, conv in enumerate(self.convs):
             xs = []
