@@ -32,5 +32,5 @@ int main() {
     tgEngine.convert2bin(inputfile,test,delimiter,true,"degree.bin");
     std::vector<int> degree;
     tgEngine.readDegree("degree.bin",degree);
-    return 0;
+    return 0;  
 }
