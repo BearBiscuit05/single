@@ -1,5 +1,6 @@
 #include <iostream>
 #include <fstream>
+#include <sstream>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -48,3 +49,28 @@ public:
 };
 
 
+
+class TGEngine{
+public:
+    std::string graphPath;
+
+    int Fd;
+    off_t edgeLength;
+    int* edgeAddr;
+
+    int edgeNUM;
+    int nodeNUM;
+    int readPtr=0;
+    
+    size_t readSize = 4096 * 16;
+    int batch = readSize / sizeof(int);
+    off_t chunkSize = 0;
+    off_t offset = 0;
+
+    TGEngine();
+    TGEngine(std::string graphPath,int nodeNUM,int edgeNUM);
+    void loadingMmapBlock();
+    void unmapBlock(int* addr, off_t size);
+    int readline(std::pair<int, int> &edge);
+    void convert2bin(std::string raw_graphPath,std::string new_graphPath,char delimiter,bool saveDegree);
+};
