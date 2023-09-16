@@ -23,17 +23,11 @@ public:
     int partitionNum;
     int vCount;
     int eCount;
-    int eCount_B;
-    int eCount_S;
     std::string inputGraphPath;
-    std::string inputGraphPath_B;
-    std::string inputGraphPath_S;
-    std::string outputGraphPath;
-    std::string outputResultPath;
-    
-    GlobalConfig();
-    GlobalConfig(std::string filepath);
     int clusterBSize;
+
+    GlobalConfig() {};
+    GlobalConfig(std::string filepath);
     int getMaxClusterVolume();
     double getAverageDegree();
 };

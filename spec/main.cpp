@@ -16,21 +16,24 @@ int main() {
     // }
     // std::cout << "one hop num :" << sum << std::endl;
     // std::cout << "all edges num :" << readengine.readPtr << std::endl;
-    //std::string graphPath = "/home/bear/workspace/singleGNN/spec/edges.bin";
-    // TGEngine tgEngine(graphPath,9498,153138);
+    std::string graphPath = "/home/dzz/graphdataset/IN/in.txt";
+    std::string bin_graphPath = "/home/bear/workspace/singleGNN/spec/S5P/edge.bin";
+    TGEngine tgEngine(bin_graphPath,1382867,16539643);
+    std::pair<int,int> edge(-1,-1);
+    char delimiter = '\t';
+    //tgEngine.convert2bin(graphPath,bin_graphPath,delimiter,false,"");
     // int sum = 0;
-    // std::pair<int,int> edge(-1,-1);
-    // while( -1 != tgEngine.readline(edge)){
-    //     std::cout << edge.first << " --> " << edge.second << std::endl;
-    //     sum++;
-    // }
+    
+    while( -1 != tgEngine.readline(edge)){
+    }
+    std::cout << "all edges num :" << tgEngine.readPtr << std::endl;
     // std::cout << "one hop num :" << sum << std::endl;
-    std::string inputfile = "/home/dzz/graphdataset/small.txt";
-    std::string test="test.bin";
-    TGEngine tgEngine(8,6);
-    char delimiter = ' ';
-    tgEngine.convert2bin(inputfile,test,delimiter,true,"degree.bin");
-    std::vector<int> degree;
-    tgEngine.readDegree("degree.bin",degree);
-    return 0;  
+    // std::string inputfile = "/home/dzz/graphdataset/small.txt";
+    // std::string test="test.bin";
+    // TGEngine tgEngine(8,6);
+    // char delimiter = ' ';
+    // tgEngine.convert2bin(inputfile,test,delimiter,true,"degree.bin");
+    // std::vector<int> degree;
+    // tgEngine.readDegree("degree.bin",degree);
+    // return 0;  
 }

@@ -54,17 +54,3 @@ void Graph::readGraphFromFile() {
     }
 }
 
-
-int Graph::getVCount() {
-    return this->vCount;
-}
-
-int Graph::getECount() {
-    return this->eCount;
-}
-
-void Graph::clear() {
-    vCount = 0;
-    eCount = 0;
-    graphpath.clear();
-}

@@ -96,7 +96,7 @@ void ReadEngine::readTrainIdx(std::vector<int64_t>& ids) {
 TGEngine::TGEngine() {}
 
 TGEngine::TGEngine(int nodeNUM,int edgeNUM) {
-    this->edgeNUM = edgeNUM;
+    this->edgeNUM = edgeNUM*2;
     this->nodeNUM = nodeNUM;
 }
 
@@ -113,7 +113,7 @@ TGEngine::TGEngine(std::string graphPath,int nodeNUM,int edgeNUM) {
         perror("fstat");close(Fd);
     }
     edgeLength = sb.st_size;
-    this->edgeNUM = edgeNUM;
+    this->edgeNUM = edgeNUM*2;
     this->nodeNUM = nodeNUM;
 }
 

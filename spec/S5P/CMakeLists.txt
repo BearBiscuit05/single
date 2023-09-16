@@ -12,7 +12,7 @@ set(EXECUTABLE_OUTPUT_PATH "./bin/")
 
 
 add_executable(main main.cpp globalConfig.cpp graph.cpp StreamCluster.cpp
-            ClusterPackGame.cpp ClusterGameTask.cpp Partitioner.cpp)
+            ClusterPackGame.cpp ClusterGameTask.cpp Partitioner.cpp readGraph.cpp)
 target_link_libraries(main PRIVATE Threads::Threads)
 # target_link_libraries(main PRIVATE CThreadPool)
 # add_executable(main main.cpp globalConfig.cpp graph.cpp StreamCluster.cpp

@@ -7,16 +7,7 @@
 #include <list>
 
 class ClusterPackGame {
-private:
-    struct PairHash {
-        template <class T1, class T2>
-        std::size_t operator () (const std::pair<T1, T2>& p) const {
-            auto h1 = std::hash<T1>{}(p.first);
-            auto h2 = std::hash<T2>{}(p.second);
-            // 可以使用一个位运算混合哈希值
-            return h1 ^ h2;
-        }
-    };
+public:
 
     std::unordered_map<int, int> cutCostValue; // key: cluster value: cutCost
     std::unordered_map<int, std::unordered_set<int>> clusterNeighbours;
@@ -35,7 +26,7 @@ private:
     int gap = 0;
     GlobalConfig config;
     
-public:
+
     
     ClusterPackGame();
     ClusterPackGame(StreamCluster streamCluster, std::vector<int>& clusterList, std::string& graphType,GlobalConfig& config);

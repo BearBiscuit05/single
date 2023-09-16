@@ -1,24 +1,7 @@
 #include "Partitioner.h"
+#include "readGraph.h"
+
 extern std::unordered_map<int, int> clusterPartition;
-int __readStep(std::ifstream& fileStream,Edge& edge) {
-    std::string line;
-    if (std::getline(fileStream, line)) {
-        if (line.empty() || line[0] == '#')
-            return __readStep(fileStream,edge);
-
-        size_t tabPos = line.find('\t');
-        int srcVId = std::stoi(line.substr(0, tabPos));
-        int destVId = std::stoi(line.substr(tabPos + 1));
-
-        if (srcVId == destVId)
-            return __readStep(fileStream,edge);
-        edge.srcVId = srcVId;
-        edge.destVId = destVId;
-        return 0;
-    }
-    std::cout << "read end..." << std::endl;
-    return -1; // Return an empty edge if end of file is reached
-}
 
 Partitioner::Partitioner() {}
 
@@ -38,12 +21,12 @@ void Partitioner::performStep() {
 }
 
 void Partitioner::processGraph(double maxLoad) {
-    Edge edge(-1,-1,-1);
     std::string inputGraphPath = config.inputGraphPath;
-    std::ifstream tmp(inputGraphPath);
-    while (-1 != __readStep(tmp,edge)) {
-        int src = edge.srcVId;
-        int dest = edge.destVId;
+    std::pair<int,int> edge(-1,-1);
+    TGEngine tgEngine(inputGraphPath,3997962,16539643);  
+    while (-1 != tgEngine.readline(edge)) {
+        int src = edge.first;
+        int dest = edge.second;
         if (degree[src] >= config.tao * config.getAverageDegree() &&
             degree[dest] >= config.tao * config.getAverageDegree()) {
             int srcPartition = clusterPartition[streamCluster.getClusterId(src, "B")];

@@ -15,7 +15,6 @@
 
 void printParaInfo(GlobalConfig& configInfo) {
     std::cout << "input graph: " << configInfo.inputGraphPath << std::endl;
-    std::cout << "outputGraphPath: " << configInfo.outputGraphPath << std::endl;
     std::cout << "vCount: " << configInfo.vCount << std::endl;
     std::cout << "eCount: " << configInfo.eCount << std::endl;
     std::cout << "averageDegree: " << configInfo.getAverageDegree() << std::endl;
@@ -30,7 +29,7 @@ void printParaInfo(GlobalConfig& configInfo) {
 }
 
 using namespace std;
-std::string inputGraphPath = "/home/dzz/graphdataset/graphpartition_smallgraph/Dmusae/Dmusae_DE.edges";
+std::string inputGraphPath = "/home/bear/workspace/singleGNN/spec/S5P/edge.bin";
 
 int main() {
     GlobalConfig configInfo("./project.properties");

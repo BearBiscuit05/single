@@ -24,8 +24,6 @@ public:
     int eCount;
     std::ifstream fileStream;
     std::string graphpath;
-
-
     Graph();
     Graph(GlobalConfig config);
     ~Graph();
@@ -33,10 +31,9 @@ public:
     Graph& operator=(const Graph& other);
     int readStep(Edge& edge);
     void readGraphFromFile();
-    void addEdge(int srcVId, int destVId);
-    int getVCount();
-    int getECount();
-    void clear();
+    int getVCount() {return this->vCount;};
+    int getECount() {return this->eCount;};
+    void clear()    {this->vCount = 0;this->eCount = 0;this->graphpath.clear();};
 };
 
 #endif // GRAPH_H

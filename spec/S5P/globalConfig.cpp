@@ -1,7 +1,5 @@
 #include "globalConfig.h"
 
-GlobalConfig::GlobalConfig(){}
-
 GlobalConfig::GlobalConfig(std::string filepath) {
     std::ifstream configFile(filepath);
     std::string line;
@@ -32,14 +30,8 @@ GlobalConfig::GlobalConfig(std::string filepath) {
     partitionNum = std::stoi(properties["partitionNum"]);
     vCount = std::stoi(properties["vCount"]);
     eCount = std::stoi(properties["eCount"]);
-    eCount_B = std::stoi(properties["eCount_B"]);
     k = std::stoi(properties["k"]);
-    eCount_S = std::stoi(properties["eCount_S"]);
     inputGraphPath = properties["inputGraphPath"];
-    inputGraphPath_B = properties["inputGraphPath_B"];
-    inputGraphPath_S = properties["inputGraphPath_S"];
-    outputGraphPath = properties["outputGraphPath"];
-    outputResultPath = properties["outputGraphPath"];
 }
 
 int GlobalConfig::getMaxClusterVolume() {

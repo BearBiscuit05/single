@@ -15,21 +15,20 @@ public:
         std::size_t operator () (const std::pair<T1, T2>& p) const {
             auto h1 = std::hash<T1>{}(p.first);
             auto h2 = std::hash<T2>{}(p.second);
-            // 可以使用一个位运算混合哈希值
             return h1 ^ h2;
         }
     };
     std::vector<int> cluster;
-    std::vector<int> cluster_S;     // TODO:修改数据结构
-    std::vector<int> cluster_B;     // TODO:修改数据结构
+    std::vector<int> cluster_S;     
+    std::vector<int> cluster_B;     
     std::vector<int> degree;
     std::vector<int> degree_B;
     std::vector<int> degree_S;
 
 
     std::vector<int> volume;
-    std::vector<int> volume_S;     // TODO:修改数据结构
-    std::vector<int> volume_B;     // TODO:修改数据结构
+    std::vector<int> volume_S;     
+    std::vector<int> volume_B;     
 
 
     std::unordered_map<std::pair<int, int>, int, PairHash> innerAndCutEdge;
@@ -50,23 +49,12 @@ public:
     StreamCluster();
     StreamCluster(Graph& graph, GlobalConfig& config);
 
-    void setCluster(std::vector<int> cluster);
     void setDegree(std::vector<int> degree);
-    void setVolume_S(std::unordered_map<int, int> volume_S);
-    void setClusterList(std::vector<int> clusterList);
-    void setClusterList_S(std::vector<int> clusterList_S);
-    void setClusterList_B(std::vector<int> clusterList_B);
     void setMaxVolume(int maxVolume);
     void setInnerAndCutEdge(std::unordered_map<int, std::unordered_map<int, int>> innerAndCutEdge);
-    
-    void setUpIndex();
     void startStreamCluster();
-    void startSteamClusterB();
-    void startSteamClusterS();
     void computeHybridInfo();
     void calculateDegree();
-    void PrintInfomation();
-
     int getEdgeNum(int cluster1, int cluster2);
     int getEdgeNum(int cluster1, int cluster2, std::string type);
     std::vector<int> getClusterList();
