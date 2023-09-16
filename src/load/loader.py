@@ -846,7 +846,7 @@ if __name__ == "__main__":
         epoch = config['maxEpoch']
     train_loader = DataLoader(dataset=dataset, batch_size=batchsize,collate_fn=collate_fn)#pin_memory=True)
     count = 0
-    for index in range(1):
+    for index in range(10):
         start = time.time()
         loopTime = time.time()
         for graph,feat,label,number in train_loader:
