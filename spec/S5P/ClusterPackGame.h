@@ -17,21 +17,9 @@ private:
             return h1 ^ h2;
         }
     };
-    // std::unordered_map<std::pair<int, int>, int, PairHash> clusterNeighbours;
 
-    // std::unordered_map<int, int> clusterPartition; // key: cluster value: partition
-    // std::unordered_map<int, int> clusterPartition_B; // key: cluster value: partition
-    // std::unordered_map<int, int> clusterPartition_S; // key: cluster value: partition
     std::unordered_map<int, int> cutCostValue; // key: cluster value: cutCost
-    // std::unordered_map<int, int> cutCostValue_B; // key: cluster value: cutCost
-    // std::unordered_map<int, int> cutCostValue_S; // key: cluster value: cutCost
-    // std::unordered_map<int, int> cutCostValue_hybrid_B; // key: cluster value: cutCost
-    // std::unordered_map<int, int> cutCostValue_hybrid_S; // key: cluster value: cutCost
     std::unordered_map<int, std::unordered_set<int>> clusterNeighbours;
-    // std::unordered_map<int, std::unordered_set<int>> clusterNeighbours_B;
-    // std::unordered_map<int, std::unordered_set<int>> clusterNeighbours_S;
-    // std::unordered_map<int, std::unordered_set<int>> clusterNeighbours_hybrid_B;
-    // std::unordered_map<int, std::unordered_set<int>> clusterNeighbours_hybrid_S;
     std::vector<double> partitionLoad;
     std::vector<int> clusterList;
     StreamCluster streamCluster;
@@ -64,9 +52,5 @@ public:
     void startGameDouble();
 
     int getRoundCnt();
-
-    // std::unordered_map<int, int> getClusterPartition() ;
-    // std::unordered_map<int, int> getClusterPartition_B();
-    // std::unordered_map<int, int> getClusterPartition_S();
 
 };

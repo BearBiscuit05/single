@@ -26,8 +26,6 @@ public:
     std::vector<int> degree;
     std::vector<std::vector<char>> v2p; 
     std::unordered_map<int, int> clusterPartition;
-    // std::unordered_map<int, int> clusterPartition_B;
-    // std::unordered_map<int, int> clusterPartition_S;
     GlobalConfig config;
 
     Partitioner();

@@ -10,24 +10,16 @@ class Edge {
 public:
     int srcVId;
     int destVId;
-    int weight;
-
-public:
-    Edge();
-    Edge(int srcVId, int destVId, int weight);
+    Edge() {};
+    Edge(int srcVId, int destVId, int weight) : srcVId(srcVId), destVId(destVId) {};
     bool operator!=(const Edge& other) const {
-        return (weight != other.weight) && (srcVId != other.srcVId) && (destVId != other.destVId);
+        return (srcVId != other.srcVId) && (destVId != other.destVId);
     }
-    int getSrcVId() const;
-    int getDestVId() const;
-    int getWeight() const;
-    void addWeight();
 };
 
 // Define the Graph class
 class Graph {
 public:
-    std::vector<Edge> edgeList;
     int vCount;
     int eCount;
     std::ifstream fileStream;
@@ -42,7 +34,6 @@ public:
     int readStep(Edge& edge);
     void readGraphFromFile();
     void addEdge(int srcVId, int destVId);
-    std::vector<Edge> getEdgeList();
     int getVCount();
     int getECount();
     void clear();

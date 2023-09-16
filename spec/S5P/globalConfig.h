@@ -35,13 +35,7 @@ public:
     GlobalConfig(std::string filepath);
     int clusterBSize;
     int getMaxClusterVolume();
-    float getAlpha();
     double getAverageDegree();
-    int getPartitionNum();
-    double getTao();
-    int getECount();
-    int getBatchSize();
-    int getThreads();
 };
 
 #endif // GLOBALCONFIG_H

@@ -8,7 +8,7 @@
 ClusterGameTask::ClusterGameTask(std::string graphType, int taskId, StreamCluster streamCluster,GlobalConfig config)
     : streamCluster(streamCluster), streamCluster_B(), streamCluster_S(), graphType(graphType) {
     std::vector<int> clusterList = (graphType == "B" ? streamCluster.getClusterList_B() : streamCluster.getClusterList_S());
-    int batchSize = config.getBatchSize();
+    int batchSize = config.batchSize;
     int begin = batchSize * taskId;
     int end = std::min(batchSize * (taskId + 1), static_cast<int>(clusterList.size()));
     this->cluster.assign(clusterList.begin() + begin, clusterList.begin() + end);
@@ -17,7 +17,7 @@ ClusterGameTask::ClusterGameTask(std::string graphType, int taskId, StreamCluste
 
 ClusterGameTask::ClusterGameTask(std::string graphType, StreamCluster streamCluster, int taskId_B, int taskId_S,GlobalConfig config)
     : streamCluster(streamCluster), graphType(graphType) {
-    int batchSize = config.getBatchSize();
+    int batchSize = config.batchSize;
     int begin = batchSize * taskId_B;
     std::vector<int> clusterList_B = streamCluster.getClusterList_B();
     std::vector<int> clusterList_S = streamCluster.getClusterList_S();

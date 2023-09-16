@@ -26,9 +26,6 @@ public:
     std::vector<int> degree_B;
     std::vector<int> degree_S;
 
-    // std::unordered_map<int, int> volume;
-    // std::unordered_map<int, int> volume_S;
-    // std::unordered_map<int, int> volume_B;      // TODO :修改数组?
 
     std::vector<int> volume;
     std::vector<int> volume_S;     // TODO:修改数据结构
@@ -36,14 +33,7 @@ public:
 
 
     std::unordered_map<std::pair<int, int>, int, PairHash> innerAndCutEdge;
-  
-    // std::vector<std::pair<int, int> > innerAndCutEdge_hybrid;
-    // std::unordered_map<int, std::unordered_map<int, int>> innerAndCutEdge;
-    // std::unordered_map<int, std::unordered_map<int, int>> innerAndCutEdge_B;
-    // std::unordered_map<int, std::unordered_map<int, int>> innerAndCutEdge_S;
-    // std::unordered_map<int, std::unordered_map<int, int>> innerAndCutEdge_hybrid;
 
-    // Graph* graph;
     Graph* graph;
 
     std::vector<int> clusterList;

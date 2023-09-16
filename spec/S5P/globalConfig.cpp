@@ -17,15 +17,12 @@ GlobalConfig::GlobalConfig(std::string filepath) {
             continue;
         }
 
-        // Extract the key and value from the line
         std::string key = line.substr(0, delimiterPos);
         std::string value = line.substr(delimiterPos + 1);
         std::cout << key  << " = " << value << std::endl;
-        // Add the key-value pair to the configMap
         properties[key] = value;
     }
 
-    // Load properties
     hashNum = std::stoi(properties["hashNum"]);
     alpha = std::stof(properties["alpha"]);
     beta = std::stod(properties["beta"]);
@@ -49,30 +46,6 @@ int GlobalConfig::getMaxClusterVolume() {
     return  eCount / k;
 }
 
-float GlobalConfig::getAlpha() {
-    return alpha;
-}
-
 double GlobalConfig::getAverageDegree() {
     return 2.0 * eCount / vCount;
-}
-
-int GlobalConfig::getPartitionNum() {
-    return partitionNum;
-}
-
-double GlobalConfig::getTao() {
-    return tao;
-}
-
-int GlobalConfig::getECount() {
-    return eCount;
-}
-
-int GlobalConfig::getBatchSize() {
-    return batchSize;
-}
-
-int GlobalConfig::getThreads() {
-    return threads;
 }

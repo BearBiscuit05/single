@@ -1,5 +1,5 @@
 #include "ClusterPackGame.h"
-extern std::unordered_map<int, int> clusterPartition = std::unordered_map<int, int>();
+std::unordered_map<int, int> clusterPartition = std::unordered_map<int, int>();
 
 ClusterPackGame::ClusterPackGame() {}
 
@@ -10,7 +10,7 @@ ClusterPackGame::ClusterPackGame(StreamCluster streamCluster, std::vector<int>& 
     this->streamCluster = streamCluster;
     this->clusterList = clusterList;
 
-    this->partitionLoad.resize(config.getPartitionNum(),0);
+    this->partitionLoad.resize(config.partitionNum,0);
 
 }
 
@@ -18,13 +18,9 @@ ClusterPackGame::ClusterPackGame(StreamCluster streamCluster, std::vector<int>& 
     this->config = config;
     this->streamCluster = streamCluster;
     //TODO
-    
-    // clusterPartition_B = std::unordered_map<int, int>();
-    // clusterPartition_S = std::unordered_map<int, int>();
     clusterList = streamCluster.getClusterList();
-
     this->cutCostValue = std::unordered_map<int, int>();
-    this->partitionLoad.resize(config.getPartitionNum(),0);
+    this->partitionLoad.resize(config.partitionNum,0);
     clusterNeighbours = std::unordered_map<int, std::unordered_set<int>>();
     this->clusterList_B = clusterList_B;
     this->clusterList_S = clusterList_S;
@@ -41,8 +37,8 @@ std::string ClusterPackGame::getGraphType() {
 void ClusterPackGame::initGame() {
     int partition = 0;
     for (int clusterId : clusterList) {
-        double minLoad = config.getECount();
-        for (int i = 0; i < config.getPartitionNum(); i++) {
+        double minLoad = config.eCount;
+        for (int i = 0; i < config.partitionNum; i++) {
             if (partitionLoad[i] < minLoad) {
                 minLoad = partitionLoad[i];
                 partition = i;
@@ -60,8 +56,8 @@ void ClusterPackGame::initGameDouble() {
     // std::cout << "000" << std::endl;
     int partition = 0;
     for (int clusterId : clusterList_B) {
-        double minLoad = config.getECount();
-        for (int i = 0; i < config.getPartitionNum(); i++) {
+        double minLoad = config.eCount;
+        for (int i = 0; i < config.partitionNum; i++) {
             if (partitionLoad[i] < minLoad) {
                 minLoad = partitionLoad[i];
                 partition = i;
@@ -72,8 +68,8 @@ void ClusterPackGame::initGameDouble() {
     }
     // std::cout << "111" << std::endl;
     for (int clusterId : clusterList_S) {
-        double minLoad = config.getECount();
-        for (int i = 0; i < config.getPartitionNum(); i++) {
+        double minLoad = config.eCount;
+        for (int i = 0; i < config.partitionNum; i++) {
             if (partitionLoad[i] < minLoad) {
                 minLoad = partitionLoad[i];
                 partition = i;
@@ -178,45 +174,17 @@ void ClusterPackGame::initGameDouble() {
         }
     }
     beta_S = (double)config.eCount  / (sizePart_S * sizePart_S + 1.0) * (double)config.eCount * ((double)cutPart_S + (double)config.vCount);
-    // std::cout << 6666 << std::endl;
 }
 
-// double ClusterPackGame::computeCost(int clusterId, int partition) {
-//     double loadPart = 0.0;
-
-//     int edgeCutPart = cutCostValue[clusterId];
-//     int old_partition = clusterPartition[clusterId];
-//     loadPart = partitionLoad[old_partition];
-//     if (partition != old_partition)
-//         loadPart = partitionLoad[partition] + streamCluster.getEdgeNum(clusterId, clusterId, graphType);
-//     auto it = clusterNeighbours.find(clusterId);
-//     if (it != clusterNeighbours.end()) {
-//         for (int neighbour : clusterNeighbours[clusterId]) {
-//             if (clusterPartition[neighbour] == partition)
-//                 edgeCutPart = edgeCutPart - streamCluster.getEdgeNum(clusterId, neighbour, graphType)
-//                         - streamCluster.getEdgeNum(neighbour, clusterId, graphType);
-//         }
-//     }
-
-//     double alpha = config.getAlpha(), k = config.getPartitionNum();
-//     double m = streamCluster.getEdgeNum(clusterId, clusterId, graphType);
-
-//     return alpha * beta / k * loadPart * m + (1 - alpha) / 2 * edgeCutPart;
-// }
 
 double ClusterPackGame::computeCost(int clusterId, int partition, const std::string type) {
     if (type == "B") {
         double loadPart = 0.0;
-        // int edgeCutPart_B = cutCostValue_B[clusterId];
-        // int edgeCutPart_hybrid_B = cutCostValue_hybrid_B[clusterId];
         double edgeCutPart = cutCostValue[clusterId];
         int old_partition = clusterPartition[clusterId];
         loadPart = partitionLoad[old_partition];
         if (partition != old_partition)
             loadPart = partitionLoad[partition] + streamCluster.getEdgeNum(clusterId, clusterId);
-
-
- 
         auto it3 = clusterNeighbours.find(clusterId);
         if ( it3 != clusterNeighbours.end()) {
             for (int neighbour : clusterNeighbours[clusterId]) {
@@ -225,7 +193,7 @@ double ClusterPackGame::computeCost(int clusterId, int partition, const std::str
             }
         }
 
-        double alpha = config.getAlpha(), k = config.getPartitionNum();
+        double alpha = config.alpha, k = config.partitionNum;
         double m = streamCluster.getEdgeNum(clusterId, clusterId);
         double Cost = beta_B / k * loadPart * m +  edgeCutPart   + m;
         return Cost;
@@ -244,7 +212,7 @@ double ClusterPackGame::computeCost(int clusterId, int partition, const std::str
             }
         }
 
-        double alpha = config.getAlpha(), k = config.getPartitionNum();
+        double alpha = config.alpha, k = config.partitionNum;
         double m = streamCluster.getEdgeNum(clusterId, clusterId);
 
 
@@ -255,43 +223,6 @@ double ClusterPackGame::computeCost(int clusterId, int partition, const std::str
         return 0.0;
     }
 }
-
-// void ClusterPackGame::startGame() {
-//     bool finish = false;
-//     while (!finish) {
-//         finish = true;
-//         for (int clusterId : clusterList) {
-//             double minCost = std::numeric_limits<double>::max();
-//             int minPartition = clusterPartition[clusterId];
-
-//             if (graphType == "B") {
-//                 for (int j = 0; j < config.getPartitionNum() / 2; j++) {
-//                     double cost = computeCost(clusterId, j, "B");
-//                     if (cost <= minCost) {
-//                         minCost = cost;
-//                         minPartition = j;
-//                     }
-//                 }
-//             } else if (graphType == "S") {
-//                 for (int j = config.getPartitionNum() - 1; j >= config.getPartitionNum() / 2; j--) {
-//                     double cost = computeCost(clusterId, j, "S");
-//                     if (cost <= minCost) {
-//                         minCost = cost;
-//                         minPartition = j;
-//                     }
-//                 }
-//             }
-
-//             if (minPartition != clusterPartition[clusterId]) {
-//                 finish = false;
-//                 partitionLoad[minPartition] += streamCluster.getEdgeNum(clusterId, clusterId, graphType);
-//                 partitionLoad[clusterPartition[clusterId]] -= streamCluster.getEdgeNum(clusterId, clusterId, graphType);
-//                 clusterPartition[clusterId] = minPartition;
-//             }
-//         }
-//         roundCnt++;
-//     }
-// }
 
 void ClusterPackGame::startGameDouble() {
     bool finish_B = false;
@@ -304,7 +235,7 @@ void ClusterPackGame::startGameDouble() {
         for (int clusterId : clusterList_B) {
             double minCost = std::numeric_limits<double>::max();
             int minPartition = clusterPartition[clusterId];
-            for (int j = 0; j < config.getPartitionNum() / 2; j++) {
+            for (int j = 0; j < config.partitionNum / 2; j++) {
                 double cost = computeCost(clusterId, j, "B");
                 if (cost <= minCost) {
                     minCost = cost;
@@ -324,7 +255,7 @@ void ClusterPackGame::startGameDouble() {
         for (int clusterId : clusterList_S) {
             double minCost = std::numeric_limits<double>::max();
             int minPartition = clusterPartition[clusterId];
-            for (int j = config.getPartitionNum() - 1; j >= config.getPartitionNum() / 2; j--) {
+            for (int j = config.partitionNum - 1; j >= config.partitionNum / 2; j--) {
                 double cost = computeCost(clusterId, j, "S");
                 if (cost <= minCost) {
                     minCost = cost;
@@ -352,18 +283,6 @@ void ClusterPackGame::startGameDouble() {
 int ClusterPackGame::getRoundCnt() {
     return roundCnt;
 }
-
-// std::unordered_map<int, int> ClusterPackGame::getClusterPartition() {
-//     return clusterPartition;
-// }
-
-// std::unordered_map<int, int> ClusterPackGame::getClusterPartition_B() {
-//     return clusterPartition_B;
-// }
-
-// std::unordered_map<int, int> ClusterPackGame::getClusterPartition_S() {
-//     return clusterPartition_S;
-// }
 
 
 

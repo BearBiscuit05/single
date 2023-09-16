@@ -4,11 +4,8 @@
 #include <fstream>
 
 int _readStep(std::ifstream& fileStream,Edge& edge) {
-    // std::cout << 666666666 << std::endl;
-    // std::cout << (!fileStream) << std::endl;
     std::string line;
-    if (std::getline(fileStream, line)) {
-        // std::cout << line << std::endl;
+    if (std::getline(fileStream, line)) {;
         if (line.empty() || line[0] == '#')
             return _readStep(fileStream,edge);
 
@@ -20,11 +17,10 @@ int _readStep(std::ifstream& fileStream,Edge& edge) {
             return _readStep(fileStream,edge);
         edge.srcVId = srcVId;
         edge.destVId = destVId;
-        edge.weight = 1;
         return 0;
     }
     std::cout << "read end..." << std::endl;
-    return -1; // Return an empty edge if end of file is reached
+    return -1;
 }
 
 
@@ -38,14 +34,10 @@ StreamCluster::StreamCluster(Graph& graph, GlobalConfig& config) {
     this->volume_B.resize(size_t(0.1 * config.vCount),0);
     this->volume_S.resize(size_t(0.1 * config.vCount),0);
     this->graph = &graph;
-    // Rest of the constructor implementation
     maxVolume = config.getMaxClusterVolume();
     degree.resize(config.vCount,0);
-    // degree_B.resize(config.vCount,0);
     degree_S.resize(config.vCount,0);
-    // std::cout << "end"<< std::endl;
     calculateDegree();
-    // std::cout << "end"<< std::endl;
 }
 
 void StreamCluster::setCluster(std::vector<int> cluster) {
@@ -56,9 +48,6 @@ void StreamCluster::setDegree(std::vector<int> degree) {
     this->degree = degree;
 }
 
-// void StreamCluster::setVolume_S(std::unordered_map<int, int> volume_S) {
-//     this->volume_S = volume_S;
-// }
 
 void StreamCluster::setClusterList(std::vector<int> clusterList) {
     this->clusterList = clusterList;
@@ -122,9 +111,9 @@ void StreamCluster::startStreamCluster() {
     std::string line;
     Edge edge(-1,-1,-1);  
     while (-1 != _readStep(tmp,edge)) {
-        int src = edge.getSrcVId();
-        int dest = edge.getDestVId();
-        if (degree[src] >= config.getTao() * averageDegree && degree[dest] >= config.getTao() * averageDegree) {
+        int src = edge.srcVId;
+        int dest = edge.destVId;
+        if (degree[src] >= config.tao * averageDegree && degree[dest] >= config.tao * averageDegree) {
             if (cluster_B[src] == -1) {
                 cluster_B[src] = clusterID_B++;
             }
@@ -386,8 +375,8 @@ void StreamCluster::computeHybridInfo() {
     std::ifstream tmp(inputGraphPath);
  
     while (-1 != _readStep(tmp,edge)) {
-        int src = edge.getSrcVId();
-        int dest = edge.getDestVId();
+        int src = edge.srcVId;
+        int dest = edge.destVId;
         int oldValue = 0;
         if (degree[src] >= config.tao * config.getAverageDegree() && degree[dest] >= config.tao * config.getAverageDegree()) {
             this->innerAndCutEdge[std::make_pair(cluster_B[src], cluster_B[dest])] += 1;
@@ -413,8 +402,8 @@ void StreamCluster::calculateDegree() {
     int count = 0;
    
     while(-1 != graph->readStep(edge)) {
-        int src = edge.getSrcVId();
-        int dest = edge.getDestVId();
+        int src = edge.srcVId;
+        int dest = edge.destVId;
         count++;
         degree[src] ++;
         degree[dest] ++;

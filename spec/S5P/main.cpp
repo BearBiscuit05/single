@@ -12,8 +12,6 @@
 #include "ClusterPackGame.h"
 #include "ClusterGameTask.h"
 #include "Partitioner.h"
-// #include "Partitioner.h"
-
 
 void printParaInfo(GlobalConfig& configInfo) {
     std::cout << "input graph: " << configInfo.inputGraphPath << std::endl;
@@ -31,24 +29,7 @@ void printParaInfo(GlobalConfig& configInfo) {
     std::cout << "MaxClusterVolume: " << configInfo.getMaxClusterVolume() << std::endl;
 }
 
-class TeeOutputStream : public std::ostream {
-public:
-    TeeOutputStream(std::ostream& out1, std::ostream& out2) : out1(out1), out2(out2) {}
-
-    template <typename T>
-    TeeOutputStream& operator<<(const T& value) {
-        out1 << value;
-        out2 << value;
-        return *this;
-    }
-
-private:
-    std::ostream& out1;
-    std::ostream& out2;
-};
-
 using namespace std;
-// std::string inputGraphPath = "/home/dzz/graphdataset/LJ/Dcom-lj.ungraph.txt";
 std::string inputGraphPath = "/home/dzz/graphdataset/graphpartition_smallgraph/Dmusae/Dmusae_DE.edges";
 
 int main() {
@@ -113,12 +94,11 @@ int main() {
     graph.clear();
     int roundCnt = partitioner.getGameRoundCnt();
 
-    std::cout << "Partition num:" << configInfo.getPartitionNum() << std::endl;
+    std::cout << "Partition num:" << configInfo.partitionNum << std::endl;
     duration = std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime);
     std::cout << "Partition time: " << duration.count() << " ms" << std::endl;
     std::cout << "Relative balance load:" << lb << std::endl;
     std::cout << "Replicate factor: " << rf << std::endl;
-    // std::cout << "Memory cost: " << memoryUsed << " MB" << std::endl;
     std::cout << "Total game round:" << roundCnt << std::endl;
     duration = std::chrono::duration_cast<std::chrono::milliseconds>(gameEndTime - gameStartTime);
     std::cout << "Cluster game time: " << duration.count() << " ms" << std::endl;

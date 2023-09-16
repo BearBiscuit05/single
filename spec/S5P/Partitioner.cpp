@@ -14,7 +14,6 @@ int __readStep(std::ifstream& fileStream,Edge& edge) {
             return __readStep(fileStream,edge);
         edge.srcVId = srcVId;
         edge.destVId = destVId;
-        edge.weight = 1;
         return 0;
     }
     std::cout << "read end..." << std::endl;
@@ -27,14 +26,11 @@ Partitioner::Partitioner(StreamCluster streamCluster,GlobalConfig config)
     : streamCluster(streamCluster), graph(streamCluster.graph) {
     this->gameRoundCnt = 0;
     this->config = config;
-    // std::cout << "partitioner init:" << config.batchSize << std::endl;
     partitionLoad.resize(config.partitionNum);
     degree = streamCluster.getDegree();
     std::cout << graph->getVCount() << std::endl;
     v2p.resize(graph->getVCount(), std::vector<char>(config.partitionNum));
-    // std::cout << "partitioner init config.batchSiz :" << config.batchSize << std::endl;
-    // std::cout << "partitioner init streamCluster.config.batchSize:" << this->streamCluster.config.batchSize << std::endl;
-}
+   }
 
 void Partitioner::performStep() {
     double maxLoad = static_cast<double>(config.eCount) / config.partitionNum * 1.1;
@@ -46,10 +42,10 @@ void Partitioner::processGraph(double maxLoad) {
     std::string inputGraphPath = config.inputGraphPath;
     std::ifstream tmp(inputGraphPath);
     while (-1 != __readStep(tmp,edge)) {
-        int src = edge.getSrcVId();
-        int dest = edge.getDestVId();
-        if (degree[src] >= config.getTao() * config.getAverageDegree() &&
-            degree[dest] >= config.getTao() * config.getAverageDegree()) {
+        int src = edge.srcVId;
+        int dest = edge.destVId;
+        if (degree[src] >= config.tao * config.getAverageDegree() &&
+            degree[dest] >= config.tao * config.getAverageDegree()) {
             int srcPartition = clusterPartition[streamCluster.getClusterId(src, "B")];
             int destPartition = clusterPartition[streamCluster.getClusterId(dest, "B")];
             int edgePartition = -1;
@@ -129,13 +125,13 @@ double Partitioner::getLoadBalance() {
 }
 
 void Partitioner::startStackelbergGame() {
-    int threads = config.getThreads();
+    int threads = config.batchSize;
     std::vector<std::thread> threadPool;
     // std::queue<std::future<ClusterPackGame>> futureList;
     std::vector<ClusterPackGame> test_futureList;
     // std::vector<std::unordered_map<int, int>> clusterPartitions_S;
     // std::vector<std::unordered_map<int, int>> clusterPartitions_B;
-    int batchSize = config.getBatchSize();
+    int batchSize = config.batchSize;
     std::vector<int> clusterList_B = streamCluster.getClusterList_B();
     std::vector<int> clusterList_S = streamCluster.getClusterList_S();
     int clusterSize_B = clusterList_B.size();
@@ -203,19 +199,6 @@ void Partitioner::startStackelbergGame() {
             // ClusterPackGame game = futureList.front().get();
             // futureList.pop();
             ClusterPackGame game = test_futureList[p];
-            // if (game.getGraphType() == "S") {
-            //     //TODO
-            //     game.getClusterPartition();
-            //     // this->clusterPartition.push_back(game.getClusterPartition());
-            // } else if (game.getGraphType() == "B") {
-            //     game.getClusterPartition();
-            //     // this->clusterPartition.push_back(game.getClusterPartition());
-            // } else if (game.getGraphType() == "hybrid") {
-            //     game.getClusterPartition();
-            //     // this->clusterPartition.push_back(game.getClusterPartition_S());
-            //     // this->clusterPartition.push_back(game.getClusterPartition_B());
-            // }
-            //  std::cout << "game roundCnt:" << game.getRoundCnt() << std::endl;
             gameRoundCnt += game.getRoundCnt();
         } catch (const std::exception& e) {
             
@@ -223,18 +206,5 @@ void Partitioner::startStackelbergGame() {
         }
     }
 
-    // Merge cluster partitions
-    // std::cout << "Merge cluster partitions" << std::endl;
-    // for (auto& clusterPartition_S : clusterPartitions_S) {
-    //     for (auto& kvp : clusterPartition_S) {
-    //         clusterPartition_S[kvp.first] = kvp.second;
-    //     }
-    // }
-
-    // for (auto& clusterPartition_B : clusterPartitions_B) {
-    //     for (auto& kvp : clusterPartition_B) {
-    //         clusterPartition_B[kvp.first] = kvp.second;
-    //     }
-    // }
 }
 
