@@ -95,6 +95,11 @@ void ReadEngine::readTrainIdx(std::vector<int64_t>& ids) {
 
 TGEngine::TGEngine() {}
 
+TGEngine::TGEngine(int nodeNUM,int edgeNUM) {
+    this->edgeNUM = edgeNUM;
+    this->nodeNUM = nodeNUM;
+}
+
 TGEngine::TGEngine(std::string graphPath,int nodeNUM,int edgeNUM) {
     this->graphPath = graphPath;
 
@@ -145,7 +150,10 @@ int TGEngine::readline(std::pair<int, int> &edge) {
     return 0;
 }
 
-void TGEngine::convert2bin(std::string raw_graphPath,std::string new_graphPath,char delimiter,bool saveDegree) {
+void TGEngine::convert2bin(std::string raw_graphPath,std::string new_graphPath,char delimiter,bool saveDegree,std::string degreePath="") {
+    if (saveDegree) {
+        degrees.resize(this->nodeNUM,0);
+    }
     std::ifstream inputFile(raw_graphPath);
     if (!inputFile.is_open()) {
         std::cerr << "Failed to open input file: " << raw_graphPath << std::endl;
@@ -167,17 +175,37 @@ void TGEngine::convert2bin(std::string raw_graphPath,std::string new_graphPath,c
             iss >> src >> dst;
         else
             iss >> src >> block >> dst;
-        std::cout << src << " --> " << dst << std::endl;
-        // 将源和目标值写入二进制文件
-        // outputFile.write((char *)&src, sizeof(int));
-        // outputFile.write((char *)&dst, sizeof(int));
+        if (saveDegree) {
+            degrees[src]++;
+            degrees[dst]++;
+        }
+        outputFile.write((char *)&src, sizeof(int));
+        outputFile.write((char *)&dst, sizeof(int));  
     }
-
     inputFile.close();
     outputFile.close();
+    if (saveDegree) {
+        outputFile.open(degreePath, std::ios::binary);
+        outputFile.write((char *)&degrees[0], degrees.size() * sizeof(int));
+        outputFile.close();
+    }
 }
 
-
+void TGEngine::readDegree(std::string degreePath,std::vector<int>& degreeList) {
+    std::ifstream file(degreePath, std::ios::binary);
+    if (!file.is_open()) {
+        std::cerr << "Failed to open file: " << degreePath << std::endl;
+        return;
+    }
+    file.seekg(0, std::ios::end);
+    std::streampos fileSize = file.tellg();
+    file.seekg(0, std::ios::beg);
+    size_t numIntegers = fileSize / sizeof(int);
+    degreeList.resize(numIntegers);
+    file.read(reinterpret_cast<char*>(degreeList.data()), fileSize);
+    file.close();
+    return;
+}
 
 
 
