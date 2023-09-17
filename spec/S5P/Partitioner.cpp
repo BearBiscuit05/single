@@ -10,14 +10,17 @@ Partitioner::Partitioner(StreamCluster streamCluster, GlobalConfig config)
     this->gameRoundCnt = 0;
     partitionLoad.resize(config.partitionNum);
     std::cout << config.vCount << std::endl;
-    v2p.resize(config.vCount, std::vector<char>(config.partitionNum));
+
+    v2p.resize(config.vCount, std::vector<bool>(config.partitionNum));
+    
    }
 
 void Partitioner::performStep() {
     double maxLoad = static_cast<double>(config.eCount) / config.partitionNum * 1.1;
     std::string inputGraphPath = config.inputGraphPath;
     std::pair<int,int> edge(-1,-1);
-    TGEngine tgEngine(inputGraphPath,3997962,16539643);  
+    TGEngine tgEngine(inputGraphPath,3072441,10308445);  
+    std::cout << v2p.size() << "|"<< v2p[0].size() << std::endl;
     while (-1 != tgEngine.readline(edge)) {
         int src = edge.first;
         int dest = edge.second;
@@ -25,7 +28,6 @@ void Partitioner::performStep() {
             int srcPartition = clusterPartition[streamCluster.cluster_B[src]];
             int destPartition = clusterPartition[streamCluster.cluster_B[dest]];
             int edgePartition = -1;
-
             if (partitionLoad[srcPartition] > maxLoad && partitionLoad[destPartition] > maxLoad) {
                 for (int i = 0; i < config.partitionNum; i++) {
                     if (partitionLoad[i] <= maxLoad) {
@@ -66,10 +68,16 @@ void Partitioner::performStep() {
                 destPartition = srcPartition;
             }
             partitionLoad[edgePartition]++;
+            
+            // if(src >= config.vCount || dest >= config.vCount || srcPartition >= 32 || destPartition >= 32)
+            //     std::cout<< "!!!"<<std::endl;
             v2p[src][srcPartition] = 1;
             v2p[dest][destPartition] = 1;
+
+            
         }
     }
+    std::cout << "11" << std::endl; 
 }
 
 

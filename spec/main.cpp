@@ -16,17 +16,17 @@ int main() {
     // }
     // std::cout << "one hop num :" << sum << std::endl;
     // std::cout << "all edges num :" << readengine.readPtr << std::endl;
-    std::string graphPath = "/home/dzz/graphdataset/IN/in.txt";
+    std::string graphPath = "/home/dzz/graphdataset/com-orkut/Dcom-orkut.ungraph.txt";
     std::string bin_graphPath = "/home/bear/workspace/singleGNN/spec/S5P/edge.bin";
-    TGEngine tgEngine(bin_graphPath,1382867,16539643);
+    TGEngine tgEngine(bin_graphPath,3072441,10308445);
     std::pair<int,int> edge(-1,-1);
     char delimiter = '\t';
-    //tgEngine.convert2bin(graphPath,bin_graphPath,delimiter,false,"");
+    tgEngine.convert2bin(graphPath,bin_graphPath,delimiter,false,"");
     // int sum = 0;
     
-    while( -1 != tgEngine.readline(edge)){
-    }
-    std::cout << "all edges num :" << tgEngine.readPtr << std::endl;
+    // while( -1 != tgEngine.readline(edge)){
+    // }
+    // std::cout << "all edges num :" << tgEngine.readPtr << std::endl;
     // std::cout << "one hop num :" << sum << std::endl;
     // std::string inputfile = "/home/dzz/graphdataset/small.txt";
     // std::string test="test.bin";

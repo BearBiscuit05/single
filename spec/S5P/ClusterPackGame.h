@@ -13,9 +13,9 @@ public:
     std::unordered_map<int, std::unordered_set<int>> clusterNeighbours;
     std::vector<double> partitionLoad;
     std::vector<int> clusterList;
-    StreamCluster streamCluster;
-    StreamCluster streamCluster_B;
-    StreamCluster streamCluster_S;
+    StreamCluster* streamCluster;
+    StreamCluster* streamCluster_B;
+    StreamCluster* streamCluster_S;
     std::vector<int> clusterList_S;
     std::vector<int> clusterList_B;
     double beta = 0.0;
@@ -24,15 +24,13 @@ public:
     int roundCnt;
     std::string graphType;
     int gap = 0;
-    GlobalConfig config;
+    GlobalConfig* config;
     
 
     
     ClusterPackGame();
-    ClusterPackGame(StreamCluster streamCluster, std::vector<int>& clusterList, std::string& graphType,GlobalConfig& config);
-    ClusterPackGame(StreamCluster streamCluster, std::vector<int>& clusterList_B, std::vector<int>& clusterList_S, std::string& graphType,GlobalConfig& config); 
-    ClusterPackGame(StreamCluster streamCluster, std::vector<int>& clusterList,GlobalConfig& config);
-    ClusterPackGame(StreamCluster streamCluster_B, std::vector<int>& clusterList_B, StreamCluster& streamCluster_S, std::vector<int>& clusterList_S,GlobalConfig& config);
+    ClusterPackGame(StreamCluster* streamCluster, std::vector<int>& clusterList, std::string& graphType,GlobalConfig* config);
+    ClusterPackGame(StreamCluster* streamCluster, std::vector<int>& clusterList_B, std::vector<int>& clusterList_S, std::string& graphType,GlobalConfig* config); 
     std::string getGraphType();
     
     void initGame();
