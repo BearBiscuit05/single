@@ -46,11 +46,13 @@ void StreamCluster::startStreamCluster() {
     std::string inputGraphPath = config.inputGraphPath;
     std::string line;
     std::pair<int,int> edge(-1,-1);
-    TGEngine tgEngine(inputGraphPath,3997962,16539643);  
+    this->isInB.resize(config.eCount,false);
+    TGEngine tgEngine(inputGraphPath,1382867,16539643);  
     while (-1 != tgEngine.readline(edge)) {
         int src = edge.first;
         int dest = edge.second;
         if (degree[src] >= config.tao * averageDegree && degree[dest] >= config.tao * averageDegree) {
+            this->isInB[tgEngine.readPtr/2] = true;
             if (cluster_B[src] == -1) {
                 cluster_B[src] = clusterID_B++;
             }
@@ -101,30 +103,20 @@ void StreamCluster::startStreamCluster() {
             if ((volume_S[cluster_S[maxVid]] + degree_S[minVid]) <= maxVolume) {
                 volume_S[cluster_S[maxVid]] += degree_S[minVid];
                 volume_S[cluster_S[minVid]] -= degree_S[minVid];
-                // if (volume_S[cluster_S[minVid]] == 0)
-                //     volume_S.erase(cluster_S[minVid]);
                 cluster_S[minVid] = cluster_S[maxVid];
             }           
         }
     }
-    
-    //TODO
-    // std::vector<std::pair<int, int>> sortList_B(volume_B.begin(), volume_B.end());
 
     for (int i = 0; i < volume_B.size(); ++i) {
-        // if (volume_B[i] == 0) {
-        //     continue;
-        // }
-        clusterList_B.push_back(i);
+        if (volume_B[i] != 0)
+            clusterList_B.push_back(i);
     }
     volume_B.clear();  
 
-
-
-    
     for (int i = 0; i < volume_S.size(); ++i) {
-
-        clusterList_S.push_back(i + cluster_B.size());
+        if (volume_S[i] != 0)
+            clusterList_S.push_back(i + cluster_B.size());
     }
     volume_S.clear();  
     this->config.clusterBSize = cluster_B.size();
@@ -132,22 +124,27 @@ void StreamCluster::startStreamCluster() {
 
 void StreamCluster::computeHybridInfo() {
     std::string inputGraphPath = config.inputGraphPath;
-    std::ifstream tmp(inputGraphPath);
     std::pair<int,int> edge(-1,-1);
-    TGEngine tgEngine(inputGraphPath,3997962,16539643);  
+    TGEngine tgEngine(inputGraphPath,1382867,16539643); 
+    int clusterNUM = this->getClusterList_B().size() + this->getClusterList_S().size();
+    for(int i = 0 ; i < cluster_S.size() ; i++) {
+        cluster_S[i] += cluster_B.size();
+    }
+    int b_size = cluster_B.size();
+    int count = 0;
     while (-1 != tgEngine.readline(edge)) {
         int src = edge.first;
         int dest = edge.second;
         int oldValue = 0;
-        if (degree[src] >= config.tao * config.getAverageDegree() && degree[dest] >= config.tao * config.getAverageDegree()) {
-            this->innerAndCutEdge[std::make_pair(cluster_B[src], cluster_B[dest])] += 1;
+        if (this->isInB[tgEngine.readPtr/2]) {
+            this->innerAndCutEdge[cluster_B[src]*clusterNUM + cluster_B[dest]] += 1;
         } else {
-            this->innerAndCutEdge[std::make_pair(cluster_S[src] + cluster_B.size(), cluster_S[dest] + cluster_B.size())] += 1;
-            if (cluster_B[src] != 0) {
-                this->innerAndCutEdge[std::make_pair(cluster_B[dest], cluster_S[src] + cluster_B.size())] += 1;
+            this->innerAndCutEdge[cluster_S[src]*clusterNUM+ (cluster_S[dest] + cluster_B.size())] += 1;
+            if (cluster_B[src] != b_size) {
+                this->innerAndCutEdge[cluster_B[dest]*clusterNUM +cluster_S[src]] += 1;
             }
-            if (cluster_B[dest] != 0) {
-                this->innerAndCutEdge[std::make_pair(cluster_B[src] , cluster_S[dest] + cluster_B.size())] += 1;
+            if (cluster_B[dest] != b_size) {
+                this->innerAndCutEdge[cluster_B[src]*clusterNUM + cluster_S[dest]] += 1;
             }
         } 
     }
@@ -161,30 +158,30 @@ void StreamCluster::calculateDegree() {
     TGEngine tgEngine(inputGraphPath,3997962,16539643);  
     // std::cout << "count :"  << count << std::endl;
     while (-1 != tgEngine.readline(edge)) {
-        // int src = edge.first;
-        // int dest = edge.second;
+        int src = edge.first;
+        int dest = edge.second;
         count++;
-        // degree[src] ++;
-        // degree[dest] ++;
-        // std::cout << "count :"  << count << std::endl;
+        degree[src] ++;
+        degree[dest] ++;
     }
     
     std::cout << "count :"  << count << std::endl;
     std::cout << "End CalculateDegree" << std::endl;
-    exit(-1);
 }
 
 
 int StreamCluster::getEdgeNum(int cluster1, int cluster2, std::string type) {
-    if(innerAndCutEdge.find(std::make_pair(cluster1, cluster2)) != innerAndCutEdge.end()) {
-        innerAndCutEdge[std::make_pair(cluster1, cluster2)];
+    int64_t index = cluster1*this->cluster_B.size()+cluster2;
+    if(innerAndCutEdge.find(index) != innerAndCutEdge.end()) {
+        return innerAndCutEdge[index];
     }
     return 0;
 }
 
 int StreamCluster::getEdgeNum(int cluster1, int cluster2) {
-    if(innerAndCutEdge.find(std::make_pair(cluster1, cluster2)) != innerAndCutEdge.end()) {
-        innerAndCutEdge[std::make_pair(cluster1, cluster2)];
+    int64_t index = cluster1*this->cluster_B.size()+cluster2;
+    if(innerAndCutEdge.find(index) != innerAndCutEdge.end()) {
+        return innerAndCutEdge[index];
     }
     return 0;
 }

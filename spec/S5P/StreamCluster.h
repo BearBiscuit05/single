@@ -10,14 +10,6 @@
 
 class StreamCluster {
 public:
-    struct PairHash {
-        template <class T1, class T2>
-        std::size_t operator () (const std::pair<T1, T2>& p) const {
-            auto h1 = std::hash<T1>{}(p.first);
-            auto h2 = std::hash<T2>{}(p.second);
-            return h1 ^ h2;
-        }
-    };
     std::vector<int> cluster;
     std::vector<int> cluster_S;     
     std::vector<int> cluster_B;     
@@ -31,7 +23,7 @@ public:
     std::vector<int> volume_B;     
 
 
-    std::unordered_map<std::pair<int, int>, int, PairHash> innerAndCutEdge;
+    std::unordered_map<int64_t , int> innerAndCutEdge;
 
     Graph* graph;
 
@@ -60,6 +52,7 @@ public:
     std::vector<int> getClusterList();
     std::vector<int> getCluster();
     std::vector<int> getDegree();
+    std::vector<bool> isInB;
     int getClusterId(int id, std::string graphType);
     std::unordered_map<int, int> getVolume_S();
     std::unordered_map<int, std::unordered_map<int, int>> getInnerAndCutEdge();

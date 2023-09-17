@@ -27,8 +27,7 @@ void Partitioner::processGraph(double maxLoad) {
     while (-1 != tgEngine.readline(edge)) {
         int src = edge.first;
         int dest = edge.second;
-        if (degree[src] >= config.tao * config.getAverageDegree() &&
-            degree[dest] >= config.tao * config.getAverageDegree()) {
+        if (this->streamCluster.isInB[tgEngine.readPtr/2]) {
             int srcPartition = clusterPartition[streamCluster.getClusterId(src, "B")];
             int destPartition = clusterPartition[streamCluster.getClusterId(dest, "B")];
             int edgePartition = -1;
@@ -110,18 +109,12 @@ double Partitioner::getLoadBalance() {
 void Partitioner::startStackelbergGame() {
     int threads = config.batchSize;
     std::vector<std::thread> threadPool;
-    // std::queue<std::future<ClusterPackGame>> futureList;
     std::vector<ClusterPackGame> test_futureList;
-    // std::vector<std::unordered_map<int, int>> clusterPartitions_S;
-    // std::vector<std::unordered_map<int, int>> clusterPartitions_B;
     int batchSize = config.batchSize;
     std::vector<int> clusterList_B = streamCluster.getClusterList_B();
     std::vector<int> clusterList_S = streamCluster.getClusterList_S();
     int clusterSize_B = clusterList_B.size();
     int clusterSize_S = clusterList_S.size();
-
-    // std::cout << clusterSize_B << std::endl;
-    // std::cout << clusterSize_S << std::endl;
     int taskNum_B = (clusterSize_B + batchSize - 1) / batchSize;
     int taskNum_S = (clusterSize_S + batchSize - 1) / batchSize;
     int i = 0, j = 0;

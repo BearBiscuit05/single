@@ -47,29 +47,31 @@ int main() {
 
     std::cout << "Start Time" << std::endl;
     auto startTime = std::chrono::high_resolution_clock::now();
+    
     auto ClusterStartTime = std::chrono::high_resolution_clock::now();
     StreamCluster streamCluster(graph, configInfo);
 
+
     auto InitialClusteringTime = std::chrono::high_resolution_clock::now();
     streamCluster.startStreamCluster();
-
+    std::cout << "Big clustersize:" << streamCluster.getClusterList_B().size() << std::endl;
+    std::cout << "Small clustersize:" << streamCluster.getClusterList_S().size()<< std::endl;
 
     auto ClusteringTime = std::chrono::high_resolution_clock::now();
-
     streamCluster.computeHybridInfo();
     std::cout << "End Clustering" << std::endl;
     std::cout << "partitioner config:" << configInfo.batchSize << std::endl;
     auto ClusterEndTime = std::chrono::high_resolution_clock::now();
-    std::cout << "Big clustersize:" << streamCluster.getClusterList_B().size() << std::endl;
-    std::cout << "Small clustersize:" << streamCluster.getClusterList_S().size()<< std::endl;
+    
 
-    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(ClusterEndTime - ClusteringTime);
-    std::cout << "ComputeHybridInfo time: " << duration.count() << " ms" << std::endl;
+    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(InitialClusteringTime - ClusterStartTime);
+    std::cout << "Initial Clustering time: " << duration.count() << " ms" << std::endl;
     duration = std::chrono::duration_cast<std::chrono::milliseconds>(ClusteringTime - InitialClusteringTime);
     std::cout << "Clustering Core time: " << duration.count() << " ms" << std::endl;
-    duration = std::chrono::duration_cast<std::chrono::milliseconds>(InitialClusteringTime - ClusterStartTime);
-    std::cout << "Initial Clustering time: " << duration.count() << " ms" << std::endl;
-
+    duration = std::chrono::duration_cast<std::chrono::milliseconds>(ClusterEndTime - ClusteringTime);
+    std::cout << "ComputeHybridInfo time: " << duration.count() << " ms" << std::endl;
+    
+    
     Partitioner partitioner(streamCluster,configInfo);
     std::cout << "partitioner config:" << partitioner.config.batchSize << std::endl;
     auto gameStartTime = std::chrono::high_resolution_clock::now();
@@ -78,34 +80,34 @@ int main() {
     auto gameEndTime = std::chrono::high_resolution_clock::now();
     std::cout << "End Game" << std::endl;
 
-    duration = std::chrono::duration_cast<std::chrono::milliseconds>(gameEndTime - gameStartTime);
-    std::cout << "Cluster game time: " << duration.count() << " ms" << std::endl;
+    // duration = std::chrono::duration_cast<std::chrono::milliseconds>(gameEndTime - gameStartTime);
+    // std::cout << "Cluster game time: " << duration.count() << " ms" << std::endl;
 
-    auto performStepStartTime = std::chrono::high_resolution_clock::now();
-    partitioner.performStep();
-    auto performStepEndTime = std::chrono::high_resolution_clock::now();
+    // auto performStepStartTime = std::chrono::high_resolution_clock::now();
+    // partitioner.performStep();
+    // auto performStepEndTime = std::chrono::high_resolution_clock::now();
 
-    auto endTime = std::chrono::high_resolution_clock::now();
-    std::cout << "End Time" << std::endl;
+    // auto endTime = std::chrono::high_resolution_clock::now();
+    // std::cout << "End Time" << std::endl;
 
-    double rf = partitioner.getReplicateFactor();
-    double lb = partitioner.getLoadBalance();
-    graph.clear();
-    int roundCnt = partitioner.getGameRoundCnt();
+    // double rf = partitioner.getReplicateFactor();
+    // double lb = partitioner.getLoadBalance();
+    // graph.clear();
+    // int roundCnt = partitioner.getGameRoundCnt();
 
-    std::cout << "Partition num:" << configInfo.partitionNum << std::endl;
-    duration = std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime);
-    std::cout << "Partition time: " << duration.count() << " ms" << std::endl;
-    std::cout << "Relative balance load:" << lb << std::endl;
-    std::cout << "Replicate factor: " << rf << std::endl;
-    std::cout << "Total game round:" << roundCnt << std::endl;
-    duration = std::chrono::duration_cast<std::chrono::milliseconds>(gameEndTime - gameStartTime);
-    std::cout << "Cluster game time: " << duration.count() << " ms" << std::endl;
-    duration = std::chrono::duration_cast<std::chrono::milliseconds>(ClusterEndTime - ClusterStartTime);
-    std::cout << "Cluster Time: " << duration.count() << " ms" << std::endl;
-    duration = std::chrono::duration_cast<std::chrono::milliseconds>(performStepEndTime - performStepStartTime);
-    std::cout << "perform Step Time: " << duration.count() << " ms" << std::endl;
-    std::cout << "---------------end-------------" << std::endl;
+    // std::cout << "Partition num:" << configInfo.partitionNum << std::endl;
+    // duration = std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime);
+    // std::cout << "Partition time: " << duration.count() << " ms" << std::endl;
+    // std::cout << "Relative balance load:" << lb << std::endl;
+    // std::cout << "Replicate factor: " << rf << std::endl;
+    // std::cout << "Total game round:" << roundCnt << std::endl;
+    // duration = std::chrono::duration_cast<std::chrono::milliseconds>(gameEndTime - gameStartTime);
+    // std::cout << "Cluster game time: " << duration.count() << " ms" << std::endl;
+    // duration = std::chrono::duration_cast<std::chrono::milliseconds>(ClusterEndTime - ClusterStartTime);
+    // std::cout << "Cluster Time: " << duration.count() << " ms" << std::endl;
+    // duration = std::chrono::duration_cast<std::chrono::milliseconds>(performStepEndTime - performStepStartTime);
+    // std::cout << "perform Step Time: " << duration.count() << " ms" << std::endl;
+    // std::cout << "---------------end-------------" << std::endl;
 
     return 0;
 }

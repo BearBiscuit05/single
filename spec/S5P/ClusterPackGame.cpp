@@ -6,10 +6,8 @@ ClusterPackGame::ClusterPackGame() {}
 ClusterPackGame::ClusterPackGame(StreamCluster streamCluster, std::vector<int>& clusterList,std::string& graphType,GlobalConfig& config) {
     this->config = config;
     this->graphType = graphType;
-
     this->streamCluster = streamCluster;
     this->clusterList = clusterList;
-
     this->partitionLoad.resize(config.partitionNum,0);
 
 }
@@ -17,8 +15,6 @@ ClusterPackGame::ClusterPackGame(StreamCluster streamCluster, std::vector<int>& 
 ClusterPackGame::ClusterPackGame(StreamCluster streamCluster, std::vector<int>& clusterList_B, std::vector<int>& clusterList_S,std::string& graphType,GlobalConfig& config) {
     this->config = config;
     this->streamCluster = streamCluster;
-    //TODO
-    clusterList = streamCluster.getClusterList();
     this->cutCostValue = std::unordered_map<int, int>();
     this->partitionLoad.resize(config.partitionNum,0);
     clusterNeighbours = std::unordered_map<int, std::unordered_set<int>>();
@@ -46,14 +42,10 @@ void ClusterPackGame::initGame() {
         }
         clusterPartition[clusterId] = partition;
         partitionLoad[partition] += streamCluster.getEdgeNum(clusterId, clusterId);
-
     }
-
-
 }
 
 void ClusterPackGame::initGameDouble() {
-    // std::cout << "000" << std::endl;
     int partition = 0;
     for (int clusterId : clusterList_B) {
         double minLoad = config.eCount;
@@ -66,7 +58,7 @@ void ClusterPackGame::initGameDouble() {
         clusterPartition[clusterId] = partition;
         partitionLoad[partition] += streamCluster.getEdgeNum(clusterId, clusterId);
     }
-    // std::cout << "111" << std::endl;
+
     for (int clusterId : clusterList_S) {
         double minLoad = config.eCount;
         for (int i = 0; i < config.partitionNum; i++) {
@@ -78,23 +70,17 @@ void ClusterPackGame::initGameDouble() {
         clusterPartition[clusterId] = partition;
         partitionLoad[partition] += streamCluster.getEdgeNum(clusterId, clusterId);
     }
-    // std::cout << "222" << std::endl;
+
     double sizePart_B = 0.0, cutPart_B = 0.0;
     double sizePart_S = 0.0, cutPart_S = 0.0;
 
-    // std::cout << clusterList_B.size() << std::endl;
     for (int cluster1 : clusterList_B) {
-        // std::cout << "111" << std::endl;
         sizePart_B += streamCluster.getEdgeNum(cluster1, cluster1);
-        // std::cout << "222" << std::endl;
         for (int cluster2 : clusterList_B) {
             int innerCut = 0;
-            int outerCut = 0;
             if (cluster1 != cluster2) {
                 innerCut = streamCluster.getEdgeNum(cluster1, cluster2);
-                // outerCut = streamCluster.getEdgeNum(cluster1, cluster2, "B");
-
-                if (innerCut != 0 || outerCut != 0) {
+                if (innerCut != 0) {
                     auto it = clusterNeighbours.find(cluster1);
                     if (it == clusterNeighbours.end())
                         clusterNeighbours[cluster1] = std::unordered_set<int>();
@@ -107,14 +93,12 @@ void ClusterPackGame::initGameDouble() {
                 cutCostValue[cluster1] = 0;
             cutCostValue[cluster1] += innerCut;
         }
-        // std::cout << "333" << std::endl;
+
         for (int cluster2 : clusterList_S) {
             int innerCut = 0;
-            int outerCut = 0;
             if (cluster1 != cluster2) {
                 innerCut = streamCluster.getEdgeNum(cluster1, cluster2);
-                // outerCut = streamCluster.getEdgeNum(cluster1, cluster2, "hybrid");
-                if (innerCut != 0 || outerCut != 0) {
+                if (innerCut != 0) {
                     if(clusterNeighbours.find(cluster1) == clusterNeighbours.end()) {
                         clusterNeighbours[cluster1] = std::unordered_set<int>();
                     }
@@ -134,11 +118,9 @@ void ClusterPackGame::initGameDouble() {
         sizePart_S += streamCluster.getEdgeNum(cluster1, cluster1);
         for (int cluster2 : clusterList_S) {
             int innerCut = 0;
-            int outerCut = 0;
             if (cluster1 != cluster2) {
                 innerCut = streamCluster.getEdgeNum(cluster1, cluster2);
-                // outerCut = streamCluster.getEdgeNum(cluster1, cluster2, "S");
-                if (innerCut != 0 || outerCut != 0) {
+                if (innerCut != 0) {
                     if(clusterNeighbours.find(cluster1) == clusterNeighbours.end()) {
                         clusterNeighbours[cluster1] =std::unordered_set<int>();
                     }
@@ -155,12 +137,9 @@ void ClusterPackGame::initGameDouble() {
 
         for (int cluster2 : clusterList_B) {
             int innerCut = 0;
-            int outerCut = 0;
             if (cluster1 != cluster2) {
                 innerCut = streamCluster.getEdgeNum(cluster2,  cluster1);
-                // outerCut = streamCluster.getEdgeNum(cluster1, cluster2, "B");
-
-                if (innerCut != 0 || outerCut != 0) {
+                if (innerCut != 0) {
                     auto it = clusterNeighbours.find(cluster1 );
                     if (it == clusterNeighbours.end())
                         clusterNeighbours[cluster1] = std::unordered_set<int>();

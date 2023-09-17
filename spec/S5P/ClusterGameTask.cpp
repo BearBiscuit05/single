@@ -38,7 +38,7 @@ ClusterPackGame ClusterGameTask::call() {
             ClusterPackGame clusterPackGame(streamCluster, cluster_B, cluster_S, graphType,config);
             // std::cout << "start init game double" << std::endl;
             clusterPackGame.initGameDouble();
-            // clusterPackGame.startGameDouble();
+            clusterPackGame.startGameDouble();
             return clusterPackGame;
         } else if (graphType == "B") {
             ClusterPackGame clusterPackGame(streamCluster, cluster, graphType,config);
