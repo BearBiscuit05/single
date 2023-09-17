@@ -5,22 +5,16 @@ extern std::unordered_map<int, int> clusterPartition;
 
 Partitioner::Partitioner() {}
 
-Partitioner::Partitioner(StreamCluster streamCluster,GlobalConfig config)
-    : streamCluster(streamCluster), graph(streamCluster.graph) {
+Partitioner::Partitioner(StreamCluster streamCluster, GlobalConfig config)
+    : streamCluster(streamCluster), config(config) {
     this->gameRoundCnt = 0;
-    this->config = config;
     partitionLoad.resize(config.partitionNum);
-    degree = streamCluster.getDegree();
-    std::cout << graph->getVCount() << std::endl;
-    v2p.resize(graph->getVCount(), std::vector<char>(config.partitionNum));
+    std::cout << config.vCount << std::endl;
+    v2p.resize(config.vCount, std::vector<char>(config.partitionNum));
    }
 
 void Partitioner::performStep() {
     double maxLoad = static_cast<double>(config.eCount) / config.partitionNum * 1.1;
-    processGraph(maxLoad);
-}
-
-void Partitioner::processGraph(double maxLoad) {
     std::string inputGraphPath = config.inputGraphPath;
     std::pair<int,int> edge(-1,-1);
     TGEngine tgEngine(inputGraphPath,3997962,16539643);  
@@ -28,8 +22,8 @@ void Partitioner::processGraph(double maxLoad) {
         int src = edge.first;
         int dest = edge.second;
         if (this->streamCluster.isInB[tgEngine.readPtr/2]) {
-            int srcPartition = clusterPartition[streamCluster.getClusterId(src, "B")];
-            int destPartition = clusterPartition[streamCluster.getClusterId(dest, "B")];
+            int srcPartition = clusterPartition[streamCluster.cluster_B[src]];
+            int destPartition = clusterPartition[streamCluster.cluster_B[dest]];
             int edgePartition = -1;
 
             if (partitionLoad[srcPartition] > maxLoad && partitionLoad[destPartition] > maxLoad) {
@@ -52,8 +46,8 @@ void Partitioner::processGraph(double maxLoad) {
             v2p[src][srcPartition] = 1;
             v2p[dest][destPartition] = 1;
         } else {
-            int srcPartition = clusterPartition[streamCluster.getClusterId(src, "S")];
-            int destPartition = clusterPartition[streamCluster.getClusterId(dest, "S")];
+            int srcPartition = clusterPartition[streamCluster.cluster_S[src]];
+            int destPartition = clusterPartition[streamCluster.cluster_S[dest]];
             int edgePartition = -1;
             if (partitionLoad[srcPartition] > maxLoad && partitionLoad[destPartition] > maxLoad) {
                 for (int i = config.partitionNum - 1; i >= 0; i--) {
@@ -78,17 +72,15 @@ void Partitioner::processGraph(double maxLoad) {
     }
 }
 
-int Partitioner::getGameRoundCnt() {
-    return gameRoundCnt;
-}
 
-std::unordered_map<int, int> Partitioner::getClusterPartition() {
-    return clusterPartition;
-}
+
+
+
+
 
 double Partitioner::getReplicateFactor() {
     int replicateTotal = 0;
-    for (int i = 0; i < graph->getVCount(); i++) {
+    for (int i = 0; i < config.vCount; i++) {
         for (int j = 0; j < config.partitionNum; j++) {
             replicateTotal += v2p[i][j];
         }
@@ -107,21 +99,19 @@ double Partitioner::getLoadBalance() {
 }
 
 void Partitioner::startStackelbergGame() {
-    int threads = config.batchSize;
-    std::vector<std::thread> threadPool;
+    //int threads = config.batchSize;
+    //std::vector<std::thread> threadPool;
     std::vector<ClusterPackGame> test_futureList;
     int batchSize = config.batchSize;
     std::vector<int> clusterList_B = streamCluster.getClusterList_B();
     std::vector<int> clusterList_S = streamCluster.getClusterList_S();
-    int clusterSize_B = clusterList_B.size();
-    int clusterSize_S = clusterList_S.size();
-    int taskNum_B = (clusterSize_B + batchSize - 1) / batchSize;
-    int taskNum_S = (clusterSize_S + batchSize - 1) / batchSize;
+    int taskNum_B = (clusterList_B.size() + batchSize - 1) / batchSize;
+    int taskNum_S = (clusterList_S.size() + batchSize - 1) / batchSize;
     int i = 0, j = 0;
 
     // std::unique_ptr<CTP::UThreadPool> pool(new CTP::UThreadPool());
     // CTP::UThreadPoolPtr tp = pool.get();
-    // std::cout << taskNum_B << " " << taskNum_S << std::endl;
+    std::cout << taskNum_B << " " << taskNum_S << std::endl;
 
     for (; i < taskNum_B && j < taskNum_S; i++, j++) {
         // std::cout << "start hybrid" << std::endl;

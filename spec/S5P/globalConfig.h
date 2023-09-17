@@ -6,11 +6,11 @@
 #include <sstream>
 #include <string>
 #include <vector>
-#include <map>
+#include <unordered_map>
 
 class GlobalConfig {
 private:
-    std::map<std::string, std::string> properties;
+    std::unordered_map<std::string, std::string> properties;
 
 public:
     int k;

@@ -1,5 +1,4 @@
 #include "globalConfig.h"
-#include "graph.h"
 #include <chrono>
 #include <iostream>
 #include <fstream>
@@ -34,7 +33,6 @@ std::string inputGraphPath = "/home/bear/workspace/singleGNN/spec/S5P/edge.bin";
 int main() {
     GlobalConfig configInfo("./project.properties");
     configInfo.inputGraphPath = inputGraphPath;
-    Graph graph(configInfo);
     auto start = std::chrono::high_resolution_clock::now();
     std::cout << "---------------start-------------" << std::endl;
     printParaInfo(configInfo);
@@ -49,7 +47,7 @@ int main() {
     auto startTime = std::chrono::high_resolution_clock::now();
     
     auto ClusterStartTime = std::chrono::high_resolution_clock::now();
-    StreamCluster streamCluster(graph, configInfo);
+    StreamCluster streamCluster(configInfo);
 
 
     auto InitialClusteringTime = std::chrono::high_resolution_clock::now();
@@ -58,7 +56,7 @@ int main() {
     std::cout << "Small clustersize:" << streamCluster.getClusterList_S().size()<< std::endl;
 
     auto ClusteringTime = std::chrono::high_resolution_clock::now();
-    streamCluster.computeHybridInfo();
+    // streamCluster.computeHybridInfo();
     std::cout << "End Clustering" << std::endl;
     std::cout << "partitioner config:" << configInfo.batchSize << std::endl;
     auto ClusterEndTime = std::chrono::high_resolution_clock::now();
@@ -72,7 +70,7 @@ int main() {
     std::cout << "ComputeHybridInfo time: " << duration.count() << " ms" << std::endl;
     
     
-    Partitioner partitioner(streamCluster,configInfo);
+    Partitioner partitioner(streamCluster, configInfo);
     std::cout << "partitioner config:" << partitioner.config.batchSize << std::endl;
     auto gameStartTime = std::chrono::high_resolution_clock::now();
     std::cout << "start Game" << std::endl;
@@ -92,7 +90,7 @@ int main() {
 
     // double rf = partitioner.getReplicateFactor();
     // double lb = partitioner.getLoadBalance();
-    // graph.clear();
+
     // int roundCnt = partitioner.getGameRoundCnt();
 
     // std::cout << "Partition num:" << configInfo.partitionNum << std::endl;

@@ -11,7 +11,7 @@ set(EXECUTABLE_OUTPUT_PATH "./bin/")
 # 添加可执行文件 main.cpp f1.cpp f2.cpp f3.cpp
 
 
-add_executable(main main.cpp globalConfig.cpp graph.cpp StreamCluster.cpp
+add_executable(main main.cpp globalConfig.cpp StreamCluster.cpp
             ClusterPackGame.cpp ClusterGameTask.cpp Partitioner.cpp readGraph.cpp)
 target_link_libraries(main PRIVATE Threads::Threads)
 # target_link_libraries(main PRIVATE CThreadPool)

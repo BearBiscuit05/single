@@ -226,7 +226,7 @@ void ClusterPackGame::startGameDouble() {
                 finish_B = false;
                 // update partition load
                 partitionLoad[minPartition] += streamCluster_B.getEdgeNum(clusterId, clusterId);
-                partitionLoad[clusterPartition[clusterId]] -= streamCluster_B.getEdgeNum(clusterId, clusterId, "B");
+                partitionLoad[clusterPartition[clusterId]] -= streamCluster_B.getEdgeNum(clusterId, clusterId);
                 clusterPartition[clusterId] = minPartition;
             }
         }
@@ -246,7 +246,7 @@ void ClusterPackGame::startGameDouble() {
                 finish_S = false;
                 // update partition load
                 partitionLoad[minPartition] += streamCluster_S.getEdgeNum(clusterId, clusterId);
-                partitionLoad[clusterPartition[clusterId]] -= streamCluster_S.getEdgeNum(clusterId, clusterId, "S");
+                partitionLoad[clusterPartition[clusterId]] -= streamCluster_S.getEdgeNum(clusterId, clusterId);
                 clusterPartition[clusterId] = minPartition;
             }
         }
