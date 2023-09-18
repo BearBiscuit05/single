@@ -14,7 +14,7 @@ public:
     int gameRoundCnt;
     std::vector<int> partitionLoad;
     std::vector<std::vector<bool>> v2p; 
-    std::unordered_map<int, int> clusterPartition;
+    // phmap::flat_hash_map<int, uint8_t> clusterPartition;
     GlobalConfig config;
     Partitioner();
     Partitioner(StreamCluster streamCluster,GlobalConfig config);

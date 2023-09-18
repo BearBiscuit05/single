@@ -26,5 +26,5 @@
 #include <stdexcept>
 #include <limits>
 #include "omp.h"
-
+#include <parallel_hashmap/phmap.h>
 # define THREADNUM 2

@@ -1,10 +1,21 @@
 #include "ClusterGameTask.h"
 #include "StreamCluster.h"
-// #include "ClusterPackGame.h"
 #include "globalConfig.h"
 #include <algorithm>
 
-std::unordered_map<int, uint8_t> clusterPartition = std::unordered_map<int, uint8_t>();
+phmap::flat_hash_map<int, uint8_t> clusterPartition = phmap::flat_hash_map<int, uint8_t>();
+//std::unordered_map<int, uint8_t> clusterPartition = std::unordered_map<int, uint8_t>();
+
+//ClusterGameTask::ClusterGameTask(StreamCluster& sc,phmap::flat_hash_map<int, uint8_t>& clusterPartition)
+ClusterGameTask::ClusterGameTask(StreamCluster& sc)
+    : streamCluster(&sc){
+    std::vector<int> clusterList = (graphType == "B" ? streamCluster->getClusterList_B() : streamCluster->getClusterList_S());
+    int batchSize = streamCluster->config.batchSize;
+    this->config = &streamCluster->config;
+    this->partitionLoad.resize(this->streamCluster->config.partitionNum,0);
+    //this->clusterPartition=&clusterPartition;
+}
+
 
 ClusterGameTask::ClusterGameTask(std::string graphType, int taskId, StreamCluster& sc)
     : graphType(graphType), streamCluster(&sc){
@@ -37,6 +48,32 @@ ClusterGameTask::ClusterGameTask(std::string graphType, StreamCluster& sc, int t
     this->clusterNeighbours = std::unordered_map<int, std::unordered_set<int>>();
 }
 
+void ClusterGameTask::resize_hyper(std::string graphType,int taskIds) {
+    std::vector<int> clusterList_B = streamCluster->getClusterList_B();
+    std::vector<int> clusterList_S = streamCluster->getClusterList_S();
+    int batchSize = streamCluster->config.batchSize;
+    int begin = batchSize * taskIds;
+    int end = std::min(batchSize * (taskIds + 1), static_cast<int>(clusterList_B.size()));
+    this->cluster_B.assign(clusterList_B.begin() + begin, clusterList_B.begin() + end);
+    this->graphType = graphType;
+    begin = batchSize * taskIds;
+    end = std::min(batchSize * (taskIds + 1), static_cast<int>(clusterList_S.size()));
+    this->cluster_S.assign(clusterList_S.begin() + begin, clusterList_S.begin() + end);
+
+    this->partitionLoad.resize(this->streamCluster->config.partitionNum,0);
+    this->cutCostValue = std::unordered_map<int, int>();
+    this->clusterNeighbours = std::unordered_map<int, std::unordered_set<int>>();
+}
+
+void ClusterGameTask::resize(std::string graphType, int taskId) {
+    std::vector<int> clusterList = (graphType == "B" ? streamCluster->getClusterList_B() : streamCluster->getClusterList_S());
+    this->graphType = graphType;
+    int batchSize = streamCluster->config.batchSize;
+    int begin = batchSize * taskId;
+    int end = std::min(batchSize * (taskId + 1), static_cast<int>(clusterList.size()));
+    this->cluster.assign(clusterList.begin() + begin, clusterList.begin() + end);
+    std::fill(this->partitionLoad.begin(), this->partitionLoad.end(), 0);
+}
 
 void ClusterGameTask::call() {
     try {

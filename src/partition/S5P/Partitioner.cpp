@@ -1,7 +1,7 @@
 #include "Partitioner.h"
 #include "readGraph.h"
 
-extern std::unordered_map<int, int> clusterPartition;
+extern phmap::flat_hash_map<int, uint8_t> clusterPartition;
 
 Partitioner::Partitioner() {}
 
@@ -10,9 +10,7 @@ Partitioner::Partitioner(StreamCluster streamCluster, GlobalConfig config)
     this->gameRoundCnt = 0;
     partitionLoad.resize(config.partitionNum);
     std::cout << config.vCount << std::endl;
-
     v2p.resize(config.vCount, std::vector<bool>(config.partitionNum));
-    
    }
 
 void Partitioner::performStep() {
@@ -67,16 +65,10 @@ void Partitioner::performStep() {
                 destPartition = srcPartition;
             }
             partitionLoad[edgePartition]++;
-            
-            // if(src >= config.vCount || dest >= config.vCount || srcPartition >= 32 || destPartition >= 32)
-            //     std::cout<< "!!!"<<std::endl;
             v2p[src][srcPartition] = 1;
-            v2p[dest][destPartition] = 1;
-
-            
+            v2p[dest][destPartition] = 1;            
         }
     }
-    std::cout << "11" << std::endl; 
 }
 
 double Partitioner::getReplicateFactor() {
@@ -100,8 +92,6 @@ double Partitioner::getLoadBalance() {
 }
 
 void Partitioner::startStackelbergGame() {
-    //int threads = config.batchSize;
-    //std::vector<std::thread> threadPool;
     int batchSize = config.batchSize;
     std::vector<int> clusterList_B = streamCluster.getClusterList_B();
     std::vector<int> clusterList_S = streamCluster.getClusterList_S();
@@ -112,43 +102,45 @@ void Partitioner::startStackelbergGame() {
 
     omp_set_num_threads(THREADNUM);
     std::cout << taskNum_B << " " << taskNum_S << std::endl;
-    
-#pragma omp parallel for
+    ClusterGameTask cgt = ClusterGameTask(streamCluster);
+    std::vector<ClusterGameTask*> cgt_list(THREADNUM);
+    // for (int i = 0 ; i < THREADNUM ; i++) {
+    //     ClusterGameTask cgt = ClusterGameTask(streamCluster);
+    //     cgt_list[i] = &cgt;
+    // }
+
+//#pragma omp parallel for
     for (int i = 0; i < minTaskNUM; i++) {
-        ClusterGameTask("hybrid", streamCluster, i).call();
+        //int ompid = omp_get_thread_num();
+        // cgt_list[0]->resize("hybrid",i);
+        // cgt_list[0]->call();
+        cgt.resize("hybrid",i);
+        cgt.call();
     }
 
     std::cout << "start B... " << taskNum_B << std::endl;
 
  
     if (taskNum_B > taskNum_S) {
-#pragma omp parallel for  
+//#pragma omp parallel for  
         for (int i = 0 ; i < leftTaskNUM; ++i) {
-            ClusterGameTask("B", i+minTaskNUM, streamCluster).call();
+            int ompid = omp_get_thread_num();
+            cgt.resize("B",i+minTaskNUM);
+            cgt.call();
+            // cgt_list[0]->resize("B",i+minTaskNUM);
+            // cgt_list[0]->call();
         }
     } else {
-#pragma omp parallel for  
+//#pragma omp parallel for  
         for (int i = 0 ; i < leftTaskNUM; ++i) {
-            ClusterGameTask("S", i+minTaskNUM, streamCluster).call();
+            int ompid = omp_get_thread_num();
+            // cgt_list[ompid]->resize("S",i+minTaskNUM);
+            // cgt_list[ompid]->call();
+            cgt.resize("S",i+minTaskNUM);
+            cgt.call();
         }
     }
-    
-
     std::cout << "start S... "<< taskNum_S  << std::endl;
-
-//#pragma omp parallel for
-    
-
-    // std::cout << "max p ..." << std::max(taskNum_B, taskNum_S) << std::endl;
-    // for (int p = 0; p < std::max(taskNum_B, taskNum_S); p++) {
-    //     try {
-    //         // ClusterPackGame game = test_futureList[p];
-    //         // gameRoundCnt += game.getRoundCnt();
-    //     } catch (const std::exception& e) {
-            
-    //         std::cerr << e.what() << std::endl;
-    //     }
-    // }
 
 }
 
