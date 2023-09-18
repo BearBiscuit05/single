@@ -1,5 +1,5 @@
 import argparse
-
+import time
 import dgl
 import dgl.nn as dglnn
 import torch
@@ -17,6 +17,7 @@ from dgl.dataloading import (
 from ogb.linkproppred import DglLinkPropPredDataset, Evaluator
 from ogb.nodeproppred import DglNodePropPredDataset
 import pickle
+import ast
 
 def to_bidirected_with_reverse_mapping(g):
 	"""Makes a graph bidirectional, and returns a mapping array ``mapping`` where ``mapping[i]``
@@ -151,7 +152,7 @@ def evaluate(device, graph, edge_split, model, batch_size):
 
 def train(args, device, g, reverse_eids, seed_edges, model):
 	# create sampler & dataloader
-	sampler = NeighborSampler([15, 10, 5], prefetch_node_feats=["feat"])
+	sampler = NeighborSampler(args.fanout, prefetch_node_feats=["feat"])
 	sampler = as_edge_prediction_sampler(
 		sampler,
 		exclude="reverse_id",
@@ -171,7 +172,8 @@ def train(args, device, g, reverse_eids, seed_edges, model):
 		use_uva=use_uva,
 	)
 	opt = torch.optim.Adam(model.parameters(), lr=0.0005)
-	for epoch in range(10):
+	for epoch in range(args.maxloop):
+		startTime = time.time()
 		model.train()
 		total_loss = 0
 		for it, (input_nodes, pair_graph, neg_pair_graph, blocks) in enumerate(
@@ -190,8 +192,24 @@ def train(args, device, g, reverse_eids, seed_edges, model):
 			total_loss += loss.item()
 			if (it + 1) == 1000:
 				break
-		print("Epoch {:05d} | Loss {:.4f}".format(epoch, total_loss / (it + 1)))
+		epochTime = time.time() - startTime
+		print("Epoch {:05d} | Loss {:.4f} | Time {:.4f}".format(epoch, total_loss / (it + 1),epochTime))
 
+def load_ogb_products(rootdir,split_dict):
+	dataset = AsNodePredDataset(DglNodePropPredDataset('ogbn-products',root=rootdir))
+	# 注意：拿ogbn-products节点分类数据集做链路预测，还是可以以节点分类数据集形式加载图
+	# 区别是：1.删掉自循环边；2.split不使用dataset.get_edge_split()方法，而是处理负采样节点对，调整构造新的split_dict
+	g = dataset[0]
+	# 注意：链路预测必须删掉自循环边，否则to_bidirected_with_reverse_mapping时报错
+	g = dgl.remove_self_loop(g)
+
+	# edge_split = dataset.get_edge_split()
+	# 注意：此处不使用get_edge_split()方法，否则拿到的是ogb下节点分类任务的train/val/test
+	# 加载pickle文件保存的split字典文件，该文件的生成方式在 src/predata/LP/gendata2.py中
+	pickfile = open(split_dict,'rb')
+	edge_split = pickle.load(pickfile)
+	pickfile.close()
+	return g,edge_split
 
 if __name__ == "__main__":
 	parser = argparse.ArgumentParser()
@@ -202,6 +220,10 @@ if __name__ == "__main__":
 		help="Training mode. 'cpu' for CPU training, 'mixed' for CPU-GPU mixed training, "
 		"'puregpu' for pure-GPU training.",
 	)
+	parser.add_argument('--maxloop', type=int, default=10, help='max loop number')
+	parser.add_argument('--fanout', type=ast.literal_eval, default=[15,10,5], help='Fanout value')
+	parser.add_argument('--dataset', type=str, default='ogb-products', help='Dataset name')
+
 	args = parser.parse_args()
 	if not torch.cuda.is_available():
 		args.mode = "cpu"
@@ -209,25 +231,18 @@ if __name__ == "__main__":
 
 	# load and preprocess dataset
 	print("Loading data")
-	dataset = AsNodePredDataset(DglNodePropPredDataset('ogbn-products',root="/home/bear/workspace/singleGNN/data/dataset"))
-	# 注意：拿ogbn-products节点分类数据集做链路预测，还是可以以节点分类数据集形式加载图
-	# 区别是：1.删掉自循环边；2.split不使用dataset.get_edge_split()方法，而是处理负采样节点对，调整构造新的split_dict
-	g = dataset[0]
-	# 注意：链路预测必须删掉自循环边，否则to_bidirected_with_reverse_mapping时报错
-	g = dgl.remove_self_loop(g)
-	g = g.to("cuda" if args.mode == "puregpu" else "cpu")
+	
+	if args.dataset == 'ogb-products':
+		g,edge_split = load_ogb_products("/home/bear/workspace/singleGNN/data/dataset", 
+								"/home/wsy/single-gnn/data/dataset/ogbn_products/split_lp/split_dict.pkl")
+	else:
+		raise ValueError('unknown database:',args.dataset)
 	
 	device = torch.device("cpu" if args.mode == "cpu" else "cuda")
-	g, reverse_eids = to_bidirected_with_reverse_mapping(g)
+	g, reverse_eids = to_bidirected_with_reverse_mapping(g) #此步骤必须cpu，因此完成此步骤后再进GPU
+	g = g.to("cuda" if args.mode == "puregpu" else "cpu")
 	reverse_eids = reverse_eids.to(device)
 	seed_edges = torch.arange(g.num_edges()).to(device)
-
-	# edge_split = dataset.get_edge_split()
-	# 注意：此处不使用get_edge_split()方法，否则拿到的是ogb下节点分类任务的train/val/test
-	# 加载pickle文件保存的split字典文件，该文件的生成方式在 src/predata/LP/gendata2.py中
-	pickfile = open("/home/wsy/single-gnn/data/dataset/ogbn_products/split_lp/split_dict.pkl",'rb')
-	edge_split = pickle.load(pickfile)
-	pickfile.close()
 
 	# create GraphSAGE model
 	in_size = g.ndata["feat"].shape[1]
