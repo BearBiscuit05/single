@@ -62,4 +62,5 @@ public:
     void convert2bin(std::string raw_graphPath,std::string new_graphPath,char delimiter,bool saveDegree,std::string degreePath);
     void readDegree(std::string degreePath,std::vector<int>& degreeList);
     void writeVec(std::string savePath,std::vector<int>& vec);
+    void convert_edgelist(std::string inputfile,std::string outputfile);
 };
