@@ -25,3 +25,6 @@
 #include <fcntl.h>
 #include <stdexcept>
 #include <limits>
+#include "omp.h"
+
+# define THREADNUM 2

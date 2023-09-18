@@ -3,23 +3,31 @@
 
 #include "common.h"
 #include "StreamCluster.h"
-#include "ClusterPackGame.h"
 
 
 class ClusterGameTask {
-private:
+public:
     StreamCluster* streamCluster;
-    StreamCluster* streamCluster_B;
-    StreamCluster* streamCluster_S;
     std::vector<int> cluster;
     std::vector<int> cluster_B;
     std::vector<int> cluster_S;
-    GlobalConfig* config;
     std::string graphType;
-public:
-    ClusterGameTask(std::string graphType, int taskId, StreamCluster& streamCluster,GlobalConfig& config);
-    ClusterGameTask(std::string graphType, StreamCluster& streamCluster, int taskId_B, int taskId_S ,GlobalConfig& config);
-    ClusterPackGame call();
+    GlobalConfig* config;
+    int roundCnt = 0;
+    double beta = 0.0;
+    double beta_B = 0.0;
+    double beta_S = 0.0;
+    std::vector<double> partitionLoad;
+    std::unordered_map<int, int> cutCostValue;
+    std::unordered_map<int, std::unordered_set<int>> clusterNeighbours;
+
+
+    ClusterGameTask(std::string graphType, int taskId, StreamCluster& streamCluster);
+    ClusterGameTask(std::string graphType, StreamCluster& streamCluster, int taskIds);
+    void call();
+    void startGameDouble();
+    void initGame();
+    double computeCost(int clusterId, int partition, const std::string type);
 };
 
 #endif // CLUSTER_GAME_TASK_H

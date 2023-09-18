@@ -20,7 +20,6 @@ void Partitioner::performStep() {
     std::string inputGraphPath = config.inputGraphPath;
     std::pair<int,int> edge(-1,-1);
     TGEngine tgEngine(inputGraphPath,3072441,10308445);  
-    std::cout << v2p.size() << "|"<< v2p[0].size() << std::endl;
     while (-1 != tgEngine.readline(edge)) {
         int src = edge.first;
         int dest = edge.second;
@@ -80,12 +79,6 @@ void Partitioner::performStep() {
     std::cout << "11" << std::endl; 
 }
 
-
-
-
-
-
-
 double Partitioner::getReplicateFactor() {
     int replicateTotal = 0;
     for (int i = 0; i < config.vCount; i++) {
@@ -109,76 +102,53 @@ double Partitioner::getLoadBalance() {
 void Partitioner::startStackelbergGame() {
     //int threads = config.batchSize;
     //std::vector<std::thread> threadPool;
-    std::vector<ClusterPackGame> test_futureList;
     int batchSize = config.batchSize;
     std::vector<int> clusterList_B = streamCluster.getClusterList_B();
     std::vector<int> clusterList_S = streamCluster.getClusterList_S();
     int taskNum_B = (clusterList_B.size() + batchSize - 1) / batchSize;
     int taskNum_S = (clusterList_S.size() + batchSize - 1) / batchSize;
-    int i = 0, j = 0;
+    int minTaskNUM = std::min(taskNum_B,taskNum_S);
+    int leftTaskNUM = std::abs(taskNum_B - taskNum_S);
 
-    // std::unique_ptr<CTP::UThreadPool> pool(new CTP::UThreadPool());
-    // CTP::UThreadPoolPtr tp = pool.get();
+    omp_set_num_threads(THREADNUM);
     std::cout << taskNum_B << " " << taskNum_S << std::endl;
-
-    for (; i < taskNum_B && j < taskNum_S; i++, j++) {
-        // std::cout << "start hybrid" << std::endl;
-         test_futureList.push_back(
-            ClusterGameTask("hybrid", streamCluster, i, j,config).call());
-        
-        // futureList.push(
-        //     tp->commit([this, i, j] { return ClusterGameTask("hybrid", streamCluster, i, j,config).call();})
-        // );
-        
-        // futureList.push_back(std::async(std::launch::async, [this, i, j] {
-        //     return ClusterGameTask("hybrid", streamCluster, i, j,config).call();
-        // }));
+    
+#pragma omp parallel for
+    for (int i = 0; i < minTaskNUM; i++) {
+        ClusterGameTask("hybrid", streamCluster, i).call();
     }
 
     std::cout << "start B... " << taskNum_B << std::endl;
 
-    
-    for (; i < taskNum_B; ++i) {
-
-        test_futureList.push_back(
-            ClusterGameTask("B", i, streamCluster,config).call());
-
-        // futureList.push(
-        //     tp->commit([this, i] { return ClusterGameTask("B", i, streamCluster,config).call();})
-        // );
-
-        // futureList.push_back(std::async(std::launch::async, [this, i] {
-        //     return ClusterGameTask("B", i, streamCluster,config).call();
-        // }));
-    }
-
-    std::cout << "start S... "<< taskNum_S  << std::endl;
-    for (; j < taskNum_S; ++j) {
-        test_futureList.push_back(
-            ClusterGameTask("S", j, streamCluster,config).call());
-        
-        // futureList.push(
-        //     tp->commit([this, j] { return ClusterGameTask("S", j, streamCluster,config).call();})
-        // );
-        
-        // futureList.push_back(std::async(std::launch::async, [this, j] {
-        //     return ClusterGameTask("S", j, streamCluster,config).call();
-        // }));
-    }
-
-    std::cout << "max p ..." << std::max(taskNum_B, taskNum_S) << std::endl;
-    for (int p = 0; p < std::max(taskNum_B, taskNum_S); p++) {
-        try {
-            //TODO
-            // ClusterPackGame game = futureList.front().get();
-            // futureList.pop();
-            ClusterPackGame game = test_futureList[p];
-            gameRoundCnt += game.getRoundCnt();
-        } catch (const std::exception& e) {
-            
-            std::cerr << e.what() << std::endl;
+ 
+    if (taskNum_B > taskNum_S) {
+#pragma omp parallel for  
+        for (int i = 0 ; i < leftTaskNUM; ++i) {
+            ClusterGameTask("B", i+minTaskNUM, streamCluster).call();
+        }
+    } else {
+#pragma omp parallel for  
+        for (int i = 0 ; i < leftTaskNUM; ++i) {
+            ClusterGameTask("S", i+minTaskNUM, streamCluster).call();
         }
     }
+    
+
+    std::cout << "start S... "<< taskNum_S  << std::endl;
+
+//#pragma omp parallel for
+    
+
+    // std::cout << "max p ..." << std::max(taskNum_B, taskNum_S) << std::endl;
+    // for (int p = 0; p < std::max(taskNum_B, taskNum_S); p++) {
+    //     try {
+    //         // ClusterPackGame game = test_futureList[p];
+    //         // gameRoundCnt += game.getRoundCnt();
+    //     } catch (const std::exception& e) {
+            
+    //         std::cerr << e.what() << std::endl;
+    //     }
+    // }
 
 }
 

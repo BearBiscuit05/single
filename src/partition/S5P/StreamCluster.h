@@ -26,7 +26,6 @@ public:
     void calculateDegree();
     int getEdgeNum(int cluster1, int cluster2);
     std::vector<bool> isInB;
-    std::unordered_map<int, std::unordered_map<int, int>> getInnerAndCutEdge();
     std::vector<int> getClusterList_B();
     std::vector<int> getClusterList_S();
 };

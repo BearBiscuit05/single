@@ -1,7 +1,6 @@
 #include "globalConfig.h"
 #include "common.h"
 #include "StreamCluster.h"
-#include "ClusterPackGame.h"
 #include "ClusterGameTask.h"
 #include "Partitioner.h"
 
@@ -49,7 +48,6 @@ int main() {
     std::cout << "Small clustersize:" << streamCluster.getClusterList_S().size()<< std::endl;
 
     auto ClusteringTime = std::chrono::high_resolution_clock::now();
-    // streamCluster.computeHybridInfo();
     std::cout << "End Clustering" << std::endl;
     std::cout << "partitioner config:" << configInfo.batchSize << std::endl;
     auto ClusterEndTime = std::chrono::high_resolution_clock::now();
