@@ -4,8 +4,8 @@ set -o errexit
 
 layerList=(2 2 3 3)
 fanoutList=("10,25" "10,15" "5,10,15" "10,10,10")
-#fanoutList=("10,25")
-datasetNameList=("ogb-products" "Reddit" "ogb-papers100M")
+# datasetNameList=("ogb-products" "Reddit" "ogb-papers100M")
+datasetNameList=("ogb-products" "Reddit")
 MAXLOOP=20
 modelList=("SAGE" "GCN" "GAT")
 # MODELNAME="SAGE"
@@ -110,7 +110,9 @@ monitor_memory_usage() {
 
 
 fanoutList=("25,10" "15,10" "15,10,5" "10,10,10")
+
 for MODELNAME in "${modelList[@]}"; do
+    length=${#fanoutList[@]}
     for ((i = 0; i < length; i++)); do
         fanout="${fanoutList[i]}"
         layerNUM="${layerList[i]}"
