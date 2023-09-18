@@ -3,17 +3,17 @@
 #include "globalConfig.h"
 #include <algorithm>
 
-phmap::flat_hash_map<int, uint8_t> clusterPartition = phmap::flat_hash_map<int, uint8_t>();
+//phmap::flat_hash_map<int, uint8_t> clusterPartition = phmap::flat_hash_map<int, uint8_t>();
 //std::unordered_map<int, uint8_t> clusterPartition = std::unordered_map<int, uint8_t>();
 
-//ClusterGameTask::ClusterGameTask(StreamCluster& sc,phmap::flat_hash_map<int, uint8_t>& clusterPartition)
-ClusterGameTask::ClusterGameTask(StreamCluster& sc)
+ClusterGameTask::ClusterGameTask(StreamCluster& sc,phmap::flat_hash_map<int, uint8_t>& clusterPartition)
+//ClusterGameTask::ClusterGameTask(StreamCluster& sc)
     : streamCluster(&sc){
     std::vector<int> clusterList = (graphType == "B" ? streamCluster->getClusterList_B() : streamCluster->getClusterList_S());
     int batchSize = streamCluster->config.batchSize;
     this->config = &streamCluster->config;
     this->partitionLoad.resize(this->streamCluster->config.partitionNum,0);
-    //this->clusterPartition=&clusterPartition;
+    this->clusterPartition=&clusterPartition;
 }
 
 
@@ -102,7 +102,7 @@ void ClusterGameTask::initGame() {
                 partition = i;
             }
         }
-        clusterPartition[clusterId] = partition;
+        (*clusterPartition)[clusterId] = partition;
         partitionLoad[partition] += this->streamCluster->getEdgeNum(clusterId, clusterId);
     }
 }
@@ -118,7 +118,7 @@ void ClusterGameTask::startGameDouble() {
                 partition = i;
             }
         }
-        clusterPartition[clusterId] = partition;
+        (*clusterPartition)[clusterId] = partition;
         partitionLoad[partition] += streamCluster->getEdgeNum(clusterId, clusterId);
     }
 
@@ -130,7 +130,7 @@ void ClusterGameTask::startGameDouble() {
                 partition = i;
             }
         }
-        clusterPartition[clusterId] = partition;
+        (*clusterPartition)[clusterId] = partition;
         partitionLoad[partition] += streamCluster->getEdgeNum(clusterId, clusterId);
     }
 
@@ -224,7 +224,7 @@ void ClusterGameTask::startGameDouble() {
         finish_S = true;
         for (int clusterId : this->cluster_B) {
             double minCost = std::numeric_limits<double>::max();
-            int minPartition = clusterPartition[clusterId];
+            int minPartition = (*clusterPartition)[clusterId];
             for (int j = 0; j < config->partitionNum / 2; j++) {
                 double cost = computeCost(clusterId, j, "B");
                 if (cost <= minCost) {
@@ -233,17 +233,17 @@ void ClusterGameTask::startGameDouble() {
                 }
             }
 
-            if (minPartition != clusterPartition[clusterId]) {
+            if (minPartition != (*clusterPartition)[clusterId]) {
                 finish_B = false;
                 partitionLoad[minPartition] += streamCluster->getEdgeNum(clusterId, clusterId);
-                partitionLoad[clusterPartition[clusterId]] -= streamCluster->getEdgeNum(clusterId, clusterId);
-                clusterPartition[clusterId] = minPartition;
+                partitionLoad[(*clusterPartition)[clusterId]] -= streamCluster->getEdgeNum(clusterId, clusterId);
+                (*clusterPartition)[clusterId] = minPartition;
             }
         }
 
         for (int clusterId : this->cluster_S) {
             double minCost = std::numeric_limits<double>::max();
-            int minPartition = clusterPartition[clusterId];
+            int minPartition = (*clusterPartition)[clusterId];
             for (int j = config->partitionNum - 1; j >= config->partitionNum / 2; j--) {
                 double cost = computeCost(clusterId, j, "S");
                 if (cost <= minCost) {
@@ -252,11 +252,11 @@ void ClusterGameTask::startGameDouble() {
                 }
             }
 
-            if (minPartition != clusterPartition[clusterId]) {
+            if (minPartition != (*clusterPartition)[clusterId]) {
                 finish_S = false;
                 partitionLoad[minPartition] += streamCluster->getEdgeNum(clusterId, clusterId);
-                partitionLoad[clusterPartition[clusterId]] -= streamCluster->getEdgeNum(clusterId, clusterId);
-                clusterPartition[clusterId] = minPartition;
+                partitionLoad[(*clusterPartition)[clusterId]] -= streamCluster->getEdgeNum(clusterId, clusterId);
+                (*clusterPartition)[clusterId] = minPartition;
             }
         }
         roundCnt++;
@@ -269,7 +269,7 @@ double ClusterGameTask::computeCost(int clusterId, int partition, const std::str
     if (type == "B") {
         double loadPart = 0.0;
         double edgeCutPart = cutCostValue[clusterId];
-        int old_partition = clusterPartition[clusterId];
+        int old_partition = (*clusterPartition)[clusterId];
         loadPart = partitionLoad[old_partition];
         if (partition != old_partition)
             loadPart = partitionLoad[partition] + streamCluster->getEdgeNum(clusterId, clusterId);
@@ -288,7 +288,7 @@ double ClusterGameTask::computeCost(int clusterId, int partition, const std::str
     } else if (type == "S") {
         double loadPart = 0.0;
         double edgeCutPart =  cutCostValue[clusterId];
-        int old_partition = clusterPartition[clusterId];
+        int old_partition = (*clusterPartition)[clusterId];
         loadPart = partitionLoad[old_partition];
         if (partition != old_partition)
             loadPart = partitionLoad[partition] + streamCluster->getEdgeNum(clusterId, clusterId);

@@ -1,7 +1,7 @@
 #include "Partitioner.h"
 #include "readGraph.h"
 
-extern phmap::flat_hash_map<int, uint8_t> clusterPartition;
+//extern phmap::flat_hash_map<int, uint8_t> clusterPartition;
 
 Partitioner::Partitioner() {}
 
@@ -102,7 +102,7 @@ void Partitioner::startStackelbergGame() {
 
     omp_set_num_threads(THREADNUM);
     std::cout << taskNum_B << " " << taskNum_S << std::endl;
-    ClusterGameTask cgt = ClusterGameTask(streamCluster);
+    ClusterGameTask cgt = ClusterGameTask(streamCluster,this->clusterPartition);
     std::vector<ClusterGameTask*> cgt_list(THREADNUM);
     // for (int i = 0 ; i < THREADNUM ; i++) {
     //     ClusterGameTask cgt = ClusterGameTask(streamCluster);
