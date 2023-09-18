@@ -1,18 +1,5 @@
-#include <iostream>
-#include <fstream>
-#include <sstream>
-#include <cstdio>
-#include <cstdlib>
-#include <cstring>
-#include <vector>
-#include <set>
-#include <utility>
-#include <sys/mman.h>
-#include <sys/stat.h>
-#include <unistd.h>
-#include <cstdint>
-#include <sys/types.h>
-#include <fcntl.h>
+
+#include "common.h"
 class ReadEngine {
 public:
     std::string graphPath;

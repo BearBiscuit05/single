@@ -1,17 +1,11 @@
 #ifndef PARTITIONER_H
 #define PARTITIONER_H
-#include <vector>
-#include <unordered_map>
+
 #include "StreamCluster.h"
 #include "globalConfig.h"
 #include "ClusterGameTask.h"
-#include <iostream>
-#include <vector>
-#include <unordered_map>
-#include <algorithm>
-#include <cmath>
-#include <thread>
-#include <future>
+#include "common.h"
+
 // #include "CThreadPool/src/CThreadPool.h"
 
 class Partitioner {

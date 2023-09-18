@@ -1,10 +1,8 @@
 #ifndef STREAM_CLUSTER_H
 #define STREAM_CLUSTER_H
-#include <vector>
-#include <unordered_map>
+
 #include "globalConfig.h"
-#include <stdexcept>
-#include <limits>
+#include "common.h"
 class StreamCluster {
 public:
     std::vector<int> cluster_S;     

@@ -7,6 +7,7 @@ find_package(Threads REQUIRED)
 
 set(EXECUTABLE_OUTPUT_PATH "./bin/")
 
+include_directories("/home/bear/workspace/singleGNN/3rdparty/parallel-hashmap")
 # add_subdirectory(CThreadPool)
 # 添加可执行文件 main.cpp f1.cpp f2.cpp f3.cpp
 

@@ -1,13 +1,7 @@
 #ifndef GLOBALCONFIG_H
 #define GLOBALCONFIG_H
 
-#include <iostream>
-#include <fstream>
-#include <sstream>
-#include <string>
-#include <vector>
-#include <unordered_map>
-
+#include "common.h"
 class GlobalConfig {
 private:
     std::unordered_map<std::string, std::string> properties;

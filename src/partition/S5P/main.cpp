@@ -1,12 +1,5 @@
 #include "globalConfig.h"
-#include <chrono>
-#include <iostream>
-#include <fstream>
-#include <vector>
-#include <unordered_map>
-#include <thread>
-#include <future>
-#include <chrono>
+#include "common.h"
 #include "StreamCluster.h"
 #include "ClusterPackGame.h"
 #include "ClusterGameTask.h"
@@ -28,7 +21,7 @@ void printParaInfo(GlobalConfig& configInfo) {
 }
 
 using namespace std;
-std::string inputGraphPath = "/home/bear/workspace/singleGNN/spec/S5P/edge.bin";
+std::string inputGraphPath = "/home/bear/workspace/singleGNN/src/partition/S5P/edge.bin";
 
 int main() {
     GlobalConfig configInfo("./project.properties");
