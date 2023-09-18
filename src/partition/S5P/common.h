@@ -27,4 +27,4 @@
 #include <limits>
 #include "omp.h"
 #include <parallel_hashmap/phmap.h>
-# define THREADNUM 4
+# define THREADNUM 8

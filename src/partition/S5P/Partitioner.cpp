@@ -115,41 +115,41 @@ void Partitioner::startStackelbergGame() {
 
     omp_set_num_threads(THREADNUM);
     std::cout << taskNum_B << " " << taskNum_S << std::endl;
-    ClusterGameTask cgt = ClusterGameTask(streamCluster,this->clusterPartition);
+    // ClusterGameTask cgt = ClusterGameTask(streamCluster,this->clusterPartition);
     std::vector<ClusterGameTask*> cgt_list(THREADNUM);
-    // for (int i = 0 ; i < THREADNUM ; i++) {
-    //     ClusterGameTask cgt = ClusterGameTask(streamCluster,this->clusterPartition);
-    //     cgt_list[i] = &cgt;
-    // }
+    for (int i = 0 ; i < THREADNUM ; i++) {
+        ClusterGameTask cgt = ClusterGameTask(streamCluster,this->clusterPartition);
+        cgt_list[i] = &cgt;
+    }
 
-//#pragma omp parallel for
+#pragma omp parallel for
     for (int i = 0; i < minTaskNUM; i++) {
-        // int ompid = omp_get_thread_num();
-        // cgt_list[ompid]->resize("hybrid",i);
-        // cgt_list[ompid]->call();
-        cgt.resize("hybrid",i);
-        cgt.call();
+        int ompid = omp_get_thread_num();
+        cgt_list[ompid]->resize("hybrid",i);
+        cgt_list[ompid]->call();
+        // cgt.resize("hybrid",i);
+        // cgt.call();
     }
 
 
  
     if (taskNum_B > taskNum_S) {
-//#pragma omp parallel for  
+#pragma omp parallel for  
         for (int i = 0 ; i < leftTaskNUM; ++i) {
-            // int ompid = omp_get_thread_num();
-            // cgt_list[ompid]->resize("B",i+minTaskNUM);
-            // cgt_list[ompid]->call();
-            cgt.resize("B",i+minTaskNUM);
-            cgt.call();
+            int ompid = omp_get_thread_num();
+            cgt_list[ompid]->resize("B",i+minTaskNUM);
+            cgt_list[ompid]->call();
+            // cgt.resize("B",i+minTaskNUM);
+            // cgt.call();
         }
     } else {
-//#pragma omp parallel for  
+#pragma omp parallel for  
         for (int i = 0 ; i < leftTaskNUM; ++i) {
-            // int ompid = omp_get_thread_num();
-            // cgt_list[ompid]->resize("S",i+minTaskNUM);
-            // cgt_list[ompid]->call();
-            cgt.resize("S",i+minTaskNUM);
-            cgt.call();
+            int ompid = omp_get_thread_num();
+            cgt_list[ompid]->resize("S",i+minTaskNUM);
+            cgt_list[ompid]->call();
+            // cgt.resize("S",i+minTaskNUM);
+            // cgt.call();
         }
     }
 
