@@ -47,8 +47,8 @@ def test(model,evaluator,data,subgraph_loader,split_idx):
 def run(args, dataset,split_idx=None):
     loopList = [0,10,20,30,50,100,150,200]
     data = dataset[0]
-    #data = data.to('cuda:0', 'x', 'y')  # Move to device for faster feature fetch.
-    data = data.to('cuda:0', 'y')
+    data = data.to('cuda:0', 'x', 'y')  # Move to device for faster feature fetch.
+    # data = data.to('cuda:0', 'y')
     if args.dataset == 'Reddit':
         train_idx = data.train_mask.nonzero(as_tuple=False).view(-1)
     elif args.dataset == 'ogb-products':
@@ -57,11 +57,19 @@ def run(args, dataset,split_idx=None):
         test_idx = split_idx['test']
 
     kwargs = dict(batch_size=1024, num_workers=1, persistent_workers=True)
-    train_loader = NeighborLoader(data, input_nodes=train_idx,
-                                  num_neighbors=args.fanout, shuffle=True,
-                                  drop_last=True, **kwargs)
+    # train_loader = NeighborLoader(data, input_nodes=train_idx,
+    #                               num_neighbors=args.fanout, shuffle=True,
+    #                               drop_last=True, **kwargs)
 
-
+    train_loader = NeighborLoader(
+        data,
+        input_nodes=train_idx,
+        num_neighbors=args.fanout,
+        batch_size=1024,
+        shuffle=True,
+        num_workers=12,
+        persistent_workers=True,
+    )
     subgraph_loader = NeighborLoader(copy.copy(data), num_neighbors=[-1],
                                         shuffle=False, **kwargs)
     del subgraph_loader.data.x, subgraph_loader.data.y
@@ -98,7 +106,7 @@ def run(args, dataset,split_idx=None):
             for it, batch in enumerate(train_loader):        
                 optimizer.zero_grad()    
                 out = model(batch.x.to('cuda:0'), batch.edge_index.to('cuda:0'))[:batch.batch_size]
-                loss = F.cross_entropy(out, batch.y[:batch.batch_size].squeeze())
+                loss = F.cross_entropy(out, batch.y[:batch.batch_size].squeeze().to('cuda:0'))
                 loss.backward()
                 optimizer.step()
                 total_loss += loss.item()
@@ -107,21 +115,21 @@ def run(args, dataset,split_idx=None):
             print("| Epoch {:05d} | Loss {:.4f} | Time {:.3f}s | Count {} |"
               .format(basicLoop+epoch, total_loss / (it+1), trainTime, count))
 
-            if (epoch+1) in loopList :  # We evaluate on a single GPU for now
-                if args.dataset == 'Reddit':
-                    model.eval()
-                    with torch.no_grad():
-                        out = model.inference(data.x, "cuda:0", subgraph_loader)
-                    res = out.argmax(dim=-1) == data.y.to(out.device)
-                    acc1 = int(res[data.train_mask].sum()) / int(data.train_mask.sum())
-                    acc2 = int(res[data.val_mask].sum()) / int(data.val_mask.sum())
-                    acc3 = int(res[data.test_mask].sum()) / int(data.test_mask.sum())
-                    print(f'Train: {acc1:.4f}, Val: {acc2:.4f}, Test: {acc3:.4f}')
-                elif args.dataset == 'ogb-products':
-                    evaluator = Evaluator(name='ogbn-products')
-                    train_acc, val_acc, test_acc = test(model,evaluator,data,subgraph_loader,split_idx)
-                    print(f'Train: {train_acc:.4f}, Val: {val_acc:.4f}, '
-                                f'Test: {test_acc:.4f}')
+            # if (epoch+1) in loopList :  # We evaluate on a single GPU for now
+            #     if args.dataset == 'Reddit':
+            #         model.eval()
+            #         with torch.no_grad():
+            #             out = model.inference(data.x, "cuda:0", subgraph_loader)
+            #         res = out.argmax(dim=-1) == data.y.to(out.device)
+            #         acc1 = int(res[data.train_mask].sum()) / int(data.train_mask.sum())
+            #         acc2 = int(res[data.val_mask].sum()) / int(data.val_mask.sum())
+            #         acc3 = int(res[data.test_mask].sum()) / int(data.test_mask.sum())
+            #         print(f'Train: {acc1:.4f}, Val: {acc2:.4f}, Test: {acc3:.4f}')
+            #     elif args.dataset == 'ogb-products':
+            #         evaluator = Evaluator(name='ogbn-products')
+            #         train_acc, val_acc, test_acc = test(model,evaluator,data,subgraph_loader,split_idx)
+            #         print(f'Train: {train_acc:.4f}, Val: {val_acc:.4f}, '
+            #                     f'Test: {test_acc:.4f}')
 
 
 if __name__ == '__main__':
@@ -129,7 +137,7 @@ if __name__ == '__main__':
     parser.add_argument('--fanout', type=ast.literal_eval, default=[25, 10], help='Fanout value')
     parser.add_argument('--layers', type=int, default=2, help='Number of layers')
     parser.add_argument('--dataset', type=str, default='ogb-products', help='Dataset name')
-    parser.add_argument('--maxloop', type=int, default=20, help='max loop number')
+    parser.add_argument('--maxloop', type=int, default=10, help='max loop number')
     parser.add_argument('--model', type=str, default="SAGE", help='train model')
 
     args = parser.parse_args()
