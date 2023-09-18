@@ -20,11 +20,12 @@ public:
     std::vector<double> partitionLoad;
     std::unordered_map<int, int> cutCostValue;
     std::unordered_map<int, std::unordered_set<int>> clusterNeighbours;
-    phmap::flat_hash_map<int, uint8_t>* clusterPartition;
-
+    //phmap::flat_hash_map<int, uint8_t>* clusterPartition;
+    //std::unordered_map<int, uint8_t>* clusterPartition;
+    std::vector<int>* clusterPartition;
     ClusterGameTask() {};
     // ClusterGameTask(StreamCluster& sc);
-    ClusterGameTask(StreamCluster& sc,phmap::flat_hash_map<int, uint8_t>& clusterPartition);
+    ClusterGameTask(StreamCluster& sc,std::vector<int>& clusterPartition);
     ClusterGameTask(std::string graphType, int taskId, StreamCluster& streamCluster);
     ClusterGameTask(std::string graphType, StreamCluster& streamCluster, int taskIds);
     void call();

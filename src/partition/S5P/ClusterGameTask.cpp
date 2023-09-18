@@ -6,7 +6,7 @@
 //phmap::flat_hash_map<int, uint8_t> clusterPartition = phmap::flat_hash_map<int, uint8_t>();
 //std::unordered_map<int, uint8_t> clusterPartition = std::unordered_map<int, uint8_t>();
 
-ClusterGameTask::ClusterGameTask(StreamCluster& sc,phmap::flat_hash_map<int, uint8_t>& clusterPartition)
+ClusterGameTask::ClusterGameTask(StreamCluster& sc,std::vector<int>& clusterPartition)
 //ClusterGameTask::ClusterGameTask(StreamCluster& sc)
     : streamCluster(&sc){
     std::vector<int> clusterList = (graphType == "B" ? streamCluster->getClusterList_B() : streamCluster->getClusterList_S());

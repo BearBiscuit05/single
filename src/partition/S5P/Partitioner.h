@@ -14,12 +14,11 @@ public:
     int gameRoundCnt;
     std::vector<int> partitionLoad;
     std::vector<std::vector<bool>> v2p; 
-    phmap::flat_hash_map<int, uint8_t> clusterPartition;
+    std::vector<int> clusterPartition;
     GlobalConfig config;
     Partitioner();
     Partitioner(StreamCluster streamCluster,GlobalConfig config);
     void performStep();
-    std::unordered_map<int, int> getClusterPartition();
     double getReplicateFactor();
     double getLoadBalance();
     void startStackelbergGame();

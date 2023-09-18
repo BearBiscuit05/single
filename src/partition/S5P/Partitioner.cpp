@@ -1,7 +1,6 @@
 #include "Partitioner.h"
 #include "readGraph.h"
 
-//extern phmap::flat_hash_map<int, uint8_t> clusterPartition;
 
 Partitioner::Partitioner() {}
 
@@ -11,6 +10,7 @@ Partitioner::Partitioner(StreamCluster streamCluster, GlobalConfig config)
     partitionLoad.resize(config.partitionNum);
     std::cout << config.vCount << std::endl;
     v2p.resize(config.vCount, std::vector<bool>(config.partitionNum));
+    clusterPartition.resize(2*config.vCount, 0);
    }
 
 void Partitioner::performStep() {
@@ -22,9 +22,12 @@ void Partitioner::performStep() {
         int src = edge.first;
         int dest = edge.second;
         if (this->streamCluster.isInB[tgEngine.readPtr/2]) {
+            // 500ms
             int srcPartition = clusterPartition[streamCluster.cluster_B[src]];
             int destPartition = clusterPartition[streamCluster.cluster_B[dest]];
             int edgePartition = -1;
+
+            // 100ms
             if (partitionLoad[srcPartition] > maxLoad && partitionLoad[destPartition] > maxLoad) {
                 for (int i = 0; i < config.partitionNum; i++) {
                     if (partitionLoad[i] <= maxLoad) {
@@ -41,13 +44,19 @@ void Partitioner::performStep() {
                 edgePartition = srcPartition;
                 destPartition = srcPartition;
             }
+            // 600ms
             partitionLoad[edgePartition]++;
+            // 300ms
             v2p[src][srcPartition] = 1;
+            // 450ms
             v2p[dest][destPartition] = 1;
         } else {
+            // 500ms
             int srcPartition = clusterPartition[streamCluster.cluster_S[src]];
             int destPartition = clusterPartition[streamCluster.cluster_S[dest]];
             int edgePartition = -1;
+            
+            // 100ms
             if (partitionLoad[srcPartition] > maxLoad && partitionLoad[destPartition] > maxLoad) {
                 for (int i = config.partitionNum - 1; i >= 0; i--) {
                     if (partitionLoad[i] <= maxLoad) {
@@ -64,8 +73,12 @@ void Partitioner::performStep() {
                 edgePartition = srcPartition;
                 destPartition = srcPartition;
             }
+
+            // 600ms
             partitionLoad[edgePartition]++;
+            // 300ms
             v2p[src][srcPartition] = 1;
+            // 600ms
             v2p[dest][destPartition] = 1;            
         }
     }
