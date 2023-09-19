@@ -171,9 +171,14 @@ if __name__ == '__main__':
             acc = layerwise_infer(device, g, test_idx, model, batch_size=4096) 
         elif args.dataset == 'ogb-papers100M':
             model.eval()
-            sampler_test = NeighborSampler([100,100],  # fanout for [layer-0, layer-1, layer-2]
-                                prefetch_node_feats=['feat'],
-                                prefetch_labels=['label'])
+            if args.layers == 2:
+                sampler_test = NeighborSampler([100,100],  # fanout for [layer-0, layer-1, layer-2]
+                                    prefetch_node_feats=['feat'],
+                                    prefetch_labels=['label'])
+            else:
+                sampler_test = NeighborSampler([20,50,50],  # fanout for [layer-0, layer-1, layer-2]
+                                    prefetch_node_feats=['feat'],
+                                    prefetch_labels=['label'])
             test_dataloader = DataLoader(g, dataset.test_idx, sampler_test, device=device,
                                     batch_size=4096, shuffle=True,
                                     drop_last=False, num_workers=0,
