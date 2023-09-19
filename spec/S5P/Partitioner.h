@@ -17,19 +17,15 @@
 
 class Partitioner {
 public:
-    Graph* graph;
-    StreamCluster streamCluster_S;
-    StreamCluster streamCluster;
-    StreamCluster streamCluster_B;
+    StreamCluster* streamCluster;
     int gameRoundCnt;
     std::vector<int> partitionLoad;
-    std::vector<int> degree;
     std::vector<std::vector<char>> v2p; 
-    std::unordered_map<int, int> clusterPartition;
+    std::vector<int> clusterPartition;
     GlobalConfig config;
 
     Partitioner();
-    Partitioner(StreamCluster streamCluster,GlobalConfig config);
+    Partitioner(StreamCluster& streamCluster,GlobalConfig config);
     void performStep();
     int getGameRoundCnt();
     std::unordered_map<int, int> getClusterPartition();

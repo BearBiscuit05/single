@@ -32,9 +32,11 @@ using namespace std;
 std::string inputGraphPath = "/home/bear/workspace/singleGNN/spec/S5P/edge.bin";
 
 int main() {
+    omp_set_num_threads(THREADNUM);
     GlobalConfig configInfo("./project.properties");
     configInfo.inputGraphPath = inputGraphPath;
-    Graph graph(configInfo);
+
+
     auto start = std::chrono::high_resolution_clock::now();
     std::cout << "---------------start-------------" << std::endl;
     printParaInfo(configInfo);
@@ -47,7 +49,6 @@ int main() {
 
     std::cout << "Start Time" << std::endl;
     auto startTime = std::chrono::high_resolution_clock::now();
-    
     auto ClusterStartTime = std::chrono::high_resolution_clock::now();
     StreamCluster streamCluster(graph, configInfo);
 
@@ -71,11 +72,14 @@ int main() {
     duration = std::chrono::duration_cast<std::chrono::milliseconds>(ClusterEndTime - ClusteringTime);
     std::cout << "ComputeHybridInfo time: " << duration.count() << " ms" << std::endl;
     
-    
-    Partitioner partitioner(streamCluster,configInfo);
-    std::cout << "partitioner config:" << partitioner.config.batchSize << std::endl;
+    // -------------------partition-----------------------
     auto gameStartTime = std::chrono::high_resolution_clock::now();
-    std::cout << "start Game" << std::endl;
+    std::cout << "[===start S5V Game===]" << std::endl;
+    Partitioner partitioner(streamCluster, configInfo);
+    auto PartitionerInitEndTime = std::chrono::high_resolution_clock::now();
+    duration = std::chrono::duration_cast<std::chrono::milliseconds>(PartitionerInitEndTime - gameStartTime);
+    std::cout << "Partitioner init time: " << duration.count() << " ms" << std::endl;
+    
     partitioner.startStackelbergGame();
     auto gameEndTime = std::chrono::high_resolution_clock::now();
     std::cout << "End Game" << std::endl;
