@@ -109,14 +109,11 @@ class CustomDataset(Dataset):
         return self.NodeLen
     
     def __getitem__(self, index):
-        # 批数据预取 缓存1个
         if index % self.preRating == 0:
-            # 调用预取函数
             self.sampleFlagQueue.put(self.executor.submit(self.preGraphBatch))
         
         # 获取采样数据
         if index % self.batchsize == 0:
-            # 调用实际数据
             if self.graphPipe.qsize() > 0:
                 self.sampleFlagQueue.get()
                 cacheData = self.graphPipe.get()
@@ -159,7 +156,6 @@ class CustomDataset(Dataset):
         self.mode = config['mode']
         self.classes = config['classes']
         self.epochInterval = config['epochInterval']
-        #print(formatted_data)
 
     def custom_sort(self):
         idMap={}
