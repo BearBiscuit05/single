@@ -158,7 +158,7 @@ if __name__ == '__main__':
         evaluator = Evaluator(name='ogbn-products')
         run(args, dataset,split_idx)
     elif args.dataset == 'ogb-papers100M':
-        root = osp.join(osp.dirname(osp.realpath(__file__)), '/home/bear/workspace/singleGNN/data/', 'dataset')
+        root = osp.join(osp.dirname(osp.realpath(__file__)), '/raid/bear/', 'ogb_dataset')
         print("root:",root)
         dataset = PygNodePropPredDataset('ogbn-papers100M', root)
         split_idx = dataset.get_idx_split()
