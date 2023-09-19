@@ -4,7 +4,11 @@
 #include <fstream>
 #include "readGraph.h"
 
-
+struct Triplet {
+    int src;
+    int dst;
+    char flag;
+};
 
 
 StreamCluster::StreamCluster() {}
@@ -31,7 +35,18 @@ void StreamCluster::startStreamCluster() {
     std::string line;
     std::pair<int,int> edge(-1,-1);
     this->isInB.resize(config.eCount,false);
-    TGEngine tgEngine(inputGraphPath,NODENUM,EDGENUM);  
+    TGEngine tgEngine(inputGraphPath,NODENUM,EDGENUM);
+
+    Triplet tmp = {-1,-1,0};
+    std::vector<Triplet> cacheData(EDGENUM,tmp);
+    int cachePtr = 0;
+    std::vector<std::unordered_map<std::string , int>> maplist;
+    for (int i = 0 ; i < THREADNUM ; i++) {
+        std::unordered_map<std::string , int> mapTmp;
+        maplist.emplace_back(mapTmp);
+    }
+    
+    
     while (-1 != tgEngine.readline(edge)) {
         int src = edge.first;
         int dest = edge.second;
@@ -58,9 +73,10 @@ void StreamCluster::startStreamCluster() {
                 cluster_B[dest] = clusterID_B++;
                 volume_B[cluster_B[dest]] = degree[dest];
             }
-            
-            this->innerAndCutEdge[std::to_string(cluster_B[src]) + "," + std::to_string(cluster_B[dest])] += 1;
-            
+            cacheData[cachePtr].src = src;
+            cacheData[cachePtr++].dst = dest;
+            //this->innerAndCutEdge[std::to_string(cluster_B[src]) + "," + std::to_string(cluster_B[dest])] += 1;
+            //cachePtr++
         } else {
             if (cluster_S[src] == -1) 
                 cluster_S[src] = clusterID_S++;
@@ -86,16 +102,50 @@ void StreamCluster::startStreamCluster() {
                 volume_S[cluster_S[minVid]] -= degree_S[minVid];
                 cluster_S[minVid] = cluster_S[maxVid];
             }    
-            this->innerAndCutEdge[std::to_string(cluster_S[src] + config.vCount) + "," + std::to_string(cluster_S[dest] + config.vCount)] += 1;
+            cacheData[cachePtr].src = src;
+            cacheData[cachePtr].dst = dest;
+            cacheData[cachePtr++].flag = 1;
+            // flag = 1
+            //this->innerAndCutEdge[std::to_string(cluster_S[src] + config.vCount) + "," + std::to_string(cluster_S[dest] + config.vCount)] += 1;
             if (cluster_B[src] !=-1) {
-                this->innerAndCutEdge[std::to_string(cluster_B[dest]) + "," + std::to_string(cluster_S[src] + config.vCount)] += 1;
+                //this->innerAndCutEdge[std::to_string(cluster_B[dest]) + "," + std::to_string(cluster_S[src] + config.vCount)] += 1;
+                cacheData[cachePtr].src = src;
+                cacheData[cachePtr].dst = dest;
+                cacheData[cachePtr++].flag = 2;
             }
             if (cluster_B[dest] != -1) {
-                this->innerAndCutEdge[std::to_string(cluster_B[src]) + "," + std::to_string(cluster_S[dest] + config.vCount)] += 1;
+                //this->innerAndCutEdge[std::to_string(cluster_B[src]) + "," + std::to_string(cluster_S[dest] + config.vCount)] += 1;
+                cacheData[cachePtr].src = src;
+                cacheData[cachePtr].dst = dest;
+                cacheData[cachePtr++].flag = 3;
             }   
         }
     }
-    // std::cout << 666 << std::endl;
+
+#pragma omp parallel for
+    for (int i = 0 ;  i < EDGENUM ; i++) {
+        int flag = cacheData[i].flag;
+        int tid = omp_get_thread_num();
+        if(flag == 0) {
+            maplist[tid][std::to_string(cluster_B[cacheData[i].src]) + "," + std::to_string(cluster_B[cacheData[i].dst])] += 1;
+        } else if (flag == 1) {
+            maplist[tid][std::to_string(cluster_S[cacheData[i].src] + config.vCount) + "," + std::to_string(cluster_S[cacheData[i].dst] + config.vCount)] += 1;
+        } else if (flag == 2) {
+            maplist[tid][std::to_string(cluster_S[cacheData[i].src] + config.vCount) + "," + std::to_string(cluster_B[cacheData[i].dst])] += 1;
+        } else {
+            maplist[tid][std::to_string(cluster_B[cacheData[i].src]) + "," + std::to_string(cluster_S[cacheData[i].dst] + + config.vCount)] += 1;
+        }
+    }
+
+    for (int i = 1 ;  i < THREADNUM ; i++) {
+        for(auto& m : maplist[i]) {
+            maplist[0][m.first] += m.second;
+        }
+    }
+
+    this->innerAndCutEdge = std::move(maplist[0]);
+    maplist = std::vector<std::unordered_map<std::string , int>>();
+
     for (int i = 0; i < volume_B.size(); ++i) {
         if (volume_B[i] != 0)
             clusterList_B.push_back(i);

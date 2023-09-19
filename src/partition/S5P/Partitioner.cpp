@@ -18,6 +18,7 @@ void Partitioner::performStep() {
     std::string inputGraphPath = config.inputGraphPath;
     std::pair<int,int> edge(-1,-1);
     TGEngine tgEngine(inputGraphPath,NODENUM,EDGENUM);  
+    
     while (-1 != tgEngine.readline(edge)) {
         int src = edge.first;
         int dest = edge.second;
@@ -113,7 +114,7 @@ void Partitioner::startStackelbergGame() {
     int minTaskNUM = std::min(taskNum_B,taskNum_S);
     int leftTaskNUM = std::abs(taskNum_B - taskNum_S);
 
-    omp_set_num_threads(THREADNUM);
+    
     std::cout << taskNum_B << " " << taskNum_S << std::endl;
     // ClusterGameTask cgt = ClusterGameTask(streamCluster,this->clusterPartition);
     std::vector<ClusterGameTask*> cgt_list(THREADNUM);

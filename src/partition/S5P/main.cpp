@@ -23,6 +23,7 @@ using namespace std;
 std::string inputGraphPath = "/home/bear/workspace/singleGNN/src/partition/S5P/com.bin";
 
 int main() {
+    omp_set_num_threads(THREADNUM);
     GlobalConfig configInfo("./project.properties");
     configInfo.inputGraphPath = inputGraphPath;
     auto start = std::chrono::high_resolution_clock::now();
