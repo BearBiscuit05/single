@@ -1,11 +1,22 @@
+
+#pragma once
+
+#include <unordered_map>
+#include <unordered_set>
+#include <vector>
+#include <list>
+#include <string>
 #include <iostream>
 #include <fstream>
 #include <sstream>
+#include <chrono>
+#include <thread>
+#include <future>
+#include <algorithm>
+#include <cmath>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
-#include <vector>
-#include <set>
 #include <utility>
 #include <sys/mman.h>
 #include <sys/stat.h>
@@ -13,6 +24,10 @@
 #include <cstdint>
 #include <sys/types.h>
 #include <fcntl.h>
+#include <stdexcept>
+#include <limits>
+#include "omp.h"
+
 class ReadEngine {
 public:
     std::string graphPath;
@@ -45,6 +60,7 @@ public:
     void unmapBlock(int64_t* addr, off_t size);
     void readTrainIdx(std::vector<int64_t>& ids);
     int readlines(std::vector<std::pair<int64_t, int64_t>> &edges,std::vector<int64_t>& eids,int& edgesNUM);
+    
 };
 
 
@@ -75,4 +91,5 @@ public:
     void convert2bin(std::string raw_graphPath,std::string new_graphPath,char delimiter,bool saveDegree,std::string degreePath);
     void readDegree(std::string degreePath,std::vector<int>& degreeList);
     void writeVec(std::string savePath,std::vector<int>& vec);
+    void convert_edgelist(std::string inputfile,std::string outputfile);
 };

@@ -136,7 +136,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='pyg gcn program')
     parser.add_argument('--fanout', type=ast.literal_eval, default=[25, 10], help='Fanout value')
     parser.add_argument('--layers', type=int, default=2, help='Number of layers')
-    parser.add_argument('--dataset', type=str, default='ogb-products', help='Dataset name')
+    parser.add_argument('--dataset', type=str, default='ogb-papers100M', help='Dataset name')
     parser.add_argument('--maxloop', type=int, default=10, help='max loop number')
     parser.add_argument('--model', type=str, default="SAGE", help='train model')
 
@@ -157,5 +157,13 @@ if __name__ == '__main__':
         split_idx = dataset.get_idx_split()
         evaluator = Evaluator(name='ogbn-products')
         run(args, dataset,split_idx)
-    else:
-        raise ValueError(f"Unsupported dataset: {args.dataset}")
+    elif args.dataset == 'ogb-papers100M':
+        root = osp.join(osp.dirname(osp.realpath(__file__)), '/raid/bear/', 'ogb_dataset')
+        print("root:",root)
+        dataset = PygNodePropPredDataset('ogbn-papers100M', root)
+        split_idx = dataset.get_idx_split()
+        print("加载完毕")
+        # evaluator = Evaluator(name='ogbn-papers100M')
+        # run(args, dataset,split_idx)
+    # else:
+    #     raise ValueError(f"Unsupported dataset: {args.dataset}")

@@ -1,18 +1,5 @@
-#include <iostream>
-#include <fstream>
-#include <sstream>
-#include <cstdio>
-#include <cstdlib>
-#include <cstring>
-#include <vector>
-#include <set>
-#include <utility>
-#include <sys/mman.h>
-#include <sys/stat.h>
-#include <unistd.h>
-#include <cstdint>
-#include <sys/types.h>
-#include <fcntl.h>
+
+#include "common.h"
 class ReadEngine {
 public:
     std::string graphPath;
@@ -75,4 +62,5 @@ public:
     void convert2bin(std::string raw_graphPath,std::string new_graphPath,char delimiter,bool saveDegree,std::string degreePath);
     void readDegree(std::string degreePath,std::vector<int>& degreeList);
     void writeVec(std::string savePath,std::vector<int>& vec);
+    void convert_edgelist(std::string inputfile,std::string outputfile);
 };

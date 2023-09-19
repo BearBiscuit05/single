@@ -3,5 +3,5 @@ mkdir -p build
 cd build
 cmake ..
 make
-# cd ..
-#  ./build/bin/main
+#cd ..
+#./build/bin/main
