@@ -16,6 +16,84 @@ ClusterGameTask::ClusterGameTask(StreamCluster& sc,std::vector<int>& clusterPart
     this->clusterPartition=&clusterPartition;
 }
 
+void ClusterGameTask::startGameSingle() {
+    int partition = 0;
+    for (int clusterId : this->cluster) {
+        double minLoad = this->config->eCount;
+        for (int i = 0; i < this->config->partitionNum; i++) {
+            if (partitionLoad[i] < minLoad) {
+                minLoad = partitionLoad[i];
+                partition = i;
+            }
+        }
+        (*clusterPartition)[clusterId] = partition;
+        partitionLoad[partition] += this->streamCluster->getEdgeNum(clusterId, clusterId);
+    }
+    double sizePart = 0.0, cutPart = 0.0;
+    for (int cluster1 : this->cluster) {
+        sizePart += streamCluster->getEdgeNum(cluster1, cluster1);
+        for (int cluster2 : this->cluster) {
+            int innerCut = 0;
+            if (cluster1 != cluster2) {
+                innerCut = streamCluster->getEdgeNum(cluster1, cluster2);
+                if (innerCut != 0) {
+                    auto it = clusterNeighbours.find(cluster1);
+                    if (it == clusterNeighbours.end())
+                        clusterNeighbours[cluster1] = std::unordered_set<int>();
+                    clusterNeighbours[cluster1].insert(cluster2);
+                }
+                cutPart += innerCut;
+            }
+            auto it = cutCostValue.find(cluster1);
+            if (it == cutCostValue.end())
+                cutCostValue[cluster1] = 0;
+            cutCostValue[cluster1] += innerCut;
+        }
+
+        for (int cluster2 : this->cluster_S) {
+            int innerCut = 0;
+            if (cluster1 != cluster2) {
+                innerCut = streamCluster->getEdgeNum(cluster1, cluster2);
+                if (innerCut != 0) {
+                    if(clusterNeighbours.find(cluster1) == clusterNeighbours.end()) {
+                        clusterNeighbours[cluster1] = std::unordered_set<int>();
+                    }
+                    clusterNeighbours[cluster1].insert(cluster2);
+                }
+            }
+            if(cutCostValue.find(cluster1) == cutCostValue.end()) {
+                cutCostValue[cluster1]  = 0;
+            }
+            cutCostValue[cluster1] += innerCut;
+        }
+    }
+    this->beta = (double)config->eCount  / (sizePart * sizePart + 1.0) * (double)config->eCount * ((double)cutPart + (double)config->vCount);
+    bool finish = false;
+    while (true) {
+        finish = true;
+        for (int clusterId : this->cluster) {
+            double minCost = std::numeric_limits<double>::max();
+            int minPartition = (*clusterPartition)[clusterId];
+            for (int j = 0; j < config->partitionNum; j++) {
+                double cost = computeCost(clusterId, j, "BS");
+                if (cost <= minCost) {
+                    minCost = cost;
+                    minPartition = j;
+                }
+            }
+
+            if (minPartition != (*clusterPartition)[clusterId]) {
+                finish = false;
+                partitionLoad[minPartition] += streamCluster->getEdgeNum(clusterId, clusterId);
+                partitionLoad[(*clusterPartition)[clusterId]] -= streamCluster->getEdgeNum(clusterId, clusterId);
+                (*clusterPartition)[clusterId] = minPartition;
+            }
+        }
+        roundCnt++;
+        if (finish) {break;}
+    }
+}
+
 
 ClusterGameTask::ClusterGameTask(std::string graphType, int taskId, StreamCluster& sc)
     : graphType(graphType), streamCluster(&sc){
@@ -81,8 +159,10 @@ void ClusterGameTask::call() {
             this->startGameDouble();
         } else if (graphType == "B") {
             this->initGame();
+            //this->startGameSingle();
         } else if (graphType == "S") {
             this->initGame();
+            //this->startGameSingle();
         } else {
             std::cout << "graphType error" << std::endl;
         }

@@ -34,6 +34,7 @@ public:
     double computeCost(int clusterId, int partition, const std::string type);
     void resize_hyper(std::string graphType, int taskIds);
     void resize(std::string graphType, int taskIds);
+    void startGameSingle();
 };
 
 #endif // CLUSTER_GAME_TASK_H
