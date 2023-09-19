@@ -9,7 +9,7 @@ int main() {
     TGEngine tgEngine; 
     //char t = ''
     //tgEngine.convert2bin("/home/dzz/graphdataset/com-orkut/Dcom-orkut.ungraph.txt","edge.bin",'\t',false,"");
-    tgEngine.convert_edgelist("/raid/dzz/twitter-2010.txt","tw2010.bin");
+    tgEngine.convert_edgelist("/home/dzz/graphdataset/LJ/Dcom-lj.ungraph.txt","com.bin");
     
     return 0;
 }

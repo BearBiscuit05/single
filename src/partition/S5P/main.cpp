@@ -20,7 +20,7 @@ void printParaInfo(GlobalConfig& configInfo) {
 }
 
 using namespace std;
-std::string inputGraphPath = "/home/bear/workspace/singleGNN/src/partition/S5P/edge.bin";
+std::string inputGraphPath = "/home/bear/workspace/singleGNN/src/partition/S5P/com.bin";
 
 int main() {
     GlobalConfig configInfo("./project.properties");

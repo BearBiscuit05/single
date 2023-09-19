@@ -17,7 +17,7 @@ void Partitioner::performStep() {
     double maxLoad = static_cast<double>(config.eCount) / config.partitionNum * 1.1;
     std::string inputGraphPath = config.inputGraphPath;
     std::pair<int,int> edge(-1,-1);
-    TGEngine tgEngine(inputGraphPath,3072441,10308445);  
+    TGEngine tgEngine(inputGraphPath,NODENUM,EDGENUM);  
     while (-1 != tgEngine.readline(edge)) {
         int src = edge.first;
         int dest = edge.second;

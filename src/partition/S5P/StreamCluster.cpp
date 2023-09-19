@@ -31,7 +31,7 @@ void StreamCluster::startStreamCluster() {
     std::string line;
     std::pair<int,int> edge(-1,-1);
     this->isInB.resize(config.eCount,false);
-    TGEngine tgEngine(inputGraphPath,3072441,10308445);  
+    TGEngine tgEngine(inputGraphPath,NODENUM,EDGENUM);  
     while (-1 != tgEngine.readline(edge)) {
         int src = edge.first;
         int dest = edge.second;
@@ -115,7 +115,7 @@ void StreamCluster::computeHybridInfo() {
     /*
     std::string inputGraphPath = config.inputGraphPath;
     std::pair<int,int> edge(-1,-1);
-    TGEngine tgEngine(inputGraphPath,3072441,10308445); 
+    TGEngine tgEngine(inputGraphPath,NODENUM,EDGENUM); 
     int clusterNUM = this->getClusterList_B().size() + this->getClusterList_S().size();
     for(int i = 0 ; i < cluster_S.size() ; i++) {
         cluster_S[i] += cluster_B.size();
@@ -142,7 +142,7 @@ void StreamCluster::computeHybridInfo() {
 void StreamCluster::calculateDegree() {
     std::pair<int,int> edge(-1,-1);
     std::string inputGraphPath = config.inputGraphPath;
-    TGEngine tgEngine(inputGraphPath,3072441,10308445);  
+    TGEngine tgEngine(inputGraphPath,NODENUM,EDGENUM);  
     // std::cout << "count :"  << count << std::endl;
     while (-1 != tgEngine.readline(edge)) {
         int src = edge.first;

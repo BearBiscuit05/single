@@ -229,7 +229,7 @@ void TGEngine::convert_edgelist(std::string inputfile,std::string outputfile)
         if (s[0] == '%')
             continue; // Comment
 
-        char delims[] = " ";
+        char delims[] = "\t";
         char *t;
         t = strtok(s, delims);
         if (t == NULL) {
