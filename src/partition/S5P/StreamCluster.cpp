@@ -123,6 +123,15 @@ void StreamCluster::startStreamCluster() {
             maplist[0][m.first] += m.second;
         }
     }
+    mergeMap(maplist,cachePtr);
+    for (int i = 1 ;  i < THREADNUM ; i++) {
+        for(auto& m : maplist[i]) {
+            maplist[0][m.first] += m.second;
+        }
+    }
+
+    this->innerAndCutEdge = std::move(maplist[0]);
+    maplist = std::vector<std::unordered_map<std::string , int>>();
 
     this->innerAndCutEdge = std::move(maplist[0]);
     maplist = std::vector<std::unordered_map<std::string , int>>();
@@ -139,6 +148,24 @@ void StreamCluster::startStreamCluster() {
     }
     volume_S.clear();  
     this->config.clusterBSize = config.vCount;
+}
+
+void StreamCluster::mergeMap(std::vector<std::unordered_map<std::string , int>>& maplist,int& cachePtr) {
+#pragma omp parallel for
+    for (int i = 0 ;  i < cachePtr ; i++) {
+        int flag = this->cacheData[i].flag;
+        int tid = omp_get_thread_num();
+        if(flag == 0) {
+            maplist[tid][std::to_string(this->cluster_B[this->cacheData[i].src]) + "," + std::to_string(this->cluster_B[this->cacheData[i].dst])] += 1;
+        } else if (flag == 1) {
+            maplist[tid][std::to_string(this->cluster_S[this->cacheData[i].src] + this->config.vCount) + "," + std::to_string(this->cluster_S[this->cacheData[i].dst] + this->config.vCount)] += 1;
+        } else if (flag == 2) {
+            maplist[tid][std::to_string(this->cluster_S[this->cacheData[i].src] + this->config.vCount) + "," + std::to_string(this->cluster_B[this->cacheData[i].dst])] += 1;
+        } else {
+            maplist[tid][std::to_string(this->cluster_B[this->cacheData[i].src]) + "," + std::to_string(this->cluster_S[cacheData[i].dst] +  this->config.vCount)] += 1;
+        }
+    }
+    cachePtr = 0;
 }
 
 void StreamCluster::mergeMap(std::vector<std::unordered_map<std::string , int>>& maplist,int& cachePtr) {
