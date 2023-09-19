@@ -31,3 +31,6 @@
 build.txt
 **/*.egg-info/*.txt
 **/**_log.txt
+**/**.lst
+**/**.class
+**/**.jar

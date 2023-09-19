@@ -389,8 +389,6 @@ class CustomDataset(Dataset):
         self.cacheData[1] = self.cacheData[1][self.graphNodeNUM*2:]   # 范围
         torch.sub(self.cacheData[0] , self.graphNodeNUM,out=self.cacheData[0])
         torch.sub(self.cacheData[1] , self.graphEdgeNUM,out=self.cacheData[1])
-        #self.cacheData[0] = self.cacheData[0] - self.graphNodeNUM   # 边 nodeID
-        #self.cacheData[1] = self.cacheData[1] - self.graphEdgeNUM
         self.feats = self.feats[self.graphNodeNUM:]
         logger.debug("after move srclist len:{}".format(len(self.cacheData[0])))
         logger.debug("after move range len:{}".format(len(self.cacheData[1])))     
