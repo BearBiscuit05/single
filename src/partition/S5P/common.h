@@ -28,6 +28,6 @@
 #include "omp.h"
 #include <parallel_hashmap/phmap.h>
 # define THREADNUM 16
-# define BATCH 2048
 # define NODENUM 3997962
 # define EDGENUM 34681189
+# define BATCH 204800

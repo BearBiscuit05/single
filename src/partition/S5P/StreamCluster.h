@@ -3,6 +3,13 @@
 
 #include "globalConfig.h"
 #include "common.h"
+
+struct Triplet {
+    int src;
+    int dst;
+    char flag;
+};
+
 class StreamCluster {
 public:
     std::vector<int> cluster_S;     
@@ -28,5 +35,7 @@ public:
     std::vector<bool> isInB;
     std::vector<int> getClusterList_B();
     std::vector<int> getClusterList_S();
+    std::vector<Triplet> cacheData;
+    void mergeMap(std::vector<std::unordered_map<std::string , int>>& maplist,int& cachePtr);
 };
 #endif // STREAM_CLUSTER_H

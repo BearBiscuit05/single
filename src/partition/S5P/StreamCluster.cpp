@@ -4,12 +4,6 @@
 #include <fstream>
 #include "readGraph.h"
 
-struct Triplet {
-    int src;
-    int dst;
-    char flag;
-};
-
 
 StreamCluster::StreamCluster() {}
 
@@ -23,6 +17,8 @@ StreamCluster::StreamCluster(GlobalConfig& config)
     degree.resize(config.vCount,0);
     degree_S.resize(config.vCount,0);
     calculateDegree();
+    Triplet tmp = {-1,-1,0};
+    this->cacheData.resize(BATCH,tmp);
 }
 
 void StreamCluster::startStreamCluster() {
@@ -36,9 +32,6 @@ void StreamCluster::startStreamCluster() {
     std::pair<int,int> edge(-1,-1);
     this->isInB.resize(config.eCount,false);
     TGEngine tgEngine(inputGraphPath,NODENUM,EDGENUM);
-
-    Triplet tmp = {-1,-1,0};
-    std::vector<Triplet> cacheData(EDGENUM,tmp);
     int cachePtr = 0;
     std::vector<std::unordered_map<std::string , int>> maplist;
     for (int i = 0 ; i < THREADNUM ; i++) {
@@ -46,8 +39,11 @@ void StreamCluster::startStreamCluster() {
         maplist.emplace_back(mapTmp);
     }
     
-    
     while (-1 != tgEngine.readline(edge)) {
+        if (cachePtr + 3 >= BATCH) {
+            // std::cout << "mergeing..." << std::endl;
+            mergeMap(maplist,cachePtr);
+        }
         int src = edge.first;
         int dest = edge.second;
         if (degree[src] >= config.tao * averageDegree && degree[dest] >= config.tao * averageDegree) {
@@ -73,8 +69,8 @@ void StreamCluster::startStreamCluster() {
                 cluster_B[dest] = clusterID_B++;
                 volume_B[cluster_B[dest]] = degree[dest];
             }
-            cacheData[cachePtr].src = src;
-            cacheData[cachePtr++].dst = dest;
+            this->cacheData[cachePtr].src = src;
+            this->cacheData[cachePtr++].dst = dest;
             //this->innerAndCutEdge[std::to_string(cluster_B[src]) + "," + std::to_string(cluster_B[dest])] += 1;
             //cachePtr++
         } else {
@@ -102,41 +98,26 @@ void StreamCluster::startStreamCluster() {
                 volume_S[cluster_S[minVid]] -= degree_S[minVid];
                 cluster_S[minVid] = cluster_S[maxVid];
             }    
-            cacheData[cachePtr].src = src;
-            cacheData[cachePtr].dst = dest;
-            cacheData[cachePtr++].flag = 1;
+            this->cacheData[cachePtr].src = src;
+            this->cacheData[cachePtr].dst = dest;
+            this->cacheData[cachePtr++].flag = 1;
             // flag = 1
             //this->innerAndCutEdge[std::to_string(cluster_S[src] + config.vCount) + "," + std::to_string(cluster_S[dest] + config.vCount)] += 1;
             if (cluster_B[src] !=-1) {
                 //this->innerAndCutEdge[std::to_string(cluster_B[dest]) + "," + std::to_string(cluster_S[src] + config.vCount)] += 1;
-                cacheData[cachePtr].src = src;
-                cacheData[cachePtr].dst = dest;
-                cacheData[cachePtr++].flag = 2;
+                this->cacheData[cachePtr].src = src;
+                this->cacheData[cachePtr].dst = dest;
+                this->cacheData[cachePtr++].flag = 2;
             }
             if (cluster_B[dest] != -1) {
                 //this->innerAndCutEdge[std::to_string(cluster_B[src]) + "," + std::to_string(cluster_S[dest] + config.vCount)] += 1;
-                cacheData[cachePtr].src = src;
-                cacheData[cachePtr].dst = dest;
-                cacheData[cachePtr++].flag = 3;
+                this->cacheData[cachePtr].src = src;
+                this->cacheData[cachePtr].dst = dest;
+                this->cacheData[cachePtr++].flag = 3;
             }   
         }
     }
-
-#pragma omp parallel for
-    for (int i = 0 ;  i < EDGENUM ; i++) {
-        int flag = cacheData[i].flag;
-        int tid = omp_get_thread_num();
-        if(flag == 0) {
-            maplist[tid][std::to_string(cluster_B[cacheData[i].src]) + "," + std::to_string(cluster_B[cacheData[i].dst])] += 1;
-        } else if (flag == 1) {
-            maplist[tid][std::to_string(cluster_S[cacheData[i].src] + config.vCount) + "," + std::to_string(cluster_S[cacheData[i].dst] + config.vCount)] += 1;
-        } else if (flag == 2) {
-            maplist[tid][std::to_string(cluster_S[cacheData[i].src] + config.vCount) + "," + std::to_string(cluster_B[cacheData[i].dst])] += 1;
-        } else {
-            maplist[tid][std::to_string(cluster_B[cacheData[i].src]) + "," + std::to_string(cluster_S[cacheData[i].dst] + + config.vCount)] += 1;
-        }
-    }
-
+    mergeMap(maplist,cachePtr);
     for (int i = 1 ;  i < THREADNUM ; i++) {
         for(auto& m : maplist[i]) {
             maplist[0][m.first] += m.second;
@@ -160,6 +141,23 @@ void StreamCluster::startStreamCluster() {
     this->config.clusterBSize = config.vCount;
 }
 
+void StreamCluster::mergeMap(std::vector<std::unordered_map<std::string , int>>& maplist,int& cachePtr) {
+#pragma omp parallel for
+    for (int i = 0 ;  i < cachePtr ; i++) {
+        int flag = this->cacheData[i].flag;
+        int tid = omp_get_thread_num();
+        if(flag == 0) {
+            maplist[tid][std::to_string(this->cluster_B[this->cacheData[i].src]) + "," + std::to_string(this->cluster_B[this->cacheData[i].dst])] += 1;
+        } else if (flag == 1) {
+            maplist[tid][std::to_string(this->cluster_S[this->cacheData[i].src] + this->config.vCount) + "," + std::to_string(this->cluster_S[this->cacheData[i].dst] + this->config.vCount)] += 1;
+        } else if (flag == 2) {
+            maplist[tid][std::to_string(this->cluster_S[this->cacheData[i].src] + this->config.vCount) + "," + std::to_string(this->cluster_B[this->cacheData[i].dst])] += 1;
+        } else {
+            maplist[tid][std::to_string(this->cluster_B[this->cacheData[i].src]) + "," + std::to_string(this->cluster_S[cacheData[i].dst] +  this->config.vCount)] += 1;
+        }
+    }
+    cachePtr = 0;
+}
 
 void StreamCluster::computeHybridInfo() {
     /*
