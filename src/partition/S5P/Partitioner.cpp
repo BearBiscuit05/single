@@ -1,5 +1,4 @@
 #include "Partitioner.h"
-#include "readGraph.h"
 
 
 Partitioner::Partitioner() {}

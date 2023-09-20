@@ -1,10 +1,8 @@
 #ifndef PARTITIONER_H
 #define PARTITIONER_H
 
-#include "StreamCluster.h"
-#include "globalConfig.h"
+
 #include "ClusterGameTask.h"
-#include "common.h"
 
 // #include "CThreadPool/src/CThreadPool.h"
 

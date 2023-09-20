@@ -92,4 +92,5 @@ public:
     void readDegree(std::string degreePath,std::vector<int>& degreeList);
     void writeVec(std::string savePath,std::vector<int>& vec);
     void convert_edgelist(std::string inputfile,std::string outputfile);
+    void createBinfile(std::string outputfile,int64_t num,int loop);
 };

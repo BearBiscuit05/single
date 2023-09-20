@@ -15,12 +15,16 @@ endif()
 set(EXECUTABLE_OUTPUT_PATH "./bin/")
 
 include_directories("/home/bear/workspace/singleGNN/3rdparty/parallel-hashmap")
+include_directories("/home/bear/workspace/singleGNN/src/partition/S5P/code")
 # add_subdirectory(CThreadPool)
 
 
 
-add_executable(main main.cpp globalConfig.cpp StreamCluster.cpp
-            ClusterGameTask.cpp Partitioner.cpp readGraph.cpp)
+add_executable(main main.cpp 
+                cm_sketch.cpp         
+                globalConfig.cpp StreamCluster.cpp
+            ClusterGameTask.cpp Partitioner.cpp readGraph.cpp )
+# add_executable(main main.cpp)
 target_link_libraries(main PRIVATE Threads::Threads)
 # target_link_libraries(main PRIVATE CThreadPool)
 # add_executable(main main.cpp globalConfig.cpp graph.cpp StreamCluster.cpp
