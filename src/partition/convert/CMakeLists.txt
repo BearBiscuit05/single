@@ -15,9 +15,6 @@ endif()
 set(EXECUTABLE_OUTPUT_PATH "./bin/")
 
 include_directories("/home/bear/workspace/singleGNN/3rdparty/parallel-hashmap")
-# add_subdirectory(CThreadPool)
-
-
 
 add_executable(main main.cpp readGraph.cpp)
 target_link_libraries(main PRIVATE Threads::Threads)
