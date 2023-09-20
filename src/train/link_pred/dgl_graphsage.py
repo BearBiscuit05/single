@@ -205,7 +205,38 @@ def load_ogb_products(rootdir,split_dict):
 
 	# edge_split = dataset.get_edge_split()
 	# 注意：此处不使用get_edge_split()方法，否则拿到的是ogb下节点分类任务的train/val/test
-	# 加载pickle文件保存的split字典文件，该文件的生成方式在 src/predata/LP/gendata2.py中
+	# 加载pickle文件保存的split字典文件，该文件的生成方式在 src/predata/LP/gendata_products.py中
+	pickfile = open(split_dict,'rb')
+	edge_split = pickle.load(pickfile)
+	pickfile.close()
+	return g,edge_split
+
+def load_ogb_papers(rootdir,split_dict):
+	dataset = AsNodePredDataset(DglNodePropPredDataset('ogbn-papers100M',root=rootdir))
+	# 注意：拿ogbn-products节点分类数据集做链路预测，还是可以以节点分类数据集形式加载图
+	# 区别是：1.删掉自循环边；2.split不使用dataset.get_edge_split()方法，而是处理负采样节点对，调整构造新的split_dict
+	g = dataset[0]
+	# 注意：链路预测必须删掉自循环边，否则to_bidirected_with_reverse_mapping时报错
+	g = dgl.remove_self_loop(g)
+
+	# edge_split = dataset.get_edge_split()
+	# 注意：此处不使用get_edge_split()方法，否则拿到的是ogb下节点分类任务的train/val/test
+	# 加载pickle文件保存的split字典文件，该文件的生成方式在 src/predata/LP/gendata_papers100M.py中
+	pickfile = open(split_dict,'rb')
+	edge_split = pickle.load(pickfile)
+	pickfile.close()
+	return g,edge_split
+
+def load_reddit(rootdir,split_dict):
+	from dgl.data import RedditDataset
+	dataset = RedditDataset(self_loop=False,raw_dir=rootdir)
+	g = dataset[0]
+	g.ndata['feat'] = g.ndata.pop('feat')
+	g.ndata['label'] = g.ndata.pop('label')
+
+	# edge_split = dataset.get_edge_split()
+	# 注意：此处不使用get_edge_split()方法，否则拿到的是ogb下节点分类任务的train/val/test
+	# 加载pickle文件保存的split字典文件，该文件的生成方式在 src/predata/LP/gendata_reddit.py中
 	pickfile = open(split_dict,'rb')
 	edge_split = pickle.load(pickfile)
 	pickfile.close()
@@ -235,6 +266,12 @@ if __name__ == "__main__":
 	if args.dataset == 'ogb-products':
 		g,edge_split = load_ogb_products("/home/bear/workspace/singleGNN/data/dataset", 
 								"/home/wsy/single-gnn/data/dataset/ogbn_products/split_lp/split_dict.pkl")
+	elif args.dataset == 'Reddit':
+		g,edge_split = load_reddit("/home/bear/workspace/singleGNN/data/dataset", 
+								"/home/wsy/single-gnn/data/dataset/reddit_69f818f5/split_lp/split_dict.pkl")
+	elif args.dataset == 'ogbn-papers100M':
+		g,edge_split = load_ogb_papers("/home/bear/workspace/singleGNN/data/dataset", 
+								"/home/wsy/single-gnn/data/dataset/ogbn_papers100M/split_lp/split_dict.pkl")
 	else:
 		raise ValueError('unknown database:',args.dataset)
 	
