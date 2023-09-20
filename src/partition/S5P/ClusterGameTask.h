@@ -1,7 +1,6 @@
 #ifndef CLUSTER_GAME_TASK_H
 #define CLUSTER_GAME_TASK_H
 
-#include "common.h"
 #include "StreamCluster.h"
 
 

@@ -1,8 +1,11 @@
 #ifndef STREAM_CLUSTER_H
 #define STREAM_CLUSTER_H
-
 #include "globalConfig.h"
-#include "common.h"
+# include "cm_sketch.h"
+#include <iostream>
+#include <algorithm>
+#include <fstream>
+#include "readGraph.h"
 
 struct Triplet {
     int src;
@@ -21,6 +24,8 @@ public:
     std::unordered_map<std::string , int> innerAndCutEdge;
     std::vector<int> clusterList_S;
     std::vector<int> clusterList_B;
+    CountMinSketch c;
+
     int maxVolume;
     int maxVolume_B;
     int maxVolume_S;
@@ -38,4 +43,8 @@ public:
     std::vector<Triplet> cacheData;
     void mergeMap(std::vector<std::unordered_map<std::string , int>>& maplist,int& cachePtr);
 };
+
+
+
+
 #endif // STREAM_CLUSTER_H

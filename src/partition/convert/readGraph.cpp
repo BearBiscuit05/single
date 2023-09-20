@@ -280,6 +280,28 @@ void TGEngine::writeVec(std::string savePath,std::vector<int>& vec) {
     return;
 }
 
+void TGEngine::createBinfile(std::string outputfile,int64_t num,int loop) {
+    std::ofstream outputFile(outputfile, std::ios::binary);
+    if (!outputFile.is_open()) {
+        std::cerr << "Failed to open output file: " << outputfile << std::endl;
+        return;
+    }
+    int64_t linenum = 1;
+    int64_t iter = num / 10;
+    
+    int from = 0;
+    
+    std::vector<int> block(loop,0);
+    for (int64_t i = 0 ; i < num ; i++) {
+        linenum++;
+        outputFile.write(reinterpret_cast<const char*>(block.data()), block.size() * sizeof(int));
+        if (i % iter == 0) {
+            std::cout << "Read :" << (linenum / iter) << "0%" << std::endl;
+        }
+    }
+    outputFile.close(); 
+}
+
 
 
 
