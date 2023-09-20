@@ -120,8 +120,8 @@ void Partitioner::startStackelbergGame() {
     // ClusterGameTask cgt = ClusterGameTask(streamCluster,this->clusterPartition);
     std::vector<ClusterGameTask*> cgt_list(THREADNUM);
     for (int i = 0 ; i < THREADNUM ; i++) {
-        ClusterGameTask cgt = ClusterGameTask((*streamCluster),this->clusterPartition);
-        cgt_list[i] = &cgt;
+        ClusterGameTask* cgt = new ClusterGameTask((*streamCluster),this->clusterPartition);
+        cgt_list[i] = cgt;
     }
 
 #pragma omp parallel for
@@ -133,8 +133,7 @@ void Partitioner::startStackelbergGame() {
         // cgt.call();
     }
 
-
- 
+    std::cout << "hyper end" <<std::endl;
     if (taskNum_B > taskNum_S) {
 #pragma omp parallel for  
         for (int i = 0 ; i < leftTaskNUM; ++i) {

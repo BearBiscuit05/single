@@ -14,6 +14,7 @@ ClusterGameTask::ClusterGameTask(StreamCluster& sc,std::vector<int>& clusterPart
     this->config = &streamCluster->config;
     this->partitionLoad.resize(this->streamCluster->config.partitionNum,0);
     this->clusterPartition=&clusterPartition;
+    this->cutCostValue = std::unordered_map<int, int>();
 }
 
 void ClusterGameTask::startGameSingle() {
@@ -34,19 +35,21 @@ void ClusterGameTask::startGameSingle() {
         sizePart += streamCluster->getEdgeNum(cluster1, cluster1);
         for (int cluster2 : this->cluster) {
             int innerCut = 0;
+            
             if (cluster1 != cluster2) {
                 innerCut = streamCluster->getEdgeNum(cluster1, cluster2);
                 if (innerCut != 0) {
                     auto it = clusterNeighbours.find(cluster1);
-                    if (it == clusterNeighbours.end())
+                    if (it == clusterNeighbours.end()) {
                         clusterNeighbours[cluster1] = std::unordered_set<int>();
+                    }      
                     clusterNeighbours[cluster1].insert(cluster2);
                 }
                 cutPart += innerCut;
             }
-            auto it = cutCostValue.find(cluster1);
-            if (it == cutCostValue.end())
-                cutCostValue[cluster1] = 0;
+            auto it = this->cutCostValue.find(cluster1);
+            if (it == this->cutCostValue.end())
+                this->cutCostValue[cluster1] = 0;
             cutCostValue[cluster1] += innerCut;
         }
 
@@ -103,6 +106,7 @@ ClusterGameTask::ClusterGameTask(std::string graphType, int taskId, StreamCluste
     int end = std::min(batchSize * (taskId + 1), static_cast<int>(clusterList.size()));
     this->cluster.assign(clusterList.begin() + begin, clusterList.begin() + end);
     this->config = &streamCluster->config;
+    this->cutCostValue = std::unordered_map<int, int>();
     this->partitionLoad.resize(this->streamCluster->config.partitionNum,0);
 }
 
@@ -137,8 +141,8 @@ void ClusterGameTask::resize_hyper(std::string graphType,int taskIds) {
     begin = batchSize * taskIds;
     end = std::min(batchSize * (taskIds + 1), static_cast<int>(clusterList_S.size()));
     this->cluster_S.assign(clusterList_S.begin() + begin, clusterList_S.begin() + end);
-
-    this->partitionLoad.resize(this->streamCluster->config.partitionNum,0);
+    std::fill(this->partitionLoad.begin(), this->partitionLoad.end(), 0);
+    //this->partitionLoad.resize(this->streamCluster->config.partitionNum,0);
     this->cutCostValue = std::unordered_map<int, int>();
     this->clusterNeighbours = std::unordered_map<int, std::unordered_set<int>>();
 }
@@ -150,7 +154,11 @@ void ClusterGameTask::resize(std::string graphType, int taskId) {
     int begin = batchSize * taskId;
     int end = std::min(batchSize * (taskId + 1), static_cast<int>(clusterList.size()));
     this->cluster.assign(clusterList.begin() + begin, clusterList.begin() + end);
+    
+    this->cutCostValue = std::unordered_map<int, int>();
+    //this->partitionLoad.resize(this->streamCluster->config.partitionNum,0);
     std::fill(this->partitionLoad.begin(), this->partitionLoad.end(), 0);
+    this->clusterNeighbours = std::unordered_map<int, std::unordered_set<int>>();
 }
 
 void ClusterGameTask::call() {
@@ -158,11 +166,11 @@ void ClusterGameTask::call() {
         if (graphType == "hybrid") {
             this->startGameDouble();
         } else if (graphType == "B") {
-            this->initGame();
-            //this->startGameSingle();
+            //this->initGame();
+            this->startGameSingle();
         } else if (graphType == "S") {
-            this->initGame();
-            //this->startGameSingle();
+            //this->initGame();
+            this->startGameSingle();
         } else {
             std::cout << "graphType error" << std::endl;
         }
@@ -384,7 +392,22 @@ double ClusterGameTask::computeCost(int clusterId, int partition, const std::str
         double Cost = beta_S / k * loadPart * m + edgeCutPart  +  m;
         return Cost;
     } else {
-        std::cout << "ComputeCost Error!" << std::endl;
-        return 0.0;
+        double loadPart = 0.0;
+        double edgeCutPart = cutCostValue[clusterId];
+        int old_partition = (*clusterPartition)[clusterId];
+        loadPart = partitionLoad[old_partition];
+        if (partition != old_partition)
+            loadPart = partitionLoad[partition] + streamCluster->getEdgeNum(clusterId, clusterId);
+        auto it3 = clusterNeighbours.find(clusterId);
+        if ( it3 != clusterNeighbours.end()) {
+            for (int neighbour : clusterNeighbours[clusterId]) {
+
+                edgeCutPart -= streamCluster->getEdgeNum(clusterId, neighbour);
+            }
+        }
+        double alpha = config->alpha, k = config->partitionNum;
+        double m = streamCluster->getEdgeNum(clusterId, clusterId);
+        double Cost = beta / k * loadPart * m +  edgeCutPart   + m;
+        return Cost;
     }
 }
