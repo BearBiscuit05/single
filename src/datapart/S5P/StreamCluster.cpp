@@ -10,7 +10,7 @@
 StreamCluster::StreamCluster() :c(0.1, 0.01) {}
 
 StreamCluster::StreamCluster(GlobalConfig& config) 
-    : config(config),c(0.1, 0.01) {
+    : config(config),c(0.1, 0.01){
     this->cluster_B.resize(size_t(config.vCount),-1);
     this->cluster_S.resize(size_t(config.vCount),-1);
     this->volume_B.resize(size_t(config.vCount),0);
@@ -39,31 +39,29 @@ void StreamCluster::Stop() {
 
 
 void StreamCluster::Producer() {
-
-}
-
-void StreamCluster::Consumer() {
-
-}
-
-void StreamCluster::startStreamCluster() {
-    double averageDegree = config.getAverageDegree();
     int clusterID_B = 0;
     int clusterID_S = 0;
-    int clusterNUM = config.vCount;
-    std::cout << "start read Streaming Clustring..." << std::endl;
-    std::string inputGraphPath = config.inputGraphPath;
-    std::string line;
     std::pair<int,int> edge(-1,-1);
-    this->isInB.resize(config.eCount,false);
-    int cachePtr = 0;
-    std::vector<std::unordered_map<std::string , int>> maplist;
-    
+    double averageDegree = config.getAverageDegree();
+    int clusterNUM = config.vCount;
+    std::string inputGraphPath = config.inputGraphPath;
     TGEngine tgEngine(inputGraphPath,NODENUM,EDGENUM);
+    std::string key="";
+    std::vector<std::string> s_key(BATCH);
+    
+    int lineNUM = 0;
     while (-1 != tgEngine.readline(edge)) {
-        if (cachePtr + 3 >= BATCH) {
-            mergeMap(maplist,cachePtr);
+        if (lineNUM + 4 >= BATCH) {
+            std::unique_lock<std::mutex> lock(mtx);
+            // while (buffer.size() >= MaxQueueSize) {
+            //     cv.wait(lock);
+            // }
+            for (int li = 0 ; li < lineNUM ; li++)
+                buffer.push(s_key[li]);
+            cv.notify_all();
+            lineNUM = 0;
         }
+
         int src = edge.first;
         int dest = edge.second;
         if (degree[src] >= config.tao * averageDegree && degree[dest] >= config.tao * averageDegree) {
@@ -95,11 +93,8 @@ void StreamCluster::startStreamCluster() {
                	vol_dest += degree[dest];
                	cluster_B[dest] = cluster_B[src];
             }
-            std::string t = std::to_string(cluster_B[src]) + "," + std::to_string(cluster_B[dest]);
-            //fg = executor.commit(addSketchKV,&this->c,t);
-            //fg.get();
-            this->c.update(t.c_str(), 1);
-
+            key = std::to_string(cluster_B[src]) + "," + std::to_string(cluster_B[dest]);
+            s_key[lineNUM++] = key;
         } else {
             if (cluster_S[src] == -1) 
                 cluster_S[src] = clusterID_S++;
@@ -107,13 +102,10 @@ void StreamCluster::startStreamCluster() {
                 cluster_S[dest] = clusterID_S++;
             degree_S[src]++;
             degree_S[dest]++;
-
-
             if (cluster_S[src] >= volume_S.size() || cluster_S[dest] >= volume_S.size()) 
                 volume_S.resize(volume_S.size() + 0.1 * config.vCount, 0);
             volume_S[cluster_S[src] ]++;
             volume_S[cluster_S[dest]]++;
-
             if (volume_S[cluster_S[src]] < maxVolume && volume_S[cluster_S[dest]] < maxVolume) {
                 int minVid = (volume_S[cluster_S[src]] < volume_S[cluster_S[dest]] ? src : dest);
                 int maxVid = (src == minVid ? dest : src);
@@ -122,28 +114,60 @@ void StreamCluster::startStreamCluster() {
                     volume_S[cluster_S[minVid]] -= degree_S[minVid];
                     cluster_S[minVid] = cluster_S[maxVid];
                 }    
-                std::string t = std::to_string(cluster_S[src] + config.vCount) + "," + std::to_string(cluster_S[dest] + config.vCount);
-                //fg = executor.commit(addSketchKV,&this->c,t);
-                //fg.get();
-                c.update(t.c_str(), 1);
+                key = std::to_string(cluster_S[src] + config.vCount) + "," + std::to_string(cluster_S[dest] + config.vCount);
+                s_key[lineNUM++] = key;
                 if (cluster_B[src] !=-1) {
-                    t = std::to_string(cluster_B[dest]) + "," + std::to_string(cluster_S[src] + config.vCount);
-                    //fg = executor.commit(addSketchKV,&this->c,t);
-                    //fg.get();
-                    c.update(t.c_str(), 1);
+                    key = std::to_string(cluster_B[dest]) + "," + std::to_string(cluster_S[src] + config.vCount);
+                    s_key[lineNUM++] = key;
                 }
                 if (cluster_B[dest] != -1) {
-                    t = std::to_string(cluster_B[src]) + "," + std::to_string(cluster_S[dest] + config.vCount);
-                    //fg = executor.commit(addSketchKV,&this->c,t);
-                    //fg.get();
-                    c.update(t.c_str(), 1);
+                    key = std::to_string(cluster_B[src]) + "," + std::to_string(cluster_S[dest] + config.vCount);
+                    s_key[lineNUM++] = key;
                 }   
             } else {
                 continue;
             }
         }
     }
-    //fg.get();
+
+    std::unique_lock<std::mutex> lock(mtx);
+    for (int li = 0 ; li < lineNUM ; li++)
+        buffer.push(s_key[li]);
+    buffer.push("-1");
+    cv.notify_all();
+    lineNUM = 0;
+}
+
+void StreamCluster::Consumer() {  
+    std::string key;
+    int ssize;
+    int loop;
+    while (true) {
+        std::unique_lock<std::mutex> lock(mtx);
+        while (buffer.empty()) {
+            cv.wait(lock);
+        }
+        ssize = buffer.size();
+        loop = std::min(ssize,BATCH);
+        for (int i = 0 ; i < loop ; i++) {
+            key = buffer.front();
+            buffer.pop();
+            if (key == "-1")
+                return;
+            this->c.update(key.c_str(), 1);
+        }
+        cv.notify_all();
+    }
+
+    
+}
+
+void StreamCluster::startStreamCluster() {   
+    std::cout << "start read Streaming Clustring..." << std::endl;
+    this->isInB.resize(config.eCount,false);
+    
+    this->Start();
+    this->Stop();
 
 
     for (int i = 0; i < volume_B.size(); ++i) {

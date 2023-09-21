@@ -32,4 +32,4 @@
 # define THREADNUM 16
 # define NODENUM 3997962
 # define EDGENUM 34681189
-# define BATCH 2048000
+# define BATCH 204800

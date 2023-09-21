@@ -5,6 +5,7 @@
 #include <iostream>
 #include <algorithm>
 #include <fstream>
+#include <queue>
 #include "readGraph.h"
 
 struct Triplet {
@@ -49,11 +50,13 @@ public:
     void Consumer();
     void Stop();
 
+    //int MaxQueueSize = 10;
     std::queue<std::string> buffer;
     std::mutex mtx;
     std::condition_variable cv;
     std::thread producerThread;
     std::thread consumerThread;
+    std::unique_lock<std::mutex> _lock; // 上锁
 };
 
 
