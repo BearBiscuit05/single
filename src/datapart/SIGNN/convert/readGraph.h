@@ -59,8 +59,7 @@ public:
     void loadingMmapBlock();
     void unmapBlock(int64_t* addr, off_t size);
     void readTrainIdx(std::vector<int64_t>& ids);
-    int readlines(std::vector<std::pair<int64_t, int64_t>> &edges,std::vector<int64_t>& eids,int& edgesNUM);
-    
+    int readlines(std::vector<std::pair<int64_t, int64_t>> &edges,std::vector<int64_t>& eids,int& edgesNUM);  
 };
 
 
