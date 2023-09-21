@@ -35,7 +35,7 @@ GlobalConfig::GlobalConfig(std::string filepath) {
 }
 
 int GlobalConfig::getMaxClusterVolume() {
-    return  eCount / k;
+    return  2 * eCount / partitionNum;
 }
 
 double GlobalConfig::getAverageDegree() {

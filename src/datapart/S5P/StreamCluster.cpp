@@ -2,6 +2,7 @@
 #include <iostream>
 #include <algorithm>
 #include <fstream>
+#include "threadpool.h"
 
 
 
@@ -12,14 +13,37 @@ StreamCluster::StreamCluster(GlobalConfig& config)
     : config(config),c(0.1, 0.01) {
     this->cluster_B.resize(size_t(config.vCount),-1);
     this->cluster_S.resize(size_t(config.vCount),-1);
-    this->volume_B.resize(size_t(0.1 * config.vCount),0);
-    this->volume_S.resize(size_t(0.1 * config.vCount),0);
+    this->volume_B.resize(size_t(config.vCount),0);
+    this->volume_S.resize(size_t(config.vCount),0);
     maxVolume = config.getMaxClusterVolume();
     degree.resize(config.vCount,0);
     degree_S.resize(config.vCount,0);
     calculateDegree();
     Triplet tmp = {-1,-1,0};
     this->cacheData.resize(BATCH,tmp);
+}
+
+void addSketchKV(CountMinSketch* c,std::string str) {
+    c->update(str.c_str(), 1);
+}
+
+void StreamCluster::Start() {
+    producerThread = std::thread(&StreamCluster::Producer, this);
+    consumerThread = std::thread(&StreamCluster::Consumer, this);
+}
+
+void StreamCluster::Stop() {
+    producerThread.join();
+    consumerThread.join();
+}
+
+
+void StreamCluster::Producer() {
+
+}
+
+void StreamCluster::Consumer() {
+
 }
 
 void StreamCluster::startStreamCluster() {
@@ -32,48 +56,166 @@ void StreamCluster::startStreamCluster() {
     std::string line;
     std::pair<int,int> edge(-1,-1);
     this->isInB.resize(config.eCount,false);
-    TGEngine tgEngine(inputGraphPath,NODENUM,EDGENUM);
     int cachePtr = 0;
     std::vector<std::unordered_map<std::string , int>> maplist;
-
     
+    TGEngine tgEngine(inputGraphPath,NODENUM,EDGENUM);
     while (-1 != tgEngine.readline(edge)) {
-        // if (cachePtr + 3 >= BATCH) {
-        //     // std::cout << "mergeing..." << std::endl;
-        //     mergeMap(maplist,cachePtr);
-        // }
+        if (cachePtr + 3 >= BATCH) {
+            mergeMap(maplist,cachePtr);
+        }
         int src = edge.first;
         int dest = edge.second;
         if (degree[src] >= config.tao * averageDegree && degree[dest] >= config.tao * averageDegree) {
             this->isInB[tgEngine.readPtr/2] = true;
-            if (cluster_B[src] == -1) {
-                cluster_B[src] = clusterID_B++;
+            auto& com_src = cluster_B[src];
+            auto& com_dest = cluster_B[dest];
+            if(com_src == -1) {
+                com_src = clusterID_B;
+                volume_B[com_src] += degree[src];
+                ++clusterID_B;
             }
-            if (cluster_B[dest] == -1) {
-                cluster_B[dest] = clusterID_B++;
+            if(com_dest == -1) {
+                com_dest = clusterID_B;
+                volume_B[com_dest] += degree[src];
+                ++clusterID_B;
             }
-            if (cluster_B[src] >= volume_B.size() || cluster_B[dest] >= volume_B.size()) {
-                volume_B.resize(volume_B.size() + 0.1 * config.vCount, 0);
-            }
-            volume_B[cluster_B[src]]++;
-            volume_B[cluster_B[dest]]++;
-            if (volume_B[cluster_B[src]] >= maxVolume) {
-                volume_B[cluster_B[src]] -= degree[src];
-                cluster_B[src] = clusterID_B++;
-                volume_B[cluster_B[src]] = degree[src];
-            }
-            if (volume_B[cluster_B[dest]] >= maxVolume) {
-                volume_B[cluster_B[dest]] -= degree[dest];
-                cluster_B[dest] = clusterID_B++;
-                volume_B[cluster_B[dest]] = degree[dest];
+            auto& vol_src = volume_B[com_src];
+            auto& vol_dest = volume_B[com_dest];
+
+            auto real_vol_src = vol_src - degree[src];
+            auto real_vol_dest = vol_dest - degree[dest];
+
+            if (real_vol_src <= real_vol_dest && vol_dest + degree[src] <= maxVolume) {
+                vol_src -= degree[src];
+               	vol_dest += degree[src];
+               	cluster_B[src] = cluster_S[dest];
+            } else if (real_vol_dest <= real_vol_src && vol_src + degree[dest] <= maxVolume) {
+                vol_src -= degree[dest];
+               	vol_dest += degree[dest];
+               	cluster_B[dest] = cluster_B[src];
             }
             std::string t = std::to_string(cluster_B[src]) + "," + std::to_string(cluster_B[dest]);
-            std::cout << t << std::endl;
+            //fg = executor.commit(addSketchKV,&this->c,t);
+            //fg.get();
             this->c.update(t.c_str(), 1);
-            // this->cacheData[cachePtr].src = src;
-            // this->cacheData[cachePtr++].dst = dest;
-            //this->innerAndCutEdge[std::to_string(cluster_B[src]) + "," + std::to_string(cluster_B[dest])] += 1;
-            //cachePtr++
+
+        } else {
+            if (cluster_S[src] == -1) 
+                cluster_S[src] = clusterID_S++;
+            if (cluster_S[dest] == -1) 
+                cluster_S[dest] = clusterID_S++;
+            degree_S[src]++;
+            degree_S[dest]++;
+
+
+            if (cluster_S[src] >= volume_S.size() || cluster_S[dest] >= volume_S.size()) 
+                volume_S.resize(volume_S.size() + 0.1 * config.vCount, 0);
+            volume_S[cluster_S[src] ]++;
+            volume_S[cluster_S[dest]]++;
+
+            if (volume_S[cluster_S[src]] < maxVolume && volume_S[cluster_S[dest]] < maxVolume) {
+                int minVid = (volume_S[cluster_S[src]] < volume_S[cluster_S[dest]] ? src : dest);
+                int maxVid = (src == minVid ? dest : src);
+                if ((volume_S[cluster_S[maxVid]] + degree_S[minVid]) <= maxVolume) {
+                    volume_S[cluster_S[maxVid]] += degree_S[minVid];
+                    volume_S[cluster_S[minVid]] -= degree_S[minVid];
+                    cluster_S[minVid] = cluster_S[maxVid];
+                }    
+                std::string t = std::to_string(cluster_S[src] + config.vCount) + "," + std::to_string(cluster_S[dest] + config.vCount);
+                //fg = executor.commit(addSketchKV,&this->c,t);
+                //fg.get();
+                c.update(t.c_str(), 1);
+                if (cluster_B[src] !=-1) {
+                    t = std::to_string(cluster_B[dest]) + "," + std::to_string(cluster_S[src] + config.vCount);
+                    //fg = executor.commit(addSketchKV,&this->c,t);
+                    //fg.get();
+                    c.update(t.c_str(), 1);
+                }
+                if (cluster_B[dest] != -1) {
+                    t = std::to_string(cluster_B[src]) + "," + std::to_string(cluster_S[dest] + config.vCount);
+                    //fg = executor.commit(addSketchKV,&this->c,t);
+                    //fg.get();
+                    c.update(t.c_str(), 1);
+                }   
+            } else {
+                continue;
+            }
+        }
+    }
+    //fg.get();
+
+
+    for (int i = 0; i < volume_B.size(); ++i) {
+        if (volume_B[i] != 0)
+            clusterList_B.push_back(i);
+    }
+    volume_B.clear();  
+
+    for (int i = 0; i < volume_S.size(); ++i) {
+        if (volume_S[i] != 0)
+            clusterList_S.push_back(i + config.vCount);
+    }
+    volume_S.clear();  
+    this->config.clusterBSize = config.vCount;
+    // computeHybridInfo();
+}
+
+
+void StreamCluster::startStreamCluster_MAP() {
+    double averageDegree = config.getAverageDegree();
+    int clusterID_B = 0;
+    int clusterID_S = 0;
+    int clusterNUM = config.vCount;
+    std::cout << "start read Streaming Clustring..." << std::endl;
+    std::string inputGraphPath = config.inputGraphPath;
+    std::string line;
+    std::pair<int,int> edge(-1,-1);
+    this->isInB.resize(config.eCount,false);
+    TGEngine tgEngine(inputGraphPath,NODENUM,EDGENUM);
+    int cachePtr = 0;
+    std::vector<std::unordered_map<std::string , int>> maplist;
+    for (int i = 0 ; i < THREADNUM ; i++) {
+        std::unordered_map<std::string , int> mapTmp;
+        maplist.emplace_back(mapTmp);
+    }
+    while (-1 != tgEngine.readline(edge)) {
+        if (cachePtr + 3 >= BATCH) {
+            mergeMap(maplist,cachePtr);
+        }
+        int src = edge.first;
+        int dest = edge.second;
+        if (degree[src] >= config.tao * averageDegree && degree[dest] >= config.tao * averageDegree) {
+            this->isInB[tgEngine.readPtr/2] = true;
+            auto& com_src = cluster_B[src];
+            auto& com_dest = cluster_B[dest];
+            if(com_src == -1) {
+                com_src = clusterID_B;
+                volume_B[com_src] += degree[src];
+                ++clusterID_B;
+            }
+            if(com_dest == -1) {
+                com_dest = clusterID_B;
+                volume_B[com_dest] += degree[src];
+                ++clusterID_B;
+            }
+            auto& vol_src = volume_B[com_src];
+            auto& vol_dest = volume_B[com_dest];
+
+            auto real_vol_src = vol_src - degree[src];
+            auto real_vol_dest = vol_dest - degree[dest];
+
+            if (real_vol_src <= real_vol_dest && vol_dest + degree[src] <= maxVolume) {
+                vol_src -= degree[src];
+               	vol_dest += degree[src];
+               	cluster_B[src] = cluster_S[dest];
+            } else if (real_vol_dest <= real_vol_src && vol_src + degree[dest] <= maxVolume) {
+                vol_src -= degree[dest];
+               	vol_dest += degree[dest];
+               	cluster_B[dest] = cluster_B[src];
+            }
+            this->cacheData[cachePtr].src = src;
+            this->cacheData[cachePtr++].dst = dest;
         } else {
             if (cluster_S[src] == -1) 
                 cluster_S[src] = clusterID_S++;
@@ -87,65 +229,54 @@ void StreamCluster::startStreamCluster() {
 
             volume_S[cluster_S[src] ]++;
             volume_S[cluster_S[dest]]++;
-
-            if (volume_S[cluster_S[src]] >= maxVolume || volume_S[cluster_S[dest]] >= maxVolume)
+            if (volume_S[cluster_S[src]] < maxVolume && volume_S[cluster_S[dest]] < maxVolume) {
+                int minVid = (volume_S[cluster_S[src]] < volume_S[cluster_S[dest]] ? src : dest);
+                int maxVid = (src == minVid ? dest : src);
+                if ((volume_S[cluster_S[maxVid]] + degree_S[minVid]) <= maxVolume) {
+                    volume_S[cluster_S[maxVid]] += degree_S[minVid];
+                    volume_S[cluster_S[minVid]] -= degree_S[minVid];
+                    cluster_S[minVid] = cluster_S[maxVid];
+                }    
+                this->cacheData[cachePtr].src = src;
+                this->cacheData[cachePtr].dst = dest;
+                this->cacheData[cachePtr++].flag = 1;
+                if (cluster_B[src] !=-1) {
+                    this->cacheData[cachePtr].src = src;
+                    this->cacheData[cachePtr].dst = dest;
+                    this->cacheData[cachePtr++].flag = 2;
+                }
+                if (cluster_B[dest] != -1) {
+                    this->cacheData[cachePtr].src = src;
+                    this->cacheData[cachePtr].dst = dest;
+                    this->cacheData[cachePtr++].flag = 3;
+                } 
+            } else {
                 continue;
-
-            int minVid = (volume_S[cluster_S[src]] < volume_S[cluster_S[dest]] ? src : dest);
-            int maxVid = (src == minVid ? dest : src);
-
-            if ((volume_S[cluster_S[maxVid]] + degree_S[minVid]) <= maxVolume) {
-                volume_S[cluster_S[maxVid]] += degree_S[minVid];
-                volume_S[cluster_S[minVid]] -= degree_S[minVid];
-                cluster_S[minVid] = cluster_S[maxVid];
-            }    
-            // this->cacheData[cachePtr].src = src;
-            // this->cacheData[cachePtr].dst = dest;
-            // this->cacheData[cachePtr++].flag = 1;
-            std::string t = std::to_string(cluster_S[src] + config.vCount) + "," + std::to_string(cluster_S[dest] + config.vCount);
-            //c.update(t.c_str(), 1);
-            // flag = 1
-            //this->innerAndCutEdge[std::to_string(cluster_S[src] + config.vCount) + "," + std::to_string(cluster_S[dest] + config.vCount)] += 1;
-            if (cluster_B[src] !=-1) {
-                //this->innerAndCutEdge[std::to_string(cluster_B[dest]) + "," + std::to_string(cluster_S[src] + config.vCount)] += 1;
-                // this->cacheData[cachePtr].src = src;
-                // this->cacheData[cachePtr].dst = dest;
-                // this->cacheData[cachePtr++].flag = 2;
-                t = std::to_string(cluster_B[dest]) + "," + std::to_string(cluster_S[src] + config.vCount);
-                //c.update(t.c_str(), 1);
             }
-            if (cluster_B[dest] != -1) {
-                //this->innerAndCutEdge[std::to_string(cluster_B[src]) + "," + std::to_string(cluster_S[dest] + config.vCount)] += 1;
-                // this->cacheData[cachePtr].src = src;
-                // this->cacheData[cachePtr].dst = dest;
-                // this->cacheData[cachePtr++].flag = 3;
-                t = std::to_string(cluster_B[src]) + "," + std::to_string(cluster_S[dest] + config.vCount);
-                //c.update(t.c_str(), 1);
-            }   
         }
     }
-    //mergeMap(maplist,cachePtr);
-    // for (int i = 1 ;  i < THREADNUM ; i++) {
-    //     for(auto& m : maplist[i]) {
-    //         maplist[0][m.first] += m.second;
-    //     }
-    // }
+    mergeMap(maplist,cachePtr);
+    for (int i = 1 ;  i < THREADNUM ; i++) {
+        for(auto& m : maplist[i]) {
+            maplist[0][m.first] += m.second;
+        }
+    }
 
-    //this->innerAndCutEdge = std::move(maplist[0]);
-    //maplist = std::vector<std::unordered_map<std::string , int>>();
+    this->innerAndCutEdge = std::move(maplist[0]);
+    maplist = std::vector<std::unordered_map<std::string , int>>();
 
-    // for (int i = 0; i < volume_B.size(); ++i) {
-    //     if (volume_B[i] != 0)
-    //         clusterList_B.push_back(i);
-    // }
-    // volume_B.clear();  
+    for (int i = 0; i < volume_B.size(); ++i) {
+        if (volume_B[i] != 0)
+            clusterList_B.push_back(i);
+    }
+    volume_B.clear();  
 
-    // for (int i = 0; i < volume_S.size(); ++i) {
-    //     if (volume_S[i] != 0)
-    //         clusterList_S.push_back(i + config.vCount);
-    // }
-    // volume_S.clear();  
-    // this->config.clusterBSize = config.vCount;
+    for (int i = 0; i < volume_S.size(); ++i) {
+        if (volume_S[i] != 0)
+            clusterList_S.push_back(i + config.vCount);
+    }
+    volume_S.clear();  
+    this->config.clusterBSize = config.vCount;
 }
 
 void StreamCluster::mergeMap(std::vector<std::unordered_map<std::string , int>>& maplist,int& cachePtr) {
@@ -167,7 +298,6 @@ void StreamCluster::mergeMap(std::vector<std::unordered_map<std::string , int>>&
 }
 
 void StreamCluster::computeHybridInfo() {
-    /*
     std::string inputGraphPath = config.inputGraphPath;
     std::pair<int,int> edge(-1,-1);
     TGEngine tgEngine(inputGraphPath,NODENUM,EDGENUM); 
@@ -180,18 +310,19 @@ void StreamCluster::computeHybridInfo() {
         int src = edge.first;
         int dest = edge.second;
         if (this->isInB[tgEngine.readPtr/2]) {
-            this->innerAndCutEdge[cluster_B[src]*clusterNUM + cluster_B[dest]] += 1;
+            std::string t = std::to_string(cluster_B[src]) + "," + std::to_string(cluster_B[dest]);
+            // std::cout << t << std::endl;
+            this->c.update(t.c_str(), 1);
         } else {
-            this->innerAndCutEdge[cluster_S[src]*clusterNUM + cluster_S[dest]] += 1;
-            if (cluster_B[src] != b_size) {
-                this->innerAndCutEdge[cluster_B[dest]*clusterNUM + cluster_S[src]] += 1;
+            std::string t = std::to_string(cluster_S[src] + config.vCount) + "," + std::to_string(cluster_S[dest] + config.vCount);
+            if (cluster_B[src] !=-1) {
+                t = std::to_string(cluster_B[dest]) + "," + std::to_string(cluster_S[src] + config.vCount);
             }
-            if (cluster_B[dest] != b_size) {
-                this->innerAndCutEdge[cluster_B[src]*clusterNUM + cluster_S[dest]] += 1;
-            }
+            if (cluster_B[dest] != -1) {
+                t = std::to_string(cluster_B[src]) + "," + std::to_string(cluster_S[dest] + config.vCount);
+            }   
         } 
     }
-    */
 }
 
 void StreamCluster::calculateDegree() {
@@ -209,11 +340,15 @@ void StreamCluster::calculateDegree() {
 }
 
 int StreamCluster::getEdgeNum(int cluster1, int cluster2) {
+    // std::string index = std::to_string(cluster1) + "," + std::to_string(cluster2);
+    // return this->c.estimate(index.c_str());
+
     std::string index = std::to_string(cluster1) + "," + std::to_string(cluster2);
     if(innerAndCutEdge.find(index) != innerAndCutEdge.end()) {
         return innerAndCutEdge[index];
     }
     return 0;
+    
 }
 
 std::vector<int> StreamCluster::getClusterList_B() {

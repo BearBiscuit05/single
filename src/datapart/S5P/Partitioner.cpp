@@ -13,7 +13,7 @@ Partitioner::Partitioner(StreamCluster& streamCluster, GlobalConfig config)
    }
 
 void Partitioner::performStep() {
-    double maxLoad = static_cast<double>(config.eCount) / config.partitionNum * 1.1;
+    double maxLoad = static_cast<double>(config.eCount) / config.partitionNum * config.alpha;
     std::string inputGraphPath = config.inputGraphPath;
     std::pair<int,int> edge(-1,-1);
     TGEngine tgEngine(inputGraphPath,NODENUM,EDGENUM);  
@@ -126,7 +126,7 @@ void Partitioner::startStackelbergGame() {
 #pragma omp parallel for
     for (int i = 0; i < minTaskNUM; i++) {
         int ompid = omp_get_thread_num();
-        cgt_list[ompid]->resize("hybrid",i);
+        cgt_list[ompid]->resize_hyper("hybrid",i);
         cgt_list[ompid]->call();
         // cgt.resize("hybrid",i);
         // cgt.call();

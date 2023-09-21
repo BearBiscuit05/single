@@ -34,6 +34,7 @@ public:
     StreamCluster();
     StreamCluster(GlobalConfig& config);
     void startStreamCluster();
+    void startStreamCluster_MAP();
     void computeHybridInfo();
     void calculateDegree();
     int getEdgeNum(int cluster1, int cluster2);
@@ -42,6 +43,17 @@ public:
     std::vector<int> getClusterList_S();
     std::vector<Triplet> cacheData;
     void mergeMap(std::vector<std::unordered_map<std::string , int>>& maplist,int& cachePtr);
+    
+    void Start();
+    void Producer();
+    void Consumer();
+    void Stop();
+
+    std::queue<std::string> buffer;
+    std::mutex mtx;
+    std::condition_variable cv;
+    std::thread producerThread;
+    std::thread consumerThread;
 };
 
 

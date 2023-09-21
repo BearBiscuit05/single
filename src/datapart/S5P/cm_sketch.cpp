@@ -22,7 +22,6 @@ using namespace std;
 // ep -> error 0.01 < ep < 1 (the smaller the better)
 // gamma -> probability for error (the smaller the better) 0 < gamm < 1
 CountMinSketch::CountMinSketch(float ep, float gamm) {
-  std::cout << "cm init..." << std::endl;
   if (!(0.009 <= ep && ep < 1)) {
     cout << "eps must be in this range: [0.01, 1)" << endl;
     exit(EXIT_FAILURE);
@@ -79,17 +78,19 @@ unsigned int CountMinSketch::totalcount() {
 void CountMinSketch::update(int item, int c) {
   total = total + c;
   unsigned int hashval = 0;
-  std::cout << "get in update" << std::endl;
+  //std::cout << "update... -->"<<item << std::endl;
   for (unsigned int j = 0; j < d; j++) {
-    hashval = ((long)hashes[j][0]*item+hashes[j][1])%LONG_PRIME%w;
-    std::cout << "hashval:"<< hashval << std::endl;
+    hashval = ((unsigned int)hashes[j][0]*item+hashes[j][1])%LONG_PRIME%w;
+    // std::cout << hashes[j][0] << " " << item << " " << hashes[j][1] << " " << C[0][0] << w << std::endl; 
+    // std::cout << "hashval:"<< hashval << std::endl;
     C[j][hashval] = C[j][hashval] + c;
   }
-  std::cout << "get in update end" << std::endl;
+  //std::cout << "get in update end" << std::endl;
 }
 
 // countMinSketch update item count (string)
 void CountMinSketch::update(const char *str, int c) {
+  
   int hashval = hashstr(str);
   update(hashval, c);
 }
@@ -99,7 +100,7 @@ unsigned int CountMinSketch::estimate(int item) {
   int minval = numeric_limits<int>::max();
   unsigned int hashval = 0;
   for (unsigned int j = 0; j < d; j++) {
-    hashval = ((long)hashes[j][0]*item+hashes[j][1])%LONG_PRIME%w;
+    hashval = ((unsigned int)hashes[j][0]*item+hashes[j][1])%LONG_PRIME%w;
     minval = MIN(minval, C[j][hashval]);
   }
   return minval;
