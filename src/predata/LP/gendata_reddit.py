@@ -58,7 +58,7 @@ if __name__ == '__main__':
 	split_pt['train']={}
 	split_pt['train']['source_node']=raw_train_src
 	split_pt['train']['target_node']=raw_train_dst
-	split_pt['train']['target_node_neg']=raw_train_src
+	split_pt['train']['target_node_neg']=train_neg_dst.reshape(-1,neg_num)
 
 	split_pt['valid']={}
 	split_pt['valid']['source_node']=raw_val_src

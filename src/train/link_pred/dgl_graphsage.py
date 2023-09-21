@@ -263,7 +263,7 @@ if __name__ == "__main__":
 	# load and preprocess dataset
 	print("Loading data")
 	
-	if args.dataset == 'ogb-products':
+	if args.dataset == 'ogbn-products':
 		g,edge_split = load_ogb_products("/home/bear/workspace/singleGNN/data/dataset", 
 								"/home/wsy/single-gnn/data/dataset/ogbn_products/split_lp/split_dict.pkl")
 	elif args.dataset == 'Reddit':
