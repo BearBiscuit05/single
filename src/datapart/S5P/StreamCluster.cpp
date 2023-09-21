@@ -51,16 +51,13 @@ void StreamCluster::Producer() {
     
     int lineNUM = 0;
     while (-1 != tgEngine.readline(edge)) {
-        if (lineNUM + 4 >= BATCH) {
-            std::unique_lock<std::mutex> lock(mtx);
-            // while (buffer.size() >= MaxQueueSize) {
-            //     cv.wait(lock);
-            // }
-            for (int li = 0 ; li < lineNUM ; li++)
-                buffer.push(s_key[li]);
-            cv.notify_all();
-            lineNUM = 0;
-        }
+        // if (lineNUM + 4 >= BATCH) {
+        //     std::unique_lock<std::mutex> lock(mtx);
+        //     for (int li = 0 ; li < lineNUM ; li++)
+        //         buffer.push(s_key[li]);
+        //     cv.notify_all();
+        //     lineNUM = 0;
+        // }
 
         int src = edge.first;
         int dest = edge.second;
@@ -94,7 +91,8 @@ void StreamCluster::Producer() {
                	cluster_B[dest] = cluster_B[src];
             }
             key = std::to_string(cluster_B[src]) + "," + std::to_string(cluster_B[dest]);
-            s_key[lineNUM++] = key;
+            this->c.update(key.c_str(), 1);
+            //s_key[lineNUM++] = key;
         } else {
             if (cluster_S[src] == -1) 
                 cluster_S[src] = clusterID_S++;
@@ -115,14 +113,17 @@ void StreamCluster::Producer() {
                     cluster_S[minVid] = cluster_S[maxVid];
                 }    
                 key = std::to_string(cluster_S[src] + config.vCount) + "," + std::to_string(cluster_S[dest] + config.vCount);
-                s_key[lineNUM++] = key;
+                //s_key[lineNUM++] = key;
+                this->c.update(key.c_str(), 1);
                 if (cluster_B[src] !=-1) {
                     key = std::to_string(cluster_B[dest]) + "," + std::to_string(cluster_S[src] + config.vCount);
-                    s_key[lineNUM++] = key;
+                    //s_key[lineNUM++] = key;
+                    this->c.update(key.c_str(), 1);
                 }
                 if (cluster_B[dest] != -1) {
                     key = std::to_string(cluster_B[src]) + "," + std::to_string(cluster_S[dest] + config.vCount);
-                    s_key[lineNUM++] = key;
+                    //s_key[lineNUM++] = key;
+                    this->c.update(key.c_str(), 1);
                 }   
             } else {
                 continue;
@@ -166,8 +167,7 @@ void StreamCluster::startStreamCluster() {
     std::cout << "start read Streaming Clustring..." << std::endl;
     this->isInB.resize(config.eCount,false);
     
-    this->Start();
-    this->Stop();
+    Producer();
 
 
     for (int i = 0; i < volume_B.size(); ++i) {
