@@ -20,6 +20,7 @@ torch.nonzero(g.ndata['val_mask']).squeeze().numpy().tofile("/raid/bear/products
 torch.nonzero(g.ndata['test_mask']).squeeze().numpy().tofile("/raid/bear/products_bin/testIDs.bin")
 
 
+
 def lp_data_gen():
     edgeNUM = 1000000
     neg_num = 1000
@@ -49,7 +50,7 @@ def lp_data_gen():
     split_pt['train']={}
     split_pt['train']['source_node']=raw_train_src
     split_pt['train']['target_node']=raw_train_dst
-    split_pt['train']['target_node_neg']=raw_train_src
+    split_pt['train']['target_node_neg']=train_neg_dst.reshape(-1,neg_num)
 
     split_pt['valid']={}
     split_pt['valid']['source_node']=raw_val_src
@@ -61,7 +62,7 @@ def lp_data_gen():
     split_pt['test']['target_node']=raw_test_dst
     split_pt['test']['target_node_neg']=test_neg_dst.reshape(-1,neg_num)
 
-    file_name = folder_path+"/split_dict.pkl"
+    file_name = "/home/wsy/single-gnn/data/dataset/ogbn_papers100M/split_lp/split_dict.pkl"
     pick_file = open(file_name,'wb')
     pickle.dump(split_pt,pick_file)
     pick_file.close()
