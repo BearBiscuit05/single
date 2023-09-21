@@ -22,7 +22,7 @@ curFilePath = os.path.abspath(__file__)
 curDir = os.path.dirname(curFilePath)
 
 
-logging.basicConfig(level=logging.INFO,filename=curDir+'/log/loader.log',filemode='w',
+logging.basicConfig(level=logging.INFO,filename=curDir+'/../../log/loader.log',filemode='w',
                     format='%(message)s',datefmt='%H:%M:%S')
                     #format='%(message)s')
 logger = logging.getLogger(__name__)

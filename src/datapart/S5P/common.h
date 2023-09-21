@@ -29,7 +29,8 @@
 #include <parallel_hashmap/phmap.h>
 
 
-# define THREADNUM 16
+# define THREADNUM 12
 # define NODENUM 3997962
 # define EDGENUM 34681189
 # define BATCH 204800
+# define P_BATCH BATCH*2
