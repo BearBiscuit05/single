@@ -26,6 +26,7 @@
 #include <fcntl.h>
 #include <stdexcept>
 #include <limits>
+#include <set>
 #include "omp.h"
 
 class ReadEngine {
@@ -93,4 +94,5 @@ public:
     void writeVec(std::string savePath,std::vector<int>& vec);
     void convert_edgelist(std::string inputfile,std::string outputfile);
     void createBinfile(std::string outputfile,int64_t num,int loop);
+    void coo2csrFile(std::string inputfile,std::string outputfile,int nodeNUM, int edgeNUM);
 };

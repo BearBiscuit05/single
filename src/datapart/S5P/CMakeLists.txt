@@ -4,6 +4,7 @@ project(S5P)
 set(CMAKE_CXX_STANDARD 11)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR})
 find_package(Threads REQUIRED)
+find_package(Boost 1.62.0 REQUIRED)
 FIND_PACKAGE( OpenMP REQUIRED)
 if(OPENMP_FOUND)
 message("OPENMP FOUND")
@@ -16,7 +17,7 @@ set(EXECUTABLE_OUTPUT_PATH "./bin/")
 
 include_directories("/home/bear/workspace/singleGNN/3rdparty/parallel-hashmap")
 include_directories("/home/bear/workspace/singleGNN/src/partition/S5P/code")
-# add_subdirectory(CThreadPool)
+
 
 
 
