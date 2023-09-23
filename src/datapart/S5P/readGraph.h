@@ -67,6 +67,6 @@ public:
     void convert_edgelist(std::string inputfile,std::string outputfile);
     boost::unordered_map<int, int> name2vid;
     int get_vid(int v);
-    
     void createBinfile(std::string outputfile,int64_t num,int loop);
+    void coo2csrFile(std::string inputfile,std::string outputfile,int nodeNUM, int edgeNUM);
 };

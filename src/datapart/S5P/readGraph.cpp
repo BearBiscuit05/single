@@ -162,10 +162,12 @@ void TGEngine::convert2bin(std::string raw_graphPath,std::string new_graphPath,c
     if (saveDegree) {
         degrees.resize(this->nodeNUM,0);
     }
-    std::ifstream inputFile(raw_graphPath);
-    if (!inputFile.is_open()) {
-        std::cerr << "Failed to open input file: " << raw_graphPath << std::endl;
-        return;
+    FILE *inf = fopen(raw_graphPath.c_str(), "r");
+    size_t bytesread = 0;
+    size_t linenum = 0;
+    if (inf == NULL) {
+        std::cout << "Could not load:" << raw_graphPath
+                   << ", error: " << strerror(errno) << std::endl;
     }
 
     std::ofstream outputFile(new_graphPath, std::ios::binary);
@@ -174,23 +176,48 @@ void TGEngine::convert2bin(std::string raw_graphPath,std::string new_graphPath,c
         return;
     }
 
-    std::string line;
-    while (std::getline(inputFile, line)) {
-        std::istringstream iss(line);
-        int src, dst;
-        char block;
-        if (delimiter == ' ')
-            iss >> src >> dst;
-        else
-            iss >> src >> block >> dst;
-        if (saveDegree) {
-            degrees[src]++;
-            degrees[dst]++;
+    std::cout << "Reading in edge list format!" << std::endl;
+    char s[1024];
+    while (fgets(s, 1024, inf) != NULL) {
+        linenum++;
+        if (linenum % 10000000 == 0) {
+            std::cout << "Read " << linenum << " lines, "
+                      << bytesread / 1024 / 1024. << " MB" << std::endl;
         }
-        outputFile.write((char *)&src, sizeof(int));
-        outputFile.write((char *)&dst, sizeof(int));  
+        FIXLINE(s);
+        bytesread += strlen(s);
+        if (s[0] == '#')
+            continue; // Comment
+        if (s[0] == '%')
+            continue; // Comment
+
+        char delims[] = "\t, ";
+        char *t;
+        t = strtok(s, delims);
+        if (t == NULL) {
+            std::cout << "Input file is not in right format. "
+                       << "Expecting \"<from>\t<to>\". "
+                       << "Current line: \"" << s << "\"\n";
+        }
+        int from = atoi(t);
+        t = strtok(NULL, delims);
+        if (t == NULL) {
+            std::cout << "Input file is not in right format. "
+                       << "Expecting \"<from>\t<to>\". "
+                       << "Current line: \"" << s << "\"\n";
+        }
+        int to = atoi(t);
+        from = this->get_vid(from);
+        to = this->get_vid(to);
+        if(saveDegree) {
+            degrees[from]++;
+            degrees[to]++;
+        }
+
+        outputFile.write((char *)&from, sizeof(int));
+        outputFile.write((char *)&to, sizeof(int));  
     }
-    inputFile.close();
+    fclose(inf);
     outputFile.close();
     if (saveDegree) {
         outputFile.open(degreePath, std::ios::binary);
@@ -230,7 +257,7 @@ void TGEngine::convert_edgelist(std::string inputfile,std::string outputfile)
         if (s[0] == '%')
             continue; // Comment
 
-        char delims[] = "\t, ";
+        char delims[] = "\t";
         char *t;
         t = strtok(s, delims);
         if (t == NULL) {
@@ -313,6 +340,82 @@ void TGEngine::createBinfile(std::string outputfile,int64_t num,int loop) {
     }
     outputFile.close(); 
 }
+
+void TGEngine::coo2csrFile(std::string inputfile,std::string outputfile,int nodeNUM, int edgeNUM) {
+    // std::vector<int> tmp = std::vector<int>();
+    std::set<int> mySet;
+    // std::unordered_map<int,std::vector<int>> remap;
+    std::unordered_map<int,std::set<int>> remap;
+    for(int i = 0 ; i < nodeNUM ; i++) {
+        remap[i] = mySet;
+    }
+
+    FILE *inf = fopen(inputfile.c_str(), "r");
+    size_t bytesread = 0;
+    size_t linenum = 0;
+    if (inf == NULL) {
+        std::cout << "Could not load:" << inputfile
+                   << ", error: " << strerror(errno) << std::endl;
+    }
+
+    std::ofstream outputFile(outputfile, std::ios::binary);
+    if (!outputFile.is_open()) {
+        std::cerr << "Failed to open output file: " << outputfile << std::endl;
+        return;
+    }
+
+    std::cout << "Reading in edge list format!" << std::endl;
+    char s[1024];
+    while (fgets(s, 1024, inf) != NULL) {
+        linenum++;
+        if (linenum % 10000000 == 0) {
+            std::cout << "Read " << linenum << " lines, "
+                      << bytesread / 1024 / 1024. << " MB" << std::endl;
+        }
+        FIXLINE(s);
+        bytesread += strlen(s);
+        if (s[0] == '#')
+            continue; // Comment
+        if (s[0] == '%')
+            continue; // Comment
+
+        char delims[] = "\t";
+        char *t;
+        t = strtok(s, delims);
+        if (t == NULL) {
+            std::cout << "Input file is not in right format. "
+                       << "Expecting \"<from>\t<to>\". "
+                       << "Current line: \"" << s << "\"\n";
+        }
+        int from = atoi(t);
+        t = strtok(NULL, delims);
+        if (t == NULL) {
+            std::cout << "Input file is not in right format. "
+                       << "Expecting \"<from>\t<to>\". "
+                       << "Current line: \"" << s << "\"\n";
+        }
+        int to = atoi(t);
+        remap[from].insert(to);
+        remap[to].insert(from);
+        // outputFile.write((char *)&from, sizeof(int));
+        // outputFile.write((char *)&to, sizeof(int));  
+    }
+
+    outputFile << nodeNUM << " " << edgeNUM << std::endl;
+    int couut = 0;
+    for (int i = 0; i < nodeNUM; i++) {
+        for(auto& id : remap[i]) {
+            couut++;
+            outputFile << id << " ";
+        }  
+        outputFile << std::endl;
+    }
+    
+    std::cout << "out edge:" << couut << std::endl;
+
+
+}
+
 
 
 

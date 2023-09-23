@@ -105,11 +105,12 @@ TGEngine::TGEngine() {}
 TGEngine::TGEngine(int nodeNUM,int edgeNUM) {
     this->edgeNUM = edgeNUM*2;
     this->nodeNUM = nodeNUM;
+    this->real_num_vertices = 0;
 }
 
 TGEngine::TGEngine(std::string graphPath,int nodeNUM,int edgeNUM) {
     this->graphPath = graphPath;
-
+    this->real_num_vertices = 0;
     Fd = open(this->graphPath.c_str(), O_RDONLY);
     if (Fd == -1) {
         perror("open");
@@ -159,17 +160,14 @@ int TGEngine::readline(std::pair<int, int> &edge) {
 
 void TGEngine::convert2bin(std::string raw_graphPath,std::string new_graphPath,char delimiter,bool saveDegree,std::string degreePath="") {
     if (saveDegree) {
-        degrees.resize(this->nodeNUM,0);
+        degrees.reserve(this->nodeNUM);
     }
-
     FILE *inf = fopen(raw_graphPath.c_str(), "r");
     size_t bytesread = 0;
     size_t linenum = 0;
-
     if (inf == NULL) {
-        printf("无法打开文件。\n");
-    } else {
-        printf("文件成功打开。\n");
+        std::cout << "Could not load:" << raw_graphPath
+                   << ", error: " << strerror(errno) << std::endl;
     }
 
     std::ofstream outputFile(new_graphPath, std::ios::binary);
@@ -193,7 +191,7 @@ void TGEngine::convert2bin(std::string raw_graphPath,std::string new_graphPath,c
         if (s[0] == '%')
             continue; // Comment
 
-        char delims[] = " ";
+        char delims[] = "\t, ";
         char *t;
         t = strtok(s, delims);
         if (t == NULL) {
@@ -209,16 +207,18 @@ void TGEngine::convert2bin(std::string raw_graphPath,std::string new_graphPath,c
                        << "Current line: \"" << s << "\"\n";
         }
         int to = atoi(t);
-        if (saveDegree) {
+        from = this->get_vid(from);
+        to = this->get_vid(to);
+        if(saveDegree) {
             degrees[from]++;
             degrees[to]++;
         }
+
         outputFile.write((char *)&from, sizeof(int));
         outputFile.write((char *)&to, sizeof(int));  
     }
     fclose(inf);
     outputFile.close();
-
     if (saveDegree) {
         outputFile.open(degreePath, std::ios::binary);
         outputFile.write((char *)&degrees[0], degrees.size() * sizeof(int));
@@ -273,6 +273,8 @@ void TGEngine::convert_edgelist(std::string inputfile,std::string outputfile)
                        << "Current line: \"" << s << "\"\n";
         }
         int to = atoi(t);
+        from = this->get_vid(from);
+        to = this->get_vid(to);
         outputFile.write((char *)&from, sizeof(int));
         outputFile.write((char *)&to, sizeof(int));  
     }
@@ -306,6 +308,17 @@ void TGEngine::writeVec(std::string savePath,std::vector<int>& vec) {
     file.close();
     std::cout << "Data has been written to " << savePath << std::endl;
     return;
+}
+
+int TGEngine::get_vid(int v)
+{
+    auto it = name2vid.find(v);
+    if (it == name2vid.end()) {
+        name2vid[v] = this->real_num_vertices;
+        degrees.resize(this->real_num_vertices + 1);
+        return this->real_num_vertices++;
+    }
+    return name2vid[v];
 }
 
 void TGEngine::createBinfile(std::string outputfile,int64_t num,int loop) {
@@ -404,6 +417,7 @@ void TGEngine::coo2csrFile(std::string inputfile,std::string outputfile,int node
 
 
 }
+
 
 
 
