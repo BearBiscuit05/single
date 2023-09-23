@@ -68,4 +68,5 @@ public:
     boost::unordered_map<int, int> name2vid;
     int get_vid(int v);
     
+    void createBinfile(std::string outputfile,int64_t num,int loop);
 };

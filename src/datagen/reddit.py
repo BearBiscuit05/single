@@ -5,6 +5,14 @@ import random
 import pickle
 from dgl.data import RedditDataset
 
+
+DATA_PATH = '/raid/bear/sgnn'
+
+DOWNLOAD_URL = 'http://snap.stanford.edu/ogb/data/nodeproppred/papers100M-bin.zip'
+RAW_DATA_DIR = DATA_PATH +'/raw_dataset'
+PAPERS_RAW_DATA_DIR = f'{RAW_DATA_DIR}/reddit-bin'
+OUTPUT_DATA_DIR = DATA_PATH + '/dataset/reddit'
+
 def load_reddit(self_loop=True):
     data = RedditDataset(self_loop=self_loop,raw_dir='./data/dataset/')
     g = data[0]
@@ -25,6 +33,18 @@ def load_reddit(self_loop=True):
     return g, data,train_idx,val_idx,test_idx
 
 g, dataset,train_idx,val_idx,test_idx= load_reddit()
+
+def write_meta():
+    print('Writing meta file...')
+    with open(f'{OUTPUT_DATA_DIR}/meta.txt', 'w') as f:
+        f.write('{}\t{}\n'.format('NUM_NODE', 232965))
+        f.write('{}\t{}\n'.format('NUM_EDGE', 114848857))
+        f.write('{}\t{}\n'.format('FEAT_DIM', 602))
+        f.write('{}\t{}\n'.format('NUM_CLASS', 41))
+        f.write('{}\t{}\n'.format('NUM_TRAIN_SET', 153431))
+        f.write('{}\t{}\n'.format('NUM_VALID_SET', 23831))
+        f.write('{}\t{}\n'.format('NUM_TEST_SET', 55703))
+
 
 src = g.edges()[0].numpy()
 dst = g.edges()[1].numpy()
@@ -75,7 +95,7 @@ def gen_lp():
     split_pt['train']={}
     split_pt['train']['source_node']=raw_train_src
     split_pt['train']['target_node']=raw_train_dst
-    split_pt['train']['target_node_neg']=raw_train_src
+    split_pt['train']['target_node_neg']=train_neg_dst
 
     split_pt['valid']={}
     split_pt['valid']['source_node']=raw_val_src
