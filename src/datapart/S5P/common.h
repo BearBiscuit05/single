@@ -26,8 +26,7 @@
 #include <stdexcept>
 #include <limits>
 #include "omp.h"
-#include <parallel_hashmap/phmap.h>
-
+#include <boost/unordered_map.hpp>
 
 # define THREADNUM 12
 # define NODENUM 3997962

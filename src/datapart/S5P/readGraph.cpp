@@ -105,11 +105,12 @@ TGEngine::TGEngine() {}
 TGEngine::TGEngine(int nodeNUM,int edgeNUM) {
     this->edgeNUM = edgeNUM*2;
     this->nodeNUM = nodeNUM;
+    this->real_num_vertices = 0;
 }
 
 TGEngine::TGEngine(std::string graphPath,int nodeNUM,int edgeNUM) {
     this->graphPath = graphPath;
-
+    this->real_num_vertices = 0;
     Fd = open(this->graphPath.c_str(), O_RDONLY);
     if (Fd == -1) {
         perror("open");
@@ -280,7 +281,16 @@ void TGEngine::writeVec(std::string savePath,std::vector<int>& vec) {
     return;
 }
 
-
+int TGEngine::get_vid(int v)
+{
+    auto it = name2vid.find(v);
+    if (it == name2vid.end()) {
+        name2vid[v] = this->real_num_vertices;
+        degrees.resize(this->real_num_vertices + 1);
+        return this->real_num_vertices++;
+    }
+    return name2vid[v];
+}
 
 
 
