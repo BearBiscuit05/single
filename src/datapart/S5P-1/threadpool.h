@@ -13,13 +13,8 @@
 
 namespace std
 {
-//线程池最大容量,应尽量设小一点
-#define  THREADPOOL_MAX_NUM 16
-//线程池是否可以自动增长(如果需要,且不超过 THREADPOOL_MAX_NUM)
+#define  THREADPOOL_MAX_NUM 2
 //#define  THREADPOOL_AUTO_GROW
-
-//线程池,可以提交变参函数或拉姆达表达式的匿名函数执行,可以获取执行返回值
-//不直接支持类成员函数, 支持类静态成员函数或全局函数,Opteron()函数等
 class threadpool
 {
 	unsigned short _initSize;       //初始化线程数量

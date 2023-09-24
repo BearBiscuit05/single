@@ -3,8 +3,6 @@
 // #include "ClusterGameTask.h"
 #include "Partitioner.h"
 
-
-
 void printParaInfo(GlobalConfig& configInfo) {
     std::cout << "input graph: " << configInfo.inputGraphPath << std::endl;
     std::cout << "vCount: " << configInfo.vCount << std::endl;
@@ -21,7 +19,7 @@ void printParaInfo(GlobalConfig& configInfo) {
 }
 
 using namespace std;
-std::string inputGraphPath = "/raid/bear/bigdata/com-lj.bin";
+std::string inputGraphPath = "/home/bear/workspace/singleGNN/src/datapart/S5P/com.bin";
 
 int main() {
     omp_set_num_threads(THREADNUM);
@@ -45,7 +43,7 @@ int main() {
     
     streamCluster.startStreamCluster();
     std::cout << "Big clustersize:" << streamCluster.getClusterList_B().size() << std::endl;
-    std::cout << "Small clustersize:" << streamCluster.getClusterList_S().size()<< std::endl;
+    std::cout << "Small clustersize:" << streamCluster.getClusterList_S().size()<< std::endl;   
     auto ClusteringTime = std::chrono::high_resolution_clock::now();
     std::cout << "End Clustering" << std::endl;
     streamCluster.computeHybridInfo();
@@ -102,5 +100,3 @@ int main() {
 
     return 0;
 }
-
-

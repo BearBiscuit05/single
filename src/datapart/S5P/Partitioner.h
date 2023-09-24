@@ -21,9 +21,6 @@ public:
     double getReplicateFactor();
     double getLoadBalance();
     void startStackelbergGame();
-    void findPid_B(std::vector<std::pair<int,int>>& ids,std::vector<int>& pids,int& ptr);
-    void findPid_S(std::vector<std::pair<int,int>>& ids,std::vector<int>& pids,int& ptr);
-    void setPid(std::vector<std::pair<int,int>>& ids,std::vector<int>& pids,int& ptr);
 };
 
 #endif // PARTITIONER_H

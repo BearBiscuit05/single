@@ -5,6 +5,7 @@
 #include <iostream>
 #include <algorithm>
 #include <fstream>
+#include <queue>
 #include "readGraph.h"
 
 struct Triplet {
@@ -44,6 +45,19 @@ public:
     std::vector<Triplet> cacheData;
     void outputClusterSizeInfo();
     void mergeMap(std::vector<std::unordered_map<std::string , int>>& maplist,int& cachePtr);
+    
+    void Start();
+    void Producer();
+    void Consumer();
+    void Stop();
+
+    //int MaxQueueSize = 10;
+    std::queue<std::string> buffer;
+    std::mutex mtx;
+    std::condition_variable cv;
+    std::thread producerThread;
+    std::thread consumerThread;
+    std::unique_lock<std::mutex> _lock; // 上锁
 };
 
 

@@ -53,6 +53,8 @@ public:
     off_t chunkSize = 0;
     off_t offset = 0;
 
+    int real_num_vertices;
+    
     TGEngine();
     TGEngine(int nodeNUM,int64_t edgeNUM);
     TGEngine(std::string graphPath,int nodeNUM,int64_t edgeNUM);
@@ -63,4 +65,8 @@ public:
     void readDegree(std::string degreePath,std::vector<int>& degreeList);
     void writeVec(std::string savePath,std::vector<int>& vec);
     void convert_edgelist(std::string inputfile,std::string outputfile);
+    boost::unordered_map<int, int> name2vid;
+    int get_vid(int v);
+    void createBinfile(std::string outputfile,int64_t num,int loop);
+    void coo2csrFile(std::string inputfile,std::string outputfile,int nodeNUM, int64_t edgeNUM);
 };
