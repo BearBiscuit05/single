@@ -102,13 +102,13 @@ void ReadEngine::readTrainIdx(std::vector<int64_t>& ids) {
 
 TGEngine::TGEngine() {}
 
-TGEngine::TGEngine(int nodeNUM,int edgeNUM) {
+TGEngine::TGEngine(int nodeNUM,int64_t edgeNUM) {
     this->edgeNUM = edgeNUM*2;
     this->nodeNUM = nodeNUM;
     this->real_num_vertices = 0;
 }
 
-TGEngine::TGEngine(std::string graphPath,int nodeNUM,int edgeNUM) {
+TGEngine::TGEngine(std::string graphPath,int nodeNUM,int64_t edgeNUM) {
     this->graphPath = graphPath;
     this->real_num_vertices = 0;
     Fd = open(this->graphPath.c_str(), O_RDONLY);
@@ -341,7 +341,7 @@ void TGEngine::createBinfile(std::string outputfile,int64_t num,int loop) {
     outputFile.close(); 
 }
 
-void TGEngine::coo2csrFile(std::string inputfile,std::string outputfile,int nodeNUM, int edgeNUM) {
+void TGEngine::coo2csrFile(std::string inputfile,std::string outputfile,int nodeNUM, int64_t edgeNUM) {
     // std::vector<int> tmp = std::vector<int>();
     std::set<int> mySet;
     // std::unordered_map<int,std::vector<int>> remap;

@@ -44,9 +44,9 @@ public:
     off_t edgeLength;
     int* edgeAddr;
 
-    int edgeNUM=0;
+    int64_t edgeNUM=0;
     int nodeNUM=0;
-    int readPtr=0;
+    int64_t readPtr=0;
     std::vector<int> degrees;
     size_t readSize = 4096 * 16;
     int batch = readSize / sizeof(int);
@@ -56,8 +56,8 @@ public:
     int real_num_vertices;
     
     TGEngine();
-    TGEngine(int nodeNUM,int edgeNUM);
-    TGEngine(std::string graphPath,int nodeNUM,int edgeNUM);
+    TGEngine(int nodeNUM,int64_t edgeNUM);
+    TGEngine(std::string graphPath,int nodeNUM,int64_t edgeNUM);
     void loadingMmapBlock();
     void unmapBlock(int* addr, off_t size);
     int readline(std::pair<int, int> &edge);
@@ -68,5 +68,5 @@ public:
     boost::unordered_map<int, int> name2vid;
     int get_vid(int v);
     void createBinfile(std::string outputfile,int64_t num,int loop);
-    void coo2csrFile(std::string inputfile,std::string outputfile,int nodeNUM, int edgeNUM);
+    void coo2csrFile(std::string inputfile,std::string outputfile,int nodeNUM, int64_t edgeNUM);
 };

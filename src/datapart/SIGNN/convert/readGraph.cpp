@@ -100,7 +100,7 @@ void ReadEngine::readTrainIdx(std::vector<int64_t>& ids) {
     }
 }
 
-TGEngine::TGEngine() {}
+TGEngine::TGEngine() {this->real_num_vertices = 0;}
 
 TGEngine::TGEngine(int nodeNUM,int edgeNUM) {
     this->edgeNUM = edgeNUM*2;
@@ -191,7 +191,7 @@ void TGEngine::convert2bin(std::string raw_graphPath,std::string new_graphPath,c
         if (s[0] == '%')
             continue; // Comment
 
-        char delims[] = "\t, ";
+        char delims[] = "\t";
         char *t;
         t = strtok(s, delims);
         if (t == NULL) {
@@ -207,8 +207,10 @@ void TGEngine::convert2bin(std::string raw_graphPath,std::string new_graphPath,c
                        << "Current line: \"" << s << "\"\n";
         }
         int to = atoi(t);
+        // std::cout << "raw : "<<from << " --> " << to << std::endl;
         from = this->get_vid(from);
         to = this->get_vid(to);
+        // std::cout << "after : "<< from << " --> " << to << std::endl;
         if(saveDegree) {
             degrees[from]++;
             degrees[to]++;
@@ -219,6 +221,7 @@ void TGEngine::convert2bin(std::string raw_graphPath,std::string new_graphPath,c
     }
     fclose(inf);
     outputFile.close();
+    std::cout << "all node num:" << real_num_vertices << std::endl;
     if (saveDegree) {
         outputFile.open(degreePath, std::ios::binary);
         outputFile.write((char *)&degrees[0], degrees.size() * sizeof(int));

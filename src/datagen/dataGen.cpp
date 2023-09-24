@@ -1,4 +1,3 @@
-#pragma once
 #include <vector>
 #include <string>
 #include <iostream>
@@ -51,7 +50,7 @@ int main(int argc, char* argv[]) {
     std::ofstream file(binfilePath, std::ios::binary);
     if (!file.is_open()) {
         std::cerr << "Failed to open file for writing: " << binfilePath << std::endl;
-        return;
+        return 0;
     }
     std::vector<int> featBlcok(featLen,0);
     for (int64_t i = 0 ; i < numNodes ; i++) {

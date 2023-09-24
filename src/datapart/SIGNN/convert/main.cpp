@@ -20,10 +20,10 @@ int main(int argc, char* argv[]) {
 
     // int64_t NUM_NODE=77741046;
     // int featLen = 300;
-    std::string infile = "/raid/dzz/twitter-2010.txt";
-    std::string outer = "/raid/bear/bigdata/tw2010.bin";
-    int nodeNUM = 41652230;
-    int edgeNUM = 1468365182;
+    std::string infile = "/home/dzz/graphdataset/YT/Dcom-youtube.ungraph.txt";
+    std::string outer = "/raid/bear/bigdata/youtube.bin";
+    // int nodeNUM = 65608366;
+    // int edgeNUM = 1806067135;
     tgEngine.convert2bin(infile,outer,' ',false,"");
     
     // int64_t NUM_NODE=105896555;
