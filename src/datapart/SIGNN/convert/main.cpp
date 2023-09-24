@@ -20,8 +20,8 @@ int main(int argc, char* argv[]) {
 
     // int64_t NUM_NODE=77741046;
     // int featLen = 300;
-    std::string infile = "/home/dzz/graphdataset/YT/Dcom-youtube.ungraph.txt";
-    std::string outer = "/raid/bear/bigdata/youtube.bin";
+    std::string infile = "/raid/bear/dataset/com_fr/com-friendster.ungraph.txt";
+    std::string outer = "/raid/bear/dataset/com_fr/com_fr.bin";
     // int nodeNUM = 65608366;
     // int edgeNUM = 1806067135;
     tgEngine.convert2bin(infile,outer,' ',false,"");
