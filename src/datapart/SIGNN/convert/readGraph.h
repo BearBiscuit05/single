@@ -26,8 +26,9 @@
 #include <fcntl.h>
 #include <stdexcept>
 #include <limits>
+#include <set>
 #include "omp.h"
-
+#include <boost/unordered_map.hpp>
 class ReadEngine {
 public:
     std::string graphPath;
@@ -59,7 +60,7 @@ public:
     void loadingMmapBlock();
     void unmapBlock(int64_t* addr, off_t size);
     void readTrainIdx(std::vector<int64_t>& ids);
-    int readlines(std::vector<std::pair<int64_t, int64_t>> &edges,std::vector<int64_t>& eids,int& edgesNUM);  
+    int readlines(std::vector<std::pair<int64_t, int64_t>> &edges,std::vector<int64_t>& eids,int& edgesNUM);
 };
 
 
@@ -81,6 +82,8 @@ public:
     off_t chunkSize = 0;
     off_t offset = 0;
 
+    int real_num_vertices;
+    
     TGEngine();
     TGEngine(int nodeNUM,int edgeNUM);
     TGEngine(std::string graphPath,int nodeNUM,int edgeNUM);
@@ -91,5 +94,8 @@ public:
     void readDegree(std::string degreePath,std::vector<int>& degreeList);
     void writeVec(std::string savePath,std::vector<int>& vec);
     void convert_edgelist(std::string inputfile,std::string outputfile);
+    boost::unordered_map<int, int> name2vid;
+    int get_vid(int v);
     void createBinfile(std::string outputfile,int64_t num,int loop);
+    void coo2csrFile(std::string inputfile,std::string outputfile,int nodeNUM, int edgeNUM);
 };

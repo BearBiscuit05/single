@@ -5,11 +5,21 @@ using namespace std;
 
 
 int main(int argc, char* argv[]) {
-    // if (argc != 4) {
-    //     std::cerr << "Usage: " << argv[0] << " <binfile_path> <num_nodes> <feat_len>" << std::endl;
-    //     return 1;
-    // }
+    if (argc != 4) {
+        std::cerr << "Usage: " << argv[0] << " <binfile_path> <num_nodes> <feat_len>" << std::endl;
+        return 1;
+    }
 
+    // 获取命令行参数
+    const char* binfilePath = argv[1];
+    int numNodes = std::stoi(argv[2]);
+    int featLen = std::stoi(argv[3]);
+
+    // 在这里使用获取到的参数
+    std::cout << "Binfile Path: " << binfilePath << std::endl;
+    std::cout << "Number of Nodes: " << numNodes << std::endl;
+    std::cout << "Feature Length: " << featLen << std::endl;
+    // 3072441,10308445
     TGEngine tgEngine; 
     //char t = ''
     //tgEngine.convert2bin("/home/dzz/graphdataset/com-orkut/Dcom-orkut.ungraph.txt","edge.bin",'\t',false,"");
@@ -20,11 +30,7 @@ int main(int argc, char* argv[]) {
 
     // int64_t NUM_NODE=77741046;
     // int featLen = 300;
-    std::string infile = "/raid/dzz/twitter-2010.txt";
-    std::string outer = "/raid/bear/bigdata/tw2010.bin";
-    int nodeNUM = 41652230;
-    int edgeNUM = 1468365182;
-    tgEngine.convert2bin(infile,outer,' ',false,"");
+    tgEngine.createBinfile(binfilePath,numNodes,featLen);
     
     // int64_t NUM_NODE=105896555;
     // int featLen = 300;

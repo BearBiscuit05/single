@@ -26,10 +26,10 @@
 #include <stdexcept>
 #include <limits>
 #include "omp.h"
-#include <parallel_hashmap/phmap.h>
+#include <boost/unordered_map.hpp>
 
-
-# define THREADNUM 16
+# define THREADNUM 12
 # define NODENUM 3997962
 # define EDGENUM 34681189
 # define BATCH 204800
+# define P_BATCH BATCH*2
