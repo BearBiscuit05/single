@@ -44,12 +44,12 @@ public:
   CountMinSketch(float eps, float gamma);
   
   // update item (int) by count c
-  void update(int item, int c);
+  void update(uint64_t item, int c);
   // update item (string) by count c
   void update(const char *item, int c);
 
   // estimate count of item i and return count
-  unsigned int estimate(int item);
+  unsigned int estimate(uint64_t item);
   unsigned int estimate(const char *item);
 
   // return total count
