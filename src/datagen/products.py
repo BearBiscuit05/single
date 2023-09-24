@@ -38,8 +38,8 @@ def download_data():
 def write_meta():
     print('Writing meta file...')
     with open(f'{OUTPUT_DATA_DIR}/meta.txt', 'w') as f:
-        f.write('{}\t{}\n'.format('NUM_NODE', 123718280))
-        f.write('{}\t{}\n'.format('NUM_EDGE', 2449029))
+        f.write('{}\t{}\n'.format('NUM_NODE', 2449029))
+        f.write('{}\t{}\n'.format('NUM_EDGE', 123718280))
         f.write('{}\t{}\n'.format('FEAT_DIM', 100))
         f.write('{}\t{}\n'.format('NUM_CLASS', 47))
         f.write('{}\t{}\n'.format('NUM_TRAIN_SET', 196615))

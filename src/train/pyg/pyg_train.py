@@ -115,28 +115,28 @@ def run(args, dataset,split_idx=None):
             print("| Epoch {:05d} | Loss {:.4f} | Time {:.3f}s | Count {} |"
               .format(basicLoop+epoch, total_loss / (it+1), trainTime, count))
 
-            # if (epoch+1) in loopList :  # We evaluate on a single GPU for now
-            #     if args.dataset == 'Reddit':
-            #         model.eval()
-            #         with torch.no_grad():
-            #             out = model.inference(data.x, "cuda:0", subgraph_loader)
-            #         res = out.argmax(dim=-1) == data.y.to(out.device)
-            #         acc1 = int(res[data.train_mask].sum()) / int(data.train_mask.sum())
-            #         acc2 = int(res[data.val_mask].sum()) / int(data.val_mask.sum())
-            #         acc3 = int(res[data.test_mask].sum()) / int(data.test_mask.sum())
-            #         print(f'Train: {acc1:.4f}, Val: {acc2:.4f}, Test: {acc3:.4f}')
-            #     elif args.dataset == 'ogb-products':
-            #         evaluator = Evaluator(name='ogbn-products')
-            #         train_acc, val_acc, test_acc = test(model,evaluator,data,subgraph_loader,split_idx)
-            #         print(f'Train: {train_acc:.4f}, Val: {val_acc:.4f}, '
-            #                     f'Test: {test_acc:.4f}')
+            if (epoch+1) in loopList :  # We evaluate on a single GPU for now
+                if args.dataset == 'Reddit':
+                    model.eval()
+                    with torch.no_grad():
+                        out = model.inference(data.x, "cuda:0", subgraph_loader)
+                    res = out.argmax(dim=-1) == data.y.to(out.device)
+                    acc1 = int(res[data.train_mask].sum()) / int(data.train_mask.sum())
+                    acc2 = int(res[data.val_mask].sum()) / int(data.val_mask.sum())
+                    acc3 = int(res[data.test_mask].sum()) / int(data.test_mask.sum())
+                    print(f'Train: {acc1:.4f}, Val: {acc2:.4f}, Test: {acc3:.4f}')
+                elif args.dataset == 'ogb-products':
+                    evaluator = Evaluator(name='ogbn-products')
+                    train_acc, val_acc, test_acc = test(model,evaluator,data,subgraph_loader,split_idx)
+                    print(f'Train: {train_acc:.4f}, Val: {val_acc:.4f}, '
+                                f'Test: {test_acc:.4f}')
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='pyg gcn program')
-    parser.add_argument('--fanout', type=ast.literal_eval, default=[25, 10], help='Fanout value')
-    parser.add_argument('--layers', type=int, default=2, help='Number of layers')
-    parser.add_argument('--dataset', type=str, default='ogb-papers100M', help='Dataset name')
+    parser.add_argument('--fanout', type=ast.literal_eval, default=[10, 10, 10], help='Fanout value')
+    parser.add_argument('--layers', type=int, default=3, help='Number of layers')
+    parser.add_argument('--dataset', type=str, default='ogb-products', help='Dataset name')
     parser.add_argument('--maxloop', type=int, default=10, help='max loop number')
     parser.add_argument('--model', type=str, default="SAGE", help='train model')
 
