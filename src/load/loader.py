@@ -729,13 +729,13 @@ class CustomDataset(Dataset):
             tmp_feat = np.fromfile(filePath + "/feat.bin", dtype=np.float32)
 
         if self.feats == []:
-            self.feats = torch.from_numpy(tmp_feat).reshape(-1, self.featlen)#.to("cuda:0")
+            self.feats = torch.from_numpy(tmp_feat).reshape(-1, self.featlen).to("cuda:0")
         else:
             if preFetch == False:
-                tmp_feat = torch.from_numpy(tmp_feat).reshape(-1, self.featlen)#.to("cuda:0")
+                tmp_feat = torch.from_numpy(tmp_feat).reshape(-1, self.featlen).to("cuda:0")
                 self.feats = torch.cat([self.feats, tmp_feat])
             else:
-                preFeat = torch.from_numpy(preFeat).reshape(-1, self.featlen)#.to("cuda:0")
+                preFeat = torch.from_numpy(preFeat).reshape(-1, self.featlen).to("cuda:0")
                 self.feats = torch.cat([self.feats, preFeat])
     
     #@profile(precision=4, stream=open('./info.log','w+'))

@@ -108,8 +108,8 @@ if __name__ == '__main__':
     parser.add_argument("--mode", default='mixed', choices=['cpu', 'mixed', 'puregpu'],
                         help="Training mode. 'cpu' for CPU training, 'mixed' for CPU-GPU mixed training, "
                              "'puregpu' for pure-GPU training.")
-    parser.add_argument('--fanout', type=ast.literal_eval, default=[15, 25], help='Fanout value')
-    parser.add_argument('--layers', type=int, default=2, help='Number of layers')
+    parser.add_argument('--fanout', type=ast.literal_eval, default=[20, 20, 20], help='Fanout value')
+    parser.add_argument('--layers', type=int, default=3, help='Number of layers')
     parser.add_argument('--dataset', type=str, default='ogb-products', help='Dataset name')
     parser.add_argument('--maxloop', type=int, default=200, help='max loop number')
     parser.add_argument('--model', type=str, default="SAGE", help='train model')
