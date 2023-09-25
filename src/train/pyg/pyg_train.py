@@ -47,11 +47,12 @@ def test(model,evaluator,data,subgraph_loader,split_idx):
 def run(args, dataset,split_idx=None):
     loopList = [0,10,20,30,50,100,150,200]
     data = dataset[0]
-    data = data.to('cuda:0', 'x', 'y')  # Move to device for faster feature fetch.
+    data.y = data.y.to(torch.int64)
+    #data = data.to('cuda:0', 'x', 'y')  # Move to device for faster feature fetch.
     # data = data.to('cuda:0', 'y')
     if args.dataset == 'Reddit':
         train_idx = data.train_mask.nonzero(as_tuple=False).view(-1)
-    elif args.dataset == 'ogb-products':
+    elif args.dataset == 'ogb-products' or args.dataset == 'ogb-papers100M':
         train_idx = split_idx['train']
         val_idx = split_idx['valid']
         test_idx = split_idx['test']
@@ -80,6 +81,8 @@ def run(args, dataset,split_idx=None):
         feat_size,classNUM = 602,41
     elif args.dataset == 'ogb-products':
         feat_size,classNUM = 100,47
+    elif args.dataset == 'ogb-papers100M':
+        feat_size,classNUM = 128,172
 
     if args.model == "SAGE":
         model = SAGE(feat_size, 256, classNUM,args.layers).to('cuda:0')
@@ -136,7 +139,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='pyg gcn program')
     parser.add_argument('--fanout', type=ast.literal_eval, default=[10, 10, 10], help='Fanout value')
     parser.add_argument('--layers', type=int, default=3, help='Number of layers')
-    parser.add_argument('--dataset', type=str, default='ogb-products', help='Dataset name')
+    parser.add_argument('--dataset', type=str, default='ogb-papers100M', help='Dataset name')
     parser.add_argument('--maxloop', type=int, default=10, help='max loop number')
     parser.add_argument('--model', type=str, default="SAGE", help='train model')
 
@@ -158,12 +161,13 @@ if __name__ == '__main__':
         evaluator = Evaluator(name='ogbn-products')
         run(args, dataset,split_idx)
     elif args.dataset == 'ogb-papers100M':
-        root = osp.join(osp.dirname(osp.realpath(__file__)), '/raid/bear/', 'ogb_dataset')
+        # root = osp.join(osp.dirname(osp.realpath(__file__)), '/raid/bear/', 'ogb_dataset')
+        root = "/raid/bear/wget_paper"
         print("root:",root)
         dataset = PygNodePropPredDataset('ogbn-papers100M', root)
         split_idx = dataset.get_idx_split()
         print("加载完毕")
         # evaluator = Evaluator(name='ogbn-papers100M')
-        # run(args, dataset,split_idx)
+        run(args, dataset,split_idx)
     # else:
     #     raise ValueError(f"Unsupported dataset: {args.dataset}")
