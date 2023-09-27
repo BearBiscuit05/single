@@ -22,6 +22,7 @@ using namespace std;
 // ep -> error 0.01 < ep < 1 (the smaller the better)
 // gamma -> probability for error (the smaller the better) 0 < gamm < 1
 CountMinSketch::CountMinSketch(float ep, float gamm) {
+  std::cout << "cm init..." << std::endl;
   if (!(0.009 <= ep && ep < 1)) {
     cout << "eps must be in this range: [0.01, 1)" << endl;
     exit(EXIT_FAILURE);
@@ -34,6 +35,7 @@ CountMinSketch::CountMinSketch(float ep, float gamm) {
   w = ceil(exp(1)/eps);
   d = ceil(log(1/gamma));
   total = 0;
+  //std::cout << "d" << d << std::endl;
   // initialize counter array of arrays, C
   C = new int *[d];
   unsigned int i, j;
@@ -50,6 +52,7 @@ CountMinSketch::CountMinSketch(float ep, float gamm) {
     hashes[i] = new int[2];
     genajbj(hashes, i);
   }
+
 }
 
 // CountMinSkectch destructor
@@ -75,33 +78,33 @@ unsigned int CountMinSketch::totalcount() {
 }
 
 // countMinSketch update item count (int)
-void CountMinSketch::update(int item, int c) {
+void CountMinSketch::update(uint64_t item, int c) {
   total = total + c;
   unsigned int hashval = 0;
-  //std::cout << "update... -->"<<item << std::endl;
+  // std::cout << "get in update" << std::endl;
   for (unsigned int j = 0; j < d; j++) {
     hashval = ((unsigned int)hashes[j][0]*item+hashes[j][1])%LONG_PRIME%w;
-    // std::cout << hashes[j][0] << " " << item << " " << hashes[j][1] << " " << C[0][0] << w << std::endl; 
+    // std::cout << hashes[j][0] << " " << item << " " << hashes[j][1] << " " << w << std::endl; 
     // std::cout << "hashval:"<< hashval << std::endl;
     C[j][hashval] = C[j][hashval] + c;
   }
-  //std::cout << "get in update end" << std::endl;
+  // std::cout << "get in update end" << std::endl;
 }
 
 // countMinSketch update item count (string)
 void CountMinSketch::update(const char *str, int c) {
-  
-  int hashval = hashstr(str);
+  int hashval = 0;
+  //int hashval = hashstr(str);
   update(hashval, c);
 }
 
 // CountMinSketch estimate item count (int)
-unsigned int CountMinSketch::estimate(int item) {
-  int minval = numeric_limits<int>::max();
+unsigned int CountMinSketch::estimate(uint64_t item) {
+  int minval = 1;
   unsigned int hashval = 0;
   for (unsigned int j = 0; j < d; j++) {
-    hashval = ((unsigned int)hashes[j][0]*item+hashes[j][1])%LONG_PRIME%w;
-    minval = MIN(minval, C[j][hashval]);
+    // hashval = ((unsigned int)hashes[j][0]*item+hashes[j][1])%LONG_PRIME%w;
+    // minval = MIN(minval, C[j][hashval]);
   }
   return minval;
 }
@@ -109,7 +112,9 @@ unsigned int CountMinSketch::estimate(int item) {
 // CountMinSketch estimate item count (string)
 unsigned int CountMinSketch::estimate(const char *str) {
   int hashval = hashstr(str);
-  return estimate(hashval);
+  //int hashval = 0;
+  //return estimate(hashval);
+  return 0;
 }
 
 // generates aj,bj from field Z_p for use in hashing

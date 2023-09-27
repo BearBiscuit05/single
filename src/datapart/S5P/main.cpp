@@ -3,6 +3,8 @@
 // #include "ClusterGameTask.h"
 #include "Partitioner.h"
 
+
+
 void printParaInfo(GlobalConfig& configInfo) {
     std::cout << "input graph: " << configInfo.inputGraphPath << std::endl;
     std::cout << "vCount: " << configInfo.vCount << std::endl;
@@ -19,7 +21,7 @@ void printParaInfo(GlobalConfig& configInfo) {
 }
 
 using namespace std;
-std::string inputGraphPath = "/home/bear/workspace/singleGNN/src/datapart/S5P/com.bin";
+std::string inputGraphPath = "/home/bear/workspace/singleGNN/com-lj.bin";
 
 int main() {
     omp_set_num_threads(THREADNUM);
@@ -44,9 +46,9 @@ int main() {
     streamCluster.startStreamCluster();
     std::cout << "Big clustersize:" << streamCluster.getClusterList_B().size() << std::endl;
     std::cout << "Small clustersize:" << streamCluster.getClusterList_S().size()<< std::endl;
-    streamCluster.computeHybridInfo();
     auto ClusteringTime = std::chrono::high_resolution_clock::now();
     std::cout << "End Clustering" << std::endl;
+    streamCluster.computeHybridInfo();
     std::cout << "partitioner config:" << configInfo.batchSize << std::endl;
     auto ClusterEndTime = std::chrono::high_resolution_clock::now();
     
@@ -86,7 +88,7 @@ int main() {
     // -------------------output-----------------------
     double rf = partitioner.getReplicateFactor();
     double lb = partitioner.getLoadBalance();
-    int roundCnt = partitioner.gameRoundCnt;
+    int roundCnt = partitioner.gameRoundCnt_hybrid + partitioner.gameRoundCnt_inner;
     std::cout << "[===S5V-data===]" << std::endl;
     std::cout << "Partition num:" << configInfo.partitionNum << std::endl;
     duration = std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime);
@@ -94,8 +96,11 @@ int main() {
     std::cout << "Relative balance load:" << lb << std::endl;
     std::cout << "Replicate factor: " << rf << std::endl;
     std::cout << "Total game round:" << roundCnt << std::endl;
-    
+    std::cout << "Total hybrid game round:" << partitioner.gameRoundCnt_hybrid << std::endl;
+    std::cout << "Total inner game round:" << partitioner.gameRoundCnt_inner << std::endl;
     std::cout << "[===S5V-end===]" << std::endl;
 
     return 0;
 }
+
+
