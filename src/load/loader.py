@@ -413,7 +413,8 @@ class CustomDataset(Dataset):
             self.cacheData[0] = self.cacheData[0].contiguous()
             self.cacheData[1] = self.cacheData[1].contiguous()
             gap = 0
-            signn.torch_graph_halo_merge(self.cacheData[0],self.cacheData[1],edges,bound,self.graphNodeNUM,gap)
+            dgl.loadGraphHalo(self.cacheData[1],self.cacheData[0],edges,bound,gap)
+            # signn.torch_graph_halo_merge(self.cacheData[0],self.cacheData[1],edges,bound,self.graphNodeNUM,gap)
         except:
             logger.info("graph {} has no halo file with {}...".format(self.trainingGID,self.nextGID))
             print("graph {} has no halo file with {}...".format(self.trainingGID,self.nextGID))
