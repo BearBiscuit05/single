@@ -8,22 +8,22 @@ import time
 import struct
 import os
 import copy
-
+import dgl
 
 def haloTest(graphEdge,boundList):
-    file_path = './../../../data/products_4/part0/srcList.bin'
+    file_path = './../../../data/products/products_4/part0/srcList.bin'
     graphEdge1 = np.fromfile(file_path, dtype=np.int32)
     graphEdge1 = torch.tensor(graphEdge1).to('cuda:0')
-    file_path = "./../../../data/products_4/part0/range.bin"
+    file_path = "./../../../data/products/products_4/part0/range.bin"
     boundList1 = np.fromfile(file_path, dtype=np.int32)
     boundList1 = torch.tensor(boundList1).to('cuda:0')
     nodeNUM = int((len(boundList1))/2)
     edgeLen = len(graphEdge1)
 
-    file_path = './../../../data/products_4/part3/srcList.bin'
+    file_path = './../../../data/products/products_4/part3/srcList.bin'
     graphEdge2 = np.fromfile(file_path, dtype=np.int32)
     graphEdge2 = torch.tensor(graphEdge2).to('cuda:0')
-    file_path = "./../../../data/products_4/part3/range.bin"
+    file_path = "./../../../data/products/products_4/part3/range.bin"
     boundList2 = np.fromfile(file_path, dtype=np.int32)
     boundList2 = torch.tensor(boundList2).to('cuda:0')
     graphEdge2 = graphEdge2 + int(nodeNUM)
@@ -32,10 +32,10 @@ def haloTest(graphEdge,boundList):
     graphEdge = torch.cat([graphEdge1,graphEdge2])
     boundList = torch.cat([boundList1,boundList2])
 
-    file_path = './../../../data/products_4/part0/halo3.bin'
+    file_path = './../../../data/products/products_4/part0/halo3.bin'
     halo2 = np.fromfile(file_path, dtype=np.int32)
     halo2 = torch.tensor(halo2).to('cuda:0')
-    file_path = "./../../../data/products_4/part0/halo3_bound.bin"
+    file_path = "./../../../data/products/products_4/part0/halo3_bound.bin"
     halobound = np.fromfile(file_path, dtype=np.int32)
     halobound = torch.tensor(halobound).to('cuda:0')
     graphEdge_tmp = copy.deepcopy(graphEdge).to('cpu')
@@ -58,6 +58,8 @@ def right_Test(graphEdge,boundList):
     out_dst = torch.Tensor(out_dst).to(torch.int).to('cuda:0')
     start = time.time()
     out_num = torch.Tensor([0]).to(torch.int64).to('cuda:0')
+    # NUM = dgl.sampling.sample_with_edge(self.cacheData[0],self.cacheData[1],
+    #             sampleIDs,seed_num,fan_num,out_src,out_dst)
     signn.torch_sample_hop(graphEdge,boundList,seed,seed_num,fanout,out_src,out_dst,out_num)
     print("comput time:",time.time()-start)
     print("out_dst :",out_dst)

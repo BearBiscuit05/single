@@ -459,7 +459,6 @@ class CustomDataset(Dataset):
         sampleIDs = sampleIDs.to(torch.int32).to('cuda:0')
         ptr = 0
         mapping_ptr = [ptr]
-        batch = len(sampleIDs)
         
         sampleStart = time.time()
         for l, fan_num in enumerate(self.fanout):
@@ -469,15 +468,17 @@ class CustomDataset(Dataset):
                 seed_num = len(sampleIDs)
             out_src = cacheGraph[0][ptr:ptr+seed_num*fan_num]
             out_dst = cacheGraph[1][ptr:ptr+seed_num*fan_num]
-            out_num = torch.Tensor([0]).to(torch.int64).to('cuda:0')
-            
-            signn.torch_sample_hop(
-                self.cacheData[0],self.cacheData[1],
-                sampleIDs,seed_num,fan_num,
-                out_src,out_dst,out_num)
+            NUM = dgl.sampling.sample_with_edge(self.cacheData[1],self.cacheData[0],
+                sampleIDs,seed_num,fan_num,out_src,out_dst)
+            # out_num = torch.Tensor([0]).to(torch.int64).to('cuda:0')
+            # signn.torch_sample_hop(
+            #     self.cacheData[0],self.cacheData[1],
+            #     sampleIDs,seed_num,fan_num,
+            #     out_src,out_dst,out_num)
 
             # 得到dst + src  ==> 组合得到下一次的采样seed
-            sampleIDs = cacheGraph[0][ptr:ptr+out_num.item()]
+            sampleIDs = cacheGraph[0][ptr:ptr+NUM.item()]
+            #sampleIDs = cacheGraph[0][ptr:ptr+out_num.item()]
 
             # uniqueNUM = torch.Tensor([0]).to(torch.int64).to('cuda:0')
             # nodeCache = torch.cat([out_dst[:out_num.item()],out_src[:out_num.item()]])
@@ -486,23 +487,26 @@ class CustomDataset(Dataset):
             # nodeNUM = len(nodeCache)
             # signn.torch_node_mapping(nodeCache,unique,nodeNUM,uniqueNUM)    
             # sampleIDs = unique[:uniqueNUM.item()]
-            ptr=ptr+out_num.item()
+            ptr=ptr+NUM.item()
+            # ptr=ptr+out_num.item()
             mapping_ptr.append(ptr)
         logger.info("Sample Neighbor Time {:.5f}s".format(time.time()-sampleStart))
 
         mappingTime = time.time()        
         cacheGraph[0] = cacheGraph[0][:mapping_ptr[-1]]
         cacheGraph[1] = cacheGraph[1][:mapping_ptr[-1]]
-        uniqueNUM = torch.Tensor([0]).to(torch.int64).to('cuda:0')
-        edgeNUM = mapping_ptr[-1]
+        # uniqueNUM = torch.Tensor([0]).to(torch.int64).to('cuda:0')
+        # edgeNUM = mapping_ptr[-1]
         
         # TODO: 需要优化
-        all_node = torch.cat([cacheGraph[1],cacheGraph[0]])
+        # all_node = torch.cat([cacheGraph[1],cacheGraph[0]])
         unique = torch.zeros(mapping_ptr[-1]*2,dtype=torch.int32).to('cuda:0')
         logger.info("construct remapping data Time {:.5f}s".format(time.time()-mappingTime))
         t = time.time()  
-        signn.torch_graph_mapping(all_node,cacheGraph[0],cacheGraph[1],cacheGraph[0],cacheGraph[1],unique,edgeNUM,uniqueNUM)
-        unique = unique[:uniqueNUM.item()]
+        # TODO 修改位置
+        #signn.torch_graph_mapping(all_node,cacheGraph[0],cacheGraph[1],cacheGraph[0],cacheGraph[1],unique,edgeNUM,uniqueNUM)
+        cacheGraph[0],cacheGraph[1],unique = dgl.remappingNode(cacheGraph[0],cacheGraph[1],unique)
+        #unique = unique[:uniqueNUM.item()]
         logger.info("cuda remapping func Time {:.5f}s".format(time.time()-t))
 
         transTime = time.time()
@@ -517,7 +521,7 @@ class CustomDataset(Dataset):
                 if index == 1:
                     save_num,_ = torch.max(dst,dim=0)
                     save_num += 1
-                    block = self.create_dgl_block(data,uniqueNUM.item(),save_num)
+                    block = self.create_dgl_block(data,len(unique),save_num)
                 elif index == layer:
                     tmp_num = save_num
                     save_num,_ = torch.max(dst,dim=0)
@@ -672,9 +676,9 @@ class CustomDataset(Dataset):
             cacheLabel = self.nodeLabels[sampleIDs]
         else:
             offset = self.trainptr*self.batchsize
-            sampleIDs[:self.subGtrainNodesNUM - offset] = self.trainNodes[offset:self.subGtrainNodesNUM]
+            sampleIDs = self.trainNodes[offset:self.subGtrainNodesNUM]
             batchlen = self.subGtrainNodesNUM - offset
-            cacheLabel = self.nodeLabels[sampleIDs[0:self.subGtrainNodesNUM - offset]]
+            cacheLabel = self.nodeLabels[sampleIDs]
         logger.info("prepare sample data Time cost {:.5f}s".format(time.time()-createDataTime))    
 
         ##

@@ -85,7 +85,7 @@ def train(args, device, g, dataset, model,data=None ,basicLoop=0,loop=10):
     
 def load_reddit(self_loop=True):
     from dgl.data import RedditDataset
-    data = RedditDataset(self_loop=self_loop,raw_dir='/home/bear/workspace/singleGNN/data/dataset/')
+    data = RedditDataset(self_loop=self_loop,raw_dir='/home/bear/workspace/single-gnn/data/dataset/')
     g = data[0]
     g.ndata['feat'] = g.ndata.pop('feat')
     g.ndata['label'] = g.ndata.pop('label')
@@ -108,10 +108,10 @@ if __name__ == '__main__':
     parser.add_argument("--mode", default='mixed', choices=['cpu', 'mixed', 'puregpu'],
                         help="Training mode. 'cpu' for CPU training, 'mixed' for CPU-GPU mixed training, "
                              "'puregpu' for pure-GPU training.")
-    parser.add_argument('--fanout', type=ast.literal_eval, default=[20, 20, 20], help='Fanout value')
+    parser.add_argument('--fanout', type=ast.literal_eval, default=[10, 10, 10], help='Fanout value')
     parser.add_argument('--layers', type=int, default=3, help='Number of layers')
     parser.add_argument('--dataset', type=str, default='ogb-products', help='Dataset name')
-    parser.add_argument('--maxloop', type=int, default=200, help='max loop number')
+    parser.add_argument('--maxloop', type=int, default=20, help='max loop number')
     parser.add_argument('--model', type=str, default="SAGE", help='train model')
     args = parser.parse_args()
     if not torch.cuda.is_available():
@@ -121,14 +121,14 @@ if __name__ == '__main__':
     # load and preprocess dataset
     print('Loading data')
     if args.dataset == 'ogb-products':
-        dataset = AsNodePredDataset(DglNodePropPredDataset('ogbn-products',root="/home/bear/workspace/singleGNN/data/dataset"))
+        dataset = AsNodePredDataset(DglNodePropPredDataset('ogbn-products',root="/home/bear/workspace/single-gnn/data/dataset"))
         g = dataset[0]
         data = None
     elif args.dataset == 'Reddit':
         g, dataset,train_idx,val_idx,test_idx= load_reddit()
         data = (train_idx,val_idx,test_idx)
     elif args.dataset == 'ogb-papers100M':
-        dataset = AsNodePredDataset(DglNodePropPredDataset('ogbn-papers100M',root="/home/bear/workspace/singleGNN/data/dataset"))
+        dataset = AsNodePredDataset(DglNodePropPredDataset('ogbn-papers100M',root="/home/bear/workspace/single-gnn/data/dataset"))
         g = dataset[0]
         data = None
     g = g.to('cuda' if args.mode == 'puregpu' else 'cpu')
