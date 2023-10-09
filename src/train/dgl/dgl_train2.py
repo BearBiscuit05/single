@@ -48,63 +48,47 @@ def train(args, device, g,model,train_idx,basicLoop=0,loop=10):
         print("| Epoch {:05d} | Loss {:.4f} | Time {:.3f}s | Count {} |"
               .format(basicLoop+epoch, total_loss / (it+1), trainTime, count))
 
-def load_comfr():
-    nodenum = 65608366
-    featlen = 100
-    graphbin = "/raid/bear/dataset/com_fr/graph.bin"
-    labelbin = "/raid/bear/dataset/com_fr/labels.bin" # 每个节点label 4字节
-    featsbin = "/raid/bear/dataset/com_fr/feats_%d.bin" % featlen
-    trainbin = "/raid/bear/dataset/com_fr/train_id_ordered.bin"
+def load_dataset(dataset,path,featlen,mode=None):
+    # 数据集的节点数
+    if dataset == 'com_fr':
+        nodenum = 65608366
+    elif dataset == 'twitter':
+        nodenum = 41652230
+    elif dataset == 'uk-2007-05':
+        nodenum = 105896555
+    else:
+        exit(-1)
+    graphbin = "%s/%s/graph.bin" % (path,dataset)
+    labelbin = "%s/%s/labels.bin" % (path,dataset) # 每个节点label 8字节
+    featsbin = "%s/%s/feats_%d.bin" % (path,dataset,featlen)
+    # 读取边集
     edges = np.fromfile(graphbin,dtype=np.int32)
     srcs = torch.tensor(edges[::2])
     dsts = torch.tensor(edges[1::2])
+    # 读取特征
     feats = np.fromfile(featsbin,dtype=np.float32).reshape(nodenum,featlen)
-    label = np.fromfile(labelbin,dtype=np.int32)
+    # label长度，comfr是8字节，其余4字节
+    if dataset == 'com_fr':
+        label = np.fromfile(labelbin,dtype=np.int32)
+    elif dataset == 'twitter' or dataset == 'uk-2007-05':
+        label = np.fromfile(labelbin,dtype=np.int64)
+    # 构建dgl.Graph
     g = dgl.graph((srcs,dsts),num_nodes=nodenum,idtype=torch.int32)
     g.ndata['feat'] = torch.tensor(feats)
     g.ndata['label'] = torch.tensor(label)
-    train_idx = np.fromfile(trainbin,dtype=np.int32)
+
+    if mode == 'id_ordered' or mode == 'id_random':           # 以加载id二进制文件方法拿到训练节点
+        trainbin = "%s/%s/train_%s.bin" % (path,dataset,mode)
+        train_idx = np.fromfile(trainbin,dtype=np.int32)
+    elif mode == 'mask':                                      # 以加载mask方法拿到训练节点
+        trainbin = "%s/%s/train_mask.bin" % (path,dataset)
+        trainmask = np.fromfile(trainbin,dtype=np.int32)
+        train_idx = np.argwhere(trainmask > 0).squeeze()
+    else:                                                     # 直接取1%作为训练节点
+        trainnum = int(nodenum * 0.01)
+        train_idx = np.arange(trainnum,dtype=np.int32)
     return g,train_idx
 
-def load_twitter():
-    nodenum = 41652230
-    featlen = 300
-    graphbin = "/raid/bear/dataset/twitter/graph.bin"
-    labelbin = "/raid/bear/dataset/twitter/labels.bin" # 每个节点label 8字节
-    featsbin = "/raid/bear/dataset/twitter/feats_%d.bin" % featlen
-    trainbin = "/raid/bear/dataset/twitter/train_id_ordered.bin"
-    edges = np.fromfile(graphbin,dtype=np.int32)
-    srcs = torch.tensor(edges[::2])
-    dsts = torch.tensor(edges[1::2])
-    feats = np.fromfile(featsbin,dtype=np.float32).reshape(nodenum,featlen)
-    label = np.fromfile(labelbin,dtype=np.int64)
-    g = dgl.graph((srcs,dsts),num_nodes=nodenum,idtype=torch.int32)
-    g.ndata['feat'] = torch.tensor(feats)
-    g.ndata['label'] = torch.tensor(label)
-    train_idx = np.fromfile(trainbin,dtype=np.int32)
-    return g,train_idx
-
-def load_uk2007():
-    nodenum = 105896555
-    featlen = 300
-    graphbin = "/raid/bear/dataset/uk-2007-05/graph.bin"
-    labelbin = "/raid/bear/dataset/uk-2007-05/labels.bin" # 每个节点label 8字节
-    featsbin = "/raid/bear/dataset/uk-2007-05/feats_%d.bin" % featlen
-    #trainbin = "/raid/bear/dataset/uk-2007-05/train_id_ordered.bin"
-    edges = np.fromfile(graphbin,dtype=np.int32)
-    srcs = torch.tensor(edges[::2])
-    dsts = torch.tensor(edges[1::2])
-    feats = np.fromfile(featsbin,dtype=np.float32).reshape(nodenum,featlen)
-    # 测试用，裁减到100维
-    feats = feats[:,0:100]
-    print(feats.shape)
-    label = np.fromfile(labelbin,dtype=np.int64)
-    g = dgl.graph((srcs,dsts),num_nodes=nodenum,idtype=torch.int32)
-    g.ndata['feat'] = torch.tensor(feats)
-    g.ndata['label'] = torch.tensor(label)
-    #train_idx = np.fromfile(trainbin,dtype=np.int32)
-    train_idx = np.arange(1059000,dtype=np.int32)
-    return g,train_idx
 
 def gen_trainid_uk2007():
     trainid = np.arange(1059000,dtype=np.int32)
@@ -121,7 +105,7 @@ if __name__ == '__main__':
                              "'puregpu' for pure-GPU training.")
     parser.add_argument('--fanout', type=ast.literal_eval, default=[10, 10, 10], help='Fanout value')
     parser.add_argument('--layers', type=int, default=3, help='Number of layers')
-    parser.add_argument('--dataset', type=str, default='com-fr', help='Dataset name')
+    parser.add_argument('--dataset', type=str, default='com_fr', help='Dataset name')
     parser.add_argument('--maxloop', type=int, default=20, help='max loop number')
     parser.add_argument('--model', type=str, default="SAGE", help='train model')
     args = parser.parse_args()
@@ -131,14 +115,15 @@ if __name__ == '__main__':
     
     # load and preprocess dataset
     print('Loading data')
-    if args.dataset == 'com-fr':
-        g,train_idx = load_comfr()
+    datasetpath = "/raid/bear/dataset"
+    if args.dataset == 'com_fr':
+        g,train_idx = load_dataset(args.dataset,datasetpath,100,'id_ordered')
         out_size = 150
     elif args.dataset == 'twitter':
-        g,train_idx = load_twitter()
+        g,train_idx = load_dataset(args.dataset,datasetpath,300,'id_ordered')
         out_size = 150
-    elif args.dataset == 'uk-2007':
-        g,train_idx = load_uk2007()
+    elif args.dataset == 'uk-2007-05':
+        g,train_idx = load_dataset(args.dataset,datasetpath,300)
         out_size = 150
     else:
         exit(0)
