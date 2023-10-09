@@ -16,8 +16,8 @@ set(EXECUTABLE_OUTPUT_PATH "./bin/")
 
 include_directories("/home/bear/workspace/singleGNN/3rdparty/parallel-hashmap")
 
-add_executable(main_yt main.cpp readGraph.cpp)
-target_link_libraries(main_yt PRIVATE Threads::Threads)
+add_executable(main main.cpp readGraph.cpp)
+target_link_libraries(main PRIVATE Threads::Threads)
 # target_link_libraries(main PRIVATE CThreadPool)
 # add_executable(main main.cpp globalConfig.cpp graph.cpp StreamCluster.cpp
 #                 ClusterGameTask.cpp ClusterPackGame.cpp Partitioner.cpp)
