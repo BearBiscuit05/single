@@ -17,8 +17,8 @@ from torch_geometric.loader import NeighborLoader
 from torch_geometric.nn import SAGEConv
 import sys
 from pyg_model import SAGE, GCN, GAT
-
-
+import numpy as np
+from torch_geometric.data import Data
 
 @torch.no_grad()
 def test(model,evaluator,data,subgraph_loader,split_idx):
@@ -135,11 +135,100 @@ def run(args, dataset,split_idx=None):
                                 f'Test: {test_acc:.4f}')
 
 
+def testRun(args,Gdata,trainIDs,feat_size):
+    # data.x feat
+    # data.y label
+
+    torch.manual_seed(12345)
+    classNUM = 150
+
+    if args.model == "SAGE":
+        model = SAGE(feat_size, 256, classNUM,args.layers).to('cuda:0')
+    elif args.model == "GCN":
+        model = GCN(feat_size, 256,classNUM,args.layers).to('cuda:0')
+    elif args.model == "GAT":
+        model = GAT(feat_size, 256, classNUM, 4).to('cuda:0')
+    else:
+        print("Invalid model option. Please choose from 'SAGE', 'GCN', or 'GAT'.")
+        sys.exit(1)
+
+    optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
+
+    Gdata.y = Gdata.y.to(torch.int64)
+
+    train_loader = NeighborLoader(
+        Gdata,
+        input_nodes=trainIDs,
+        num_neighbors=args.fanout,
+        batch_size=1024,
+        shuffle=True,
+        num_workers=12,
+        persistent_workers=True,
+    )
+    
+    for epoch in range(10):
+        model.train()
+        startTime = time.time() 
+        total_loss = 0   
+        count = 0
+        for it, batch in enumerate(train_loader):        
+            optimizer.zero_grad()    
+            out = model(batch.x.to('cuda:0'), batch.edge_index.to('cuda:0'))[:batch.batch_size]
+            loss = F.cross_entropy(out, batch.y[:batch.batch_size].squeeze().to('cuda:0'))
+            loss.backward()
+            optimizer.step()
+            total_loss += loss.item()
+            count = it
+        trainTime = time.time() - startTime
+        print("| Epoch {:05d} | Loss {:.4f} | Time {:.3f}s | Count {} |"
+            .format(epoch, total_loss / (it+1), trainTime, count))
+
+def load_dataset(dataset,path,featlen,mode=None):
+    # 数据集的节点数
+    if dataset == 'com_fr':
+        nodenum = 65608366
+    elif dataset == 'twitter':
+        nodenum = 41652230
+    elif dataset == 'uk-2007-05':
+        nodenum = 105896555
+    else:
+        exit(-1)
+    graphbin = "%s/%s/graph.bin" % (path,dataset)
+    labelbin = "%s/%s/labels.bin" % (path,dataset) # 每个节点label 8字节
+    featsbin = "%s/%s/feats_%d.bin" % (path,dataset,featlen)
+    # 读取边集
+    edges = np.fromfile(graphbin,dtype=np.int32)
+    srcs = torch.tensor(edges[::2])
+    dsts = torch.tensor(edges[1::2])
+    # 读取特征
+    feats = np.fromfile(featsbin,dtype=np.float32).reshape(nodenum,featlen)
+    # label长度，comfr是8字节，其余4字节
+    if dataset == 'com_fr':
+        label = np.fromfile(labelbin,dtype=np.int32)
+    elif dataset == 'twitter' or dataset == 'uk-2007-05':
+        label = np.fromfile(labelbin,dtype=np.int64)
+
+    edgeList = torch.stack((srcs,dsts),dim=0)
+    data = Data(x=feats, edge_index=edgeList, y=label)
+    
+    if mode == 'id_ordered' or mode == 'id_random':           # 以加载id二进制文件方法拿到训练节点
+        trainbin = "%s/%s/train_%s.bin" % (path,dataset,mode)
+        train_idx = np.fromfile(trainbin,dtype=np.int32)
+    elif mode == 'mask':                                      # 以加载mask方法拿到训练节点
+        trainbin = "%s/%s/train_mask.bin" % (path,dataset)
+        trainmask = np.fromfile(trainbin,dtype=np.int32)
+        train_idx = np.argwhere(trainmask > 0).squeeze()
+    else:                                                     # 直接取1%作为训练节点
+        trainnum = int(nodenum * 0.01)
+        train_idx = np.arange(trainnum,dtype=np.int32)
+    return data,train_idx
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='pyg gcn program')
     parser.add_argument('--fanout', type=ast.literal_eval, default=[10, 10, 10], help='Fanout value')
     parser.add_argument('--layers', type=int, default=3, help='Number of layers')
-    parser.add_argument('--dataset', type=str, default='ogb-papers100M', help='Dataset name')
+    parser.add_argument('--dataset', type=str, default='com_fr', help='Dataset name')
     parser.add_argument('--maxloop', type=int, default=10, help='max loop number')
     parser.add_argument('--model', type=str, default="SAGE", help='train model')
 
@@ -150,7 +239,8 @@ if __name__ == '__main__':
     print('Layers:', args.layers)
     print('Dataset:', args.dataset)
 
-    # world_size = torch.cuda.device_count()
+    datasetpath = "/raid/bear/dataset"
+
     if args.dataset == 'Reddit':
         dataset = Reddit('/home/bear/workspace/singleGNN/data/reddit/pyg_reddit')
         run(args, dataset,split_idx=None)
@@ -161,7 +251,6 @@ if __name__ == '__main__':
         evaluator = Evaluator(name='ogbn-products')
         run(args, dataset,split_idx)
     elif args.dataset == 'ogb-papers100M':
-        # root = osp.join(osp.dirname(osp.realpath(__file__)), '/raid/bear/', 'ogb_dataset')
         root = "/raid/bear/wget_paper"
         print("root:",root)
         dataset = PygNodePropPredDataset('ogbn-papers100M', root)
@@ -169,5 +258,19 @@ if __name__ == '__main__':
         print("加载完毕")
         # evaluator = Evaluator(name='ogbn-papers100M')
         run(args, dataset,split_idx)
+    elif args.dataset == 'com_fr':
+        Gdata,train_idx = load_dataset(args.dataset,datasetpath,100,'id_ordered')
+        out_size = 150
+        testRun(args,Gdata,train_idx,100)
+    elif args.dataset == 'twitter':
+        Gdata,train_idx = load_dataset(args.dataset,datasetpath,300,'id_ordered')
+        out_size = 150
+        testRun(args,Gdata,train_idx,300)
+    elif args.dataset == 'uk-2007-05':
+        Gdata,train_idx = load_dataset(args.dataset,datasetpath,300)
+        out_size = 150
+        testRun(args,Gdata,train_idx,300)
+    else:
+        exit(0)
     # else:
     #     raise ValueError(f"Unsupported dataset: {args.dataset}")
