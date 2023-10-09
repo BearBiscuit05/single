@@ -144,7 +144,7 @@ def evaluate(device, graph, edge_split, model, batch_size):
 
 def train(args, device, g, reverse_eids, seed_edges, model):
     # create sampler & dataloader
-    sampler = NeighborSampler([15, 10, 5], prefetch_node_feats=["feat"])
+    sampler = NeighborSampler([5, 10, 15], prefetch_node_feats=["feat"])
     sampler = as_edge_prediction_sampler(
         sampler,
         exclude="reverse_id",
@@ -164,7 +164,7 @@ def train(args, device, g, reverse_eids, seed_edges, model):
         use_uva=use_uva,
     )
     opt = torch.optim.Adam(model.parameters(), lr=0.0005)
-    for epoch in range(10):
+    for epoch in range(5):
         model.train()
         total_loss = 0
         for it, (input_nodes, pair_graph, neg_pair_graph, blocks) in enumerate(
@@ -202,7 +202,7 @@ if __name__ == "__main__":
 
     # load and preprocess dataset
     print("Loading data")
-    dataset = DglLinkPropPredDataset("ogbl-citation2",root="/home/bear/workspace/singleGNN/data/dataset")
+    dataset = DglLinkPropPredDataset("ogbl-citation2",root="/home/bear/workspace/single-gnn/data/dataset")
     g = dataset[0]
     g = g.to("cuda" if args.mode == "puregpu" else "cpu")
     
@@ -233,3 +233,5 @@ if __name__ == "__main__":
             valid_mrr.item(), test_mrr.item()
         )
     )
+
+# Validation MRR 0.7442, Test MRR 0.7413

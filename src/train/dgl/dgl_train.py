@@ -46,9 +46,10 @@ def train(args, device, g, dataset, model,data=None ,basicLoop=0,loop=10):
         train_idx = dataset.train_idx.to(device)
         val_idx = dataset.val_idx.to(device)
         test_idx = dataset.test_idx.to(device)
-    sampler = NeighborSampler(args.fanout,  # fanout for [layer-0, layer-1, layer-2]
-                            prefetch_node_feats=['feat'],
-                            prefetch_labels=['label'])
+    # sampler = NeighborSampler(args.fanout,  # fanout for [layer-0, layer-1, layer-2]
+    #                         prefetch_node_feats=['feat'],
+    #                         prefetch_labels=['label'])
+    sampler = NeighborSampler(args.fanout)
     use_uva = (args.mode == 'mixed')
     train_dataloader = DataLoader(g, train_idx, sampler, device=device,
                                   batch_size=1024, shuffle=True,
