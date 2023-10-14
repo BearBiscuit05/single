@@ -51,18 +51,19 @@ def train(args, device, g, dataset, model,data=None ,basicLoop=0,loop=10):
     #                         prefetch_labels=['label'])
     sampler = NeighborSampler(args.fanout)
     use_uva = (args.mode == 'mixed')
+    print("222")
     train_dataloader = DataLoader(g, train_idx, sampler, device=device,
                                   batch_size=1024, shuffle=True,
                                   drop_last=False, num_workers=0,
                                   use_uva=use_uva)
-
-    val_dataloader = DataLoader(g, val_idx, sampler, device=device,
-                                batch_size=1024, shuffle=True,
-                                drop_last=False, num_workers=0,
-                                use_uva=use_uva)
+    if val_idx != []:
+        val_dataloader = DataLoader(g, val_idx, sampler, device=device,
+                                    batch_size=1024, shuffle=True,
+                                    drop_last=False, num_workers=0,
+                                    use_uva=use_uva)
 
     opt = torch.optim.Adam(model.parameters(), lr=1e-3, weight_decay=5e-4)
-    
+    print("333")
     for epoch in range(loop):
         model.train()
         total_loss = 0
@@ -80,7 +81,10 @@ def train(args, device, g, dataset, model,data=None ,basicLoop=0,loop=10):
             total_loss += loss.item()
             count = it
         trainTime = time.time()-startTime
-        acc = evaluate(model, g, val_dataloader)
+        if val_idx != []:
+            acc = evaluate(model, g, val_dataloader)
+        else:
+            acc = torch.Tensor([0.00])
         print("| Epoch {:05d} | Loss {:.4f} | Accuracy {:.4f} | Time {:.3f}s | Count {} |"
               .format(basicLoop+epoch, total_loss / (it+1), acc.item(), trainTime, count))
     
@@ -104,6 +108,43 @@ def load_reddit(self_loop=True):
             test_idx.append(index)
     return g, data,train_idx,val_idx,test_idx
 
+def load_dataset(dataset,path,featlen,mode=None):
+    if dataset == 'com_fr':
+        nodenum = 65608366
+    elif dataset == 'twitter':
+        nodenum = 41652230
+    elif dataset == 'uk-2007-05':
+        nodenum = 105896555
+    else:
+        exit(-1)
+    graphbin = "%s/%s/graph.bin" % (path,dataset)
+    labelbin = "%s/%s/labels.bin" % (path,dataset) # 每个节点label 8字节
+    featsbin = "%s/%s/feats_%d.bin" % (path,dataset,featlen)
+    edges = np.fromfile(graphbin,dtype=np.int32)
+    srcs = torch.tensor(edges[::2])
+    dsts = torch.tensor(edges[1::2])
+    feats = np.fromfile(featsbin,dtype=np.float32).reshape(nodenum,-1)
+    if dataset == 'com_fr':
+        label = np.fromfile(labelbin,dtype=np.int32)
+    elif dataset == 'twitter' or dataset == 'uk-2007-05':
+        label = np.fromfile(labelbin,dtype=np.int64)
+    # 构建dgl.Graph
+    g = dgl.graph((srcs,dsts),num_nodes=nodenum,idtype=torch.int32)
+    g.ndata['feat'] = torch.tensor(feats)
+    g.ndata['label'] = torch.tensor(label)
+
+    if mode == 'id_ordered' or mode == 'id_random':           # 以加载id二进制文件方法拿到训练节点
+        trainbin = "%s/%s/train_%s.bin" % (path,dataset,mode)
+        train_idx = np.fromfile(trainbin,dtype=np.int32)
+    elif mode == 'mask':                                      # 以加载mask方法拿到训练节点
+        trainbin = "%s/%s/train_mask.bin" % (path,dataset)
+        trainmask = np.fromfile(trainbin,dtype=np.int32)
+        train_idx = np.argwhere(trainmask > 0).squeeze()
+    else:                                                     # 直接取1%作为训练节点
+        trainnum = int(nodenum * 0.01)
+        train_idx = np.arange(trainnum,dtype=np.int32)
+    return g,train_idx
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("--mode", default='mixed', choices=['cpu', 'mixed', 'puregpu'],
@@ -111,16 +152,17 @@ if __name__ == '__main__':
                              "'puregpu' for pure-GPU training.")
     parser.add_argument('--fanout', type=ast.literal_eval, default=[10, 10, 10], help='Fanout value')
     parser.add_argument('--layers', type=int, default=3, help='Number of layers')
-    parser.add_argument('--dataset', type=str, default='ogb-products', help='Dataset name')
-    parser.add_argument('--maxloop', type=int, default=20, help='max loop number')
+    parser.add_argument('--dataset', type=str, default='uk-2007-05', help='Dataset name')
+    parser.add_argument('--maxloop', type=int, default=10, help='max loop number')
     parser.add_argument('--model', type=str, default="SAGE", help='train model')
     args = parser.parse_args()
     if not torch.cuda.is_available():
         args.mode = 'cpu'
     print(f'Training in {args.mode} mode.')
     
-    # load and preprocess dataset
+    default_datasetpath = "/home/bear/workspace/single-gnn/data/raid"
     print('Loading data')
+    out_size = 0
     if args.dataset == 'ogb-products':
         dataset = AsNodePredDataset(DglNodePropPredDataset('ogbn-products',root="/home/bear/workspace/single-gnn/data/dataset"))
         g = dataset[0]
@@ -132,13 +174,33 @@ if __name__ == '__main__':
         dataset = AsNodePredDataset(DglNodePropPredDataset('ogbn-papers100M',root="/home/bear/workspace/single-gnn/data/dataset"))
         g = dataset[0]
         data = None
+    elif args.dataset == 'com_fr':
+        g,train_idx = load_dataset(args.dataset,default_datasetpath,100,'id_ordered')
+        out_size = 150
+        data = (train_idx,[],[])
+        dataset = None
+    elif args.dataset == 'twitter':
+        g,train_idx = load_dataset(args.dataset,default_datasetpath,100,'id_ordered')
+        out_size = 150
+        data = (train_idx,[],[])
+        dataset = None
+    elif args.dataset == 'uk-2007-05':
+        g,train_idx = load_dataset(args.dataset,default_datasetpath,100)
+        out_size = 150
+        data = (train_idx,[],[])
+        # print(train_idx)
+        # print(train_idx.shape)
+        # exit()
+        dataset = None
+    else:
+        exit(0)
     g = g.to('cuda' if args.mode == 'puregpu' else 'cpu')
     device = torch.device('cpu' if args.mode == 'cpu' else 'cuda')
     
     # create GraphSAGE model
 
     in_size = g.ndata['feat'].shape[1]
-    out_size = dataset.num_classes
+    out_size = dataset.num_classes if out_size == 0 else out_size
     if args.model == "SAGE":
         model = SAGE(in_size, 256, out_size,args.layers).to(device)
     elif args.model == "GCN":
@@ -146,23 +208,22 @@ if __name__ == '__main__':
     elif args.model == "GAT":
         model = GAT(in_size, 256, out_size,heads=[4,1]).to(device)
     else:
-        # 如果 args.model 不是有效的模型选项，触发错误并退出程序
         print("Invalid model option. Please choose from 'SAGE', 'GCN', or 'GAT'.")
         sys.exit(1)  # 使用 sys.exit(1) 退出程序并返回错误状态码
-   
+    # model.load_state_dict(torch.load("model.pth"))
 
     # model training
     print('Training...')
-    loopList = [0,10,20,30,50,100,150,200]
+    loopList = [0,5,10,20,30,50,100,150,200]
     for index in range(1,len(loopList)):
         if loopList[index] > args.maxloop:
             break
         _loop = loopList[index] - loopList[index - 1]
         train(args, device, g, dataset, model,data=data,basicLoop=loopList[index - 1],loop=_loop)
-    # model = torch.load("save.pt")
-    # model = model.to(device) 
-    #model.load_state_dict(torch.load("model_param.pth"))
-    # test the model
+        # model = torch.load("save.pt")
+        # model = model.to(device) 
+        
+        # test the model
     
     
         print('Testing with after loop {}:...'.format(loopList[index]))
@@ -172,18 +233,21 @@ if __name__ == '__main__':
             acc = layerwise_infer(device, g, test_idx, model, batch_size=4096) 
         elif args.dataset == 'ogb-papers100M':
             model.eval()
-            if args.layers == 2:
-                sampler_test = NeighborSampler([100,100],  # fanout for [layer-0, layer-1, layer-2]
-                                    prefetch_node_feats=['feat'],
-                                    prefetch_labels=['label'])
-            else:
-                sampler_test = NeighborSampler([20,50,50],  # fanout for [layer-0, layer-1, layer-2]
-                                    prefetch_node_feats=['feat'],
-                                    prefetch_labels=['label'])
-            test_dataloader = DataLoader(g, dataset.test_idx, sampler_test, device=device,
-                                    batch_size=4096, shuffle=True,
-                                    drop_last=False, num_workers=0,
-                                    use_uva=True)
-            acc = evaluate(model, g, test_dataloader)
-        print("Test Accuracy {:.4f}".format(acc.item()))
-        print("-"*20)
+            # if args.layers == 2:
+            #     sampler_test = NeighborSampler([100,100],  # fanout for [layer-0, layer-1, layer-2]
+            #                         prefetch_node_feats=['feat'],
+            #                         prefetch_labels=['label'])
+            # else:
+            #     sampler_test = NeighborSampler([20,50,50],  # fanout for [layer-0, layer-1, layer-2]
+            #                         prefetch_node_feats=['feat'],
+            #                         prefetch_labels=['label'])
+            # test_dataloader = DataLoader(g, dataset.test_idx, sampler_test, device=device,
+            #                         batch_size=4096, shuffle=True,
+            #                         drop_last=False, num_workers=0,
+            #                         use_uva=True)
+            acc = layerwise_infer('cpu', g, dataset.test_idx, model, batch_size=4096) 
+            # acc = evaluate(model, g, test_dataloader)
+        if args.dataset in ['ogb-products','Reddit','ogb-papers100M']:
+            print("Test Accuracy {:.4f}".format(acc.item()))
+            print("-"*20)
+            break

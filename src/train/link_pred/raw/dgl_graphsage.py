@@ -202,7 +202,9 @@ if __name__ == "__main__":
 
     # load and preprocess dataset
     print("Loading data")
-    dataset = DglLinkPropPredDataset("ogbl-citation2",root="/home/bear/workspace/single-gnn/data/dataset")
+    #dataset = DglLinkPropPredDataset("ogbl-citation2",root="/home/bear/workspace/single-gnn/data/dataset")
+    #dataset = DglLinkPropPredDataset("ogbl-ppa",root="/raid/bear/raw_dataset")
+    dataset = DglLinkPropPredDataset("ogbl-ppa",root="/home/bear/workspace/single-gnn/data/dataset")
     g = dataset[0]
     g = g.to("cuda" if args.mode == "puregpu" else "cpu")
     
@@ -234,4 +236,5 @@ if __name__ == "__main__":
         )
     )
 
-# Validation MRR 0.7442, Test MRR 0.7413
+# ogbl-citation2 : Validation MRR 0.7442, Test MRR 0.7413
+# 

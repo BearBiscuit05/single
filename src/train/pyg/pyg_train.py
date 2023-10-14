@@ -49,7 +49,7 @@ def run(args, dataset,split_idx=None):
     data = dataset[0]
     data.y = data.y.to(torch.int64)
     #data = data.to('cuda:0', 'x', 'y')  # Move to device for faster feature fetch.
-    # data = data.to('cuda:0', 'y')
+    data = data.to('cuda:0', 'y')
     if args.dataset == 'Reddit':
         train_idx = data.train_mask.nonzero(as_tuple=False).view(-1)
     elif args.dataset == 'ogb-products' or args.dataset == 'ogb-papers100M':
@@ -135,13 +135,13 @@ def run(args, dataset,split_idx=None):
                                 f'Test: {test_acc:.4f}')
 
 
-def testRun(args,Gdata,trainIDs,feat_size):
+def testRun(args,Gdata,trainIDs):
     # data.x feat
     # data.y label
 
     torch.manual_seed(12345)
     classNUM = 150
-
+    feat_size = Gdata.x.shape[1]
     if args.model == "SAGE":
         model = SAGE(feat_size, 256, classNUM,args.layers).to('cuda:0')
     elif args.model == "GCN":
@@ -198,16 +198,17 @@ def load_dataset(dataset,path,featlen,mode=None):
     featsbin = "%s/%s/feats_%d.bin" % (path,dataset,featlen)
     # 读取边集
     edges = np.fromfile(graphbin,dtype=np.int32)
-    srcs = torch.tensor(edges[::2])
-    dsts = torch.tensor(edges[1::2])
+    srcs = torch.tensor(edges[::2]).to(torch.int64)
+    dsts = torch.tensor(edges[1::2]).to(torch.int64)
     # 读取特征
     feats = np.fromfile(featsbin,dtype=np.float32).reshape(nodenum,featlen)
+    feats = torch.Tensor(feats)
     # label长度，comfr是8字节，其余4字节
     if dataset == 'com_fr':
         label = np.fromfile(labelbin,dtype=np.int32)
     elif dataset == 'twitter' or dataset == 'uk-2007-05':
         label = np.fromfile(labelbin,dtype=np.int64)
-
+    label = torch.Tensor(label).to(torch.int64)
     edgeList = torch.stack((srcs,dsts),dim=0)
     data = Data(x=feats, edge_index=edgeList, y=label)
     
@@ -220,7 +221,8 @@ def load_dataset(dataset,path,featlen,mode=None):
         train_idx = np.argwhere(trainmask > 0).squeeze()
     else:                                                     # 直接取1%作为训练节点
         trainnum = int(nodenum * 0.01)
-        train_idx = np.arange(trainnum,dtype=np.int32)
+        #train_idx = np.arange(trainnum,dtype=np.int32)
+        train_idx = srcs[:trainnum]
     return data,train_idx
 
 
@@ -228,7 +230,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='pyg gcn program')
     parser.add_argument('--fanout', type=ast.literal_eval, default=[10, 10, 10], help='Fanout value')
     parser.add_argument('--layers', type=int, default=3, help='Number of layers')
-    parser.add_argument('--dataset', type=str, default='com_fr', help='Dataset name')
+    parser.add_argument('--dataset', type=str, default='uk-2007-05', help='Dataset name')
     parser.add_argument('--maxloop', type=int, default=10, help='max loop number')
     parser.add_argument('--model', type=str, default="SAGE", help='train model')
 
@@ -239,7 +241,7 @@ if __name__ == '__main__':
     print('Layers:', args.layers)
     print('Dataset:', args.dataset)
 
-    datasetpath = "/raid/bear/dataset"
+    datasetpath = "/home/bear/workspace/single-gnn/data/raid"
 
     if args.dataset == 'Reddit':
         dataset = Reddit('/home/bear/workspace/singleGNN/data/reddit/pyg_reddit')
@@ -261,15 +263,15 @@ if __name__ == '__main__':
     elif args.dataset == 'com_fr':
         Gdata,train_idx = load_dataset(args.dataset,datasetpath,100,'id_ordered')
         out_size = 150
-        testRun(args,Gdata,train_idx,100)
+        testRun(args,Gdata,train_idx)
     elif args.dataset == 'twitter':
         Gdata,train_idx = load_dataset(args.dataset,datasetpath,300,'id_ordered')
         out_size = 150
-        testRun(args,Gdata,train_idx,300)
+        testRun(args,Gdata,train_idx)
     elif args.dataset == 'uk-2007-05':
-        Gdata,train_idx = load_dataset(args.dataset,datasetpath,300)
+        Gdata,train_idx = load_dataset(args.dataset,datasetpath,100)
         out_size = 150
-        testRun(args,Gdata,train_idx,300)
+        testRun(args,Gdata,train_idx)
     else:
         exit(0)
     # else:

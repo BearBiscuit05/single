@@ -133,12 +133,6 @@ class CustomDataset(Dataset):
                     return tuple(cacheData[:4])
                     #return cacheData[0],cacheData[1],cacheData[2],cacheData[3]
         return 0,0
-    
-        # if index % self.batchsize == 0:
-        #     self.preGraphBatch()
-        #     cacheData = self.graphPipe.get()
-        #     return cacheData[0], cacheData[1], cacheData[2], cacheData[3]
-        # return 0, 0
 
 ########################## 初始化训练数据 ##########################
     def readConfig(self,confPath):
@@ -218,7 +212,6 @@ class CustomDataset(Dataset):
         return epochList
 
 ########################## 加载/释放 图结构数据 ##########################
-    #@profile(precision=4, stream=open('./info.log','w+'))
     def initNextGraphData(self):
         logger.info("----------initNextGraphData----------")
         start = time.time()
@@ -726,7 +719,6 @@ class CustomDataset(Dataset):
         for file in self.readfile:
             file.close()
 
-    #@profile(precision=4, stream=open('./info.log','w+'))
     def loadingMemFeat(self, rank, preFetch=False,preFeat=None):
         # TODO:如果preFetch为True,则直接从指定位置加载
         filePath = self.dataPath + "/part" + str(rank)
@@ -743,7 +735,6 @@ class CustomDataset(Dataset):
                 preFeat = torch.from_numpy(preFeat).reshape(-1, self.featlen).to("cuda:0")
                 self.feats = torch.cat([self.feats, preFeat])
     
-    #@profile(precision=4, stream=open('./info.log','w+'))
     def featMerge(self,uniqueList):
         featTime = time.time()           
         test = self.feats[uniqueList.to(torch.int64).to(self.feats.device)]     
@@ -752,38 +743,13 @@ class CustomDataset(Dataset):
 
         
 ########################## 数据调整 ##########################
-    # nouse
     def cleanPipe(self):
         # 清理数据管道及信号
         while self.graphPipe.qsize() > 0:
             self.graphPipe.get()    
         while self.sampleFlagQueue.qsize() > 0:
-            self.sampleFlagQueue.get()
+            self.sampleFlagQueue.get()               
 
-    # nouse
-    def changeMode(self,mode):
-        logger.info("change mode from:'{}' to '{}'...".format(self.mode,mode))
-        # 数据集模式:[训练状态，验证状态，测试状态]
-        # 1.修改训练模式
-        lastMode = self.mode
-        self.mode = mode
-        # 2.清空管道与信号量
-        self.cleanPipe()
-        # 3.加载新训练节点
-        self.cleanLastModeData(lastMode)
-        self.loadModeData(self.mode)
-        
-        # 4.重置并初始化数据
-        self.cacheData = [] 
-        self.feats == []
-        self.trainSubGTrack = self.randomTrainList()    
-        self.subGptr = -1
-        self.loadingGraph(merge=False)
-        self.loadingMemFeat(self.trainSubGTrack[self.subGptr//self.partNUM][self.subGptr%self.partNUM])
-        self.initNextGraphData()
-        self.sampleFlagQueue.put(self.executor.submit(self.preGraphBatch)) #发送采样命令                          
-    
-    # nouse
     def cleanLastModeData(self,mode):
         logger.info("clean last mode:'{}' data".format(mode))
         if mode == "train":
