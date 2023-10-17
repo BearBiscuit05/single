@@ -13,7 +13,6 @@ import random
 import copy
 import sys
 import logging
-import signn
 import os
 import gc
 from memory_profiler import profile

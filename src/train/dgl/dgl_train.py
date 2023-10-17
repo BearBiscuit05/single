@@ -51,7 +51,6 @@ def train(args, device, g, dataset, model,data=None ,basicLoop=0,loop=10):
     #                         prefetch_labels=['label'])
     sampler = NeighborSampler(args.fanout)
     use_uva = (args.mode == 'mixed')
-    print("222")
     train_dataloader = DataLoader(g, train_idx, sampler, device=device,
                                   batch_size=1024, shuffle=True,
                                   drop_last=False, num_workers=0,
@@ -63,7 +62,6 @@ def train(args, device, g, dataset, model,data=None ,basicLoop=0,loop=10):
                                     use_uva=use_uva)
 
     opt = torch.optim.Adam(model.parameters(), lr=1e-3, weight_decay=5e-4)
-    print("333")
     for epoch in range(loop):
         model.train()
         total_loss = 0
@@ -152,7 +150,7 @@ if __name__ == '__main__':
                              "'puregpu' for pure-GPU training.")
     parser.add_argument('--fanout', type=ast.literal_eval, default=[10, 10, 10], help='Fanout value')
     parser.add_argument('--layers', type=int, default=3, help='Number of layers')
-    parser.add_argument('--dataset', type=str, default='uk-2007-05', help='Dataset name')
+    parser.add_argument('--dataset', type=str, default='ogb-products', help='Dataset name')
     parser.add_argument('--maxloop', type=int, default=10, help='max loop number')
     parser.add_argument('--model', type=str, default="SAGE", help='train model')
     args = parser.parse_args()
@@ -198,6 +196,8 @@ if __name__ == '__main__':
     device = torch.device('cpu' if args.mode == 'cpu' else 'cuda')
     
     # create GraphSAGE model
+
+    # self.sage = SAGE(128, 1024, 172, args.layers, torch.nn.functional.leaky_relu, 0.1).to(device)
 
     in_size = g.ndata['feat'].shape[1]
     out_size = dataset.num_classes if out_size == 0 else out_size
