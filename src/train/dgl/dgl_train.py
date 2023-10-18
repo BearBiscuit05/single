@@ -52,7 +52,7 @@ def train(args, device, g, dataset, model,data=None ,basicLoop=0,loop=10):
     sampler = NeighborSampler(args.fanout)
     use_uva = (args.mode == 'mixed')
     train_dataloader = DataLoader(g, train_idx, sampler, device=device,
-                                  batch_size=1024, shuffle=True,
+                                  batch_size=1024, shuffle=False,
                                   drop_last=False, num_workers=0,
                                   use_uva=use_uva)
     if val_idx != []:
@@ -111,8 +111,10 @@ def load_dataset(dataset,path,featlen,mode=None):
         nodenum = 65608366
     elif dataset == 'twitter':
         nodenum = 41652230
-    elif dataset == 'uk-2007-05':
-        nodenum = 105896555
+    # elif dataset == 'uk-2007-05':
+    #     nodenum = 105896555
+    # elif dataset == 'uk-2006-05':
+    #     nodenum = 77741046
     else:
         exit(-1)
     graphbin = "%s/%s/graph.bin" % (path,dataset)
@@ -124,12 +126,15 @@ def load_dataset(dataset,path,featlen,mode=None):
     feats = np.fromfile(featsbin,dtype=np.float32).reshape(nodenum,-1)
     if dataset == 'com_fr':
         label = np.fromfile(labelbin,dtype=np.int32)
-    elif dataset == 'twitter' or dataset == 'uk-2007-05':
+    elif dataset == 'twitter': #or dataset == 'uk-2007-05' or dataset == 'uk-2006-05':
         label = np.fromfile(labelbin,dtype=np.int64)
     # 构建dgl.Graph
-    g = dgl.graph((srcs,dsts),num_nodes=nodenum,idtype=torch.int32)
-    g.ndata['feat'] = torch.tensor(feats)
-    g.ndata['label'] = torch.tensor(label)
+    if dataset == 'com_fr' or dataset == 'twitter':
+        g = dgl.graph((srcs,dsts),num_nodes=nodenum,idtype=torch.int32)
+    else:
+        g = dgl.graph((srcs,dsts))
+    g.ndata['feat'] = torch.tensor(feats[:g.num_nodes()])
+    g.ndata['label'] = torch.tensor(label[:g.num_nodes()])
 
     if mode == 'id_ordered' or mode == 'id_random':           # 以加载id二进制文件方法拿到训练节点
         trainbin = "%s/%s/train_%s.bin" % (path,dataset,mode)
@@ -139,7 +144,7 @@ def load_dataset(dataset,path,featlen,mode=None):
         trainmask = np.fromfile(trainbin,dtype=np.int32)
         train_idx = np.argwhere(trainmask > 0).squeeze()
     else:                                                     # 直接取1%作为训练节点
-        trainnum = int(nodenum * 0.01)
+        trainnum = int(g.num_nodes() * 0.01)
         train_idx = np.arange(trainnum,dtype=np.int32)
     return g,train_idx
 
@@ -182,14 +187,16 @@ if __name__ == '__main__':
         out_size = 150
         data = (train_idx,[],[])
         dataset = None
-    elif args.dataset == 'uk-2007-05':
-        g,train_idx = load_dataset(args.dataset,default_datasetpath,100)
-        out_size = 150
-        data = (train_idx,[],[])
-        # print(train_idx)
-        # print(train_idx.shape)
-        # exit()
-        dataset = None
+    # elif args.dataset == 'uk-2007-05':
+    #     g,train_idx = load_dataset(args.dataset,"/raid/bear/dataset",300,'mask')
+    #     out_size = 150
+    #     data = (train_idx,[],[])
+    # elif args.dataset == 'uk-2006-05':
+    #     g,train_idx = load_dataset(args.dataset,"/raid/bear/dataset",100)
+    #     train_idx = torch.tensor(train_idx).to(torch.int64)
+    #     out_size = 150
+    #     data = (train_idx,[],[])
+    #     dataset = None
     else:
         exit(0)
     g = g.to('cuda' if args.mode == 'puregpu' else 'cpu')

@@ -35,3 +35,4 @@ build.txt
 **/**.class
 **/**.jar
 Makefile
+**/build/
