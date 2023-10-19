@@ -2,15 +2,15 @@
 
 set -o errexit
 
-layerList=(2 2 3 3)
+# layerList=(2 2 3 3)
 # fanoutList=("10,25" "10,15" "5,10,15" "10,10,10")
 # datasetNameList=("ogb-products" "Reddit" "ogb-papers100M")
 # datasetNameList=("ogb-products" "Reddit")
 MAXLOOP=10
 modelList=("SAGE" "GCN" "GAT")
 # MODELNAME="SAGE"
-ExecuteDGLPath="/home/bear/workspace/single-gnn/src/train/dgl/dgl_train.py"
-ExecutePYGPath="/home/bear/workspace/single-gnn/src/train/pyg/pyg_train.py"
+ExecuteDGLPath="/home/bear/workspace/singleGNN/src/train/dgl/dgl_train.py"
+ExecutePYGPath="/home/bear/workspace/singleGNN/src/train/pyg/pyg_train.py"
 
 
 memory_usage_file="memory_usage.txt"
@@ -67,29 +67,29 @@ fanoutList=("5,10,15" "10,10,10" "10,25")
 
 #         echo "==============================================================" 
 #         echo "${ExecuteDGLPath} --model ${MODELNAME} --fanout ${fanout} --layers ${layerNUM} \\
-#                 --maxloop ${MAXLOOP} --dataset com_fr" 
+#                 --maxloop ${MAXLOOP} --dataset uk-2006-05" 
 #         echo "--------------------------------------------------------------" 
 #         python ${ExecuteDGLPath} --model ${MODELNAME} --fanout ${fanout} --layers ${layerNUM} \
-#                 --maxloop ${MAXLOOP} --dataset com_fr & 
+#                 --maxloop ${MAXLOOP} --dataset uk-2006-05 & 
         
 #         last_pid=$!
 #         echo "last pid : '${last_pid}'"
 #         logMsg="${ExecuteDGLPath} --model ${MODELNAME} --fanout ${fanout} --layers ${layerNUM} \\
-#                 --maxloop ${MAXLOOP} --dataset com_fr"
+#                 --maxloop ${MAXLOOP} --dataset uk-2006-05"
 #         monitor_memory_usage $last_pid
 
-#         echo "==============================================================" 
-#         echo "${ExecuteDGLPath} --model ${MODELNAME} --fanout ${fanout} --layers ${layerNUM} \\
-#                 --maxloop ${MAXLOOP} --dataset twitter" 
-#         echo "--------------------------------------------------------------" 
-#         python ${ExecuteDGLPath} --model ${MODELNAME} --fanout ${fanout} --layers ${layerNUM} \
-#                 --maxloop ${MAXLOOP} --dataset twitter & 
+#         # echo "==============================================================" 
+#         # echo "${ExecuteDGLPath} --model ${MODELNAME} --fanout ${fanout} --layers ${layerNUM} \\
+#         #         --maxloop ${MAXLOOP} --dataset twitter" 
+#         # echo "--------------------------------------------------------------" 
+#         # python ${ExecuteDGLPath} --model ${MODELNAME} --fanout ${fanout} --layers ${layerNUM} \
+#         #         --maxloop ${MAXLOOP} --dataset twitter & 
 
-#         last_pid=$!
-#         echo "last pid : '${last_pid}'"
-#         logMsg="${ExecuteDGLPath} --model ${MODELNAME} --fanout ${fanout} --layers ${layerNUM} \\
-#                 --maxloop ${MAXLOOP} --dataset twitter"
-#         monitor_memory_usage $last_pid
+#         # last_pid=$!
+#         # echo "last pid : '${last_pid}'"
+#         # logMsg="${ExecuteDGLPath} --model ${MODELNAME} --fanout ${fanout} --layers ${layerNUM} \\
+#         #         --maxloop ${MAXLOOP} --dataset twitter"
+#         # monitor_memory_usage $last_pid
 
 
         
@@ -120,29 +120,29 @@ for MODELNAME in "${modelList[@]}"; do
 
         echo "==============================================================" 
         echo "${ExecutePYGPath} --model ${MODELNAME} --fanout ${fanout} --layers ${layerNUM} \\
-                --maxloop ${MAXLOOP} --dataset com_fr" 
+                --maxloop ${MAXLOOP} --dataset uk-2006-05" 
         echo "--------------------------------------------------------------" 
         python ${ExecutePYGPath} --model ${MODELNAME} --fanout ${fanout} --layers ${layerNUM} \
-                --maxloop ${MAXLOOP} --dataset com_fr & 
+                --maxloop ${MAXLOOP} --dataset uk-2006-05 & 
         
         last_pid=$!
         echo "last pid : '${last_pid}'"
         logMsg="${ExecutePYGPath} --model ${MODELNAME} --fanout ${fanout} --layers ${layerNUM} \\
-                --maxloop ${MAXLOOP} --dataset com_fr"
+                --maxloop ${MAXLOOP} --dataset uk-2006-05"
         monitor_memory_usage $last_pid $memory_usage_file $logMsg
 
-        echo "==============================================================" 
-        echo "${ExecutePYGPath} --model ${MODELNAME} --fanout ${fanout} --layers ${layerNUM} \\
-                --maxloop ${MAXLOOP} --dataset twitter" 
-        echo "--------------------------------------------------------------" 
-        python ${ExecutePYGPath} --model ${MODELNAME} --fanout ${fanout} --layers ${layerNUM} \
-                --maxloop ${MAXLOOP} --dataset twitter & 
+        # echo "==============================================================" 
+        # echo "${ExecutePYGPath} --model ${MODELNAME} --fanout ${fanout} --layers ${layerNUM} \\
+        #         --maxloop ${MAXLOOP} --dataset twitter" 
+        # echo "--------------------------------------------------------------" 
+        # python ${ExecutePYGPath} --model ${MODELNAME} --fanout ${fanout} --layers ${layerNUM} \
+        #         --maxloop ${MAXLOOP} --dataset twitter & 
 
-        last_pid=$!
-        echo "last pid : '${last_pid}'"
-        logMsg="${ExecutePYGPath} --model ${MODELNAME} --fanout ${fanout} --layers ${layerNUM} \\
-                --maxloop ${MAXLOOP} --dataset twitter"
-        monitor_memory_usage $last_pid $logMsg
+        # last_pid=$!
+        # echo "last pid : '${last_pid}'"
+        # logMsg="${ExecutePYGPath} --model ${MODELNAME} --fanout ${fanout} --layers ${layerNUM} \\
+        #         --maxloop ${MAXLOOP} --dataset twitter"
+        # monitor_memory_usage $last_pid $logMsg
         
         # echo "==============================================================" 
         # echo "${ExecutePYGPath} --model ${MODELNAME} --fanout ${fanout} --layers ${layerNUM} \

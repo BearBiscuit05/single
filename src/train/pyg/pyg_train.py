@@ -138,7 +138,7 @@ def run(args, dataset,split_idx=None):
 def testRun(args,Gdata,trainIDs):
     # data.x feat
     # data.y label
-
+    print("...")
     torch.manual_seed(12345)
     classNUM = 150
     feat_size = Gdata.x.shape[1]
@@ -151,11 +151,11 @@ def testRun(args,Gdata,trainIDs):
     else:
         print("Invalid model option. Please choose from 'SAGE', 'GCN', or 'GAT'.")
         sys.exit(1)
-
+    print("...")
     optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
-
+    trainIDs = trainIDs[:1024]
     Gdata.y = Gdata.y.to(torch.int64)
-
+    print("...")
     train_loader = NeighborLoader(
         Gdata,
         input_nodes=trainIDs,
@@ -165,7 +165,7 @@ def testRun(args,Gdata,trainIDs):
         num_workers=12,
         persistent_workers=True,
     )
-    
+    print("...")
     for epoch in range(10):
         model.train()
         startTime = time.time() 
@@ -185,14 +185,14 @@ def testRun(args,Gdata,trainIDs):
 
 def load_dataset(dataset,path,featlen,mode=None):
     # 数据集的节点数
-    if dataset == 'com_fr':
-        nodenum = 65608366
-    elif dataset == 'twitter':
-        nodenum = 41652230
-    elif dataset == 'uk-2007-05':
-        nodenum = 105896555
-    else:
-        exit(-1)
+    # if dataset == 'com_fr':
+    #     nodenum = 65608366
+    # elif dataset == 'twitter':
+    #     nodenum = 41652230
+    # elif dataset == 'uk-2006-05':
+    #     nodenum = 105896555
+    # else:
+    #     exit(-1)
     graphbin = "%s/%s/graph.bin" % (path,dataset)
     labelbin = "%s/%s/labels.bin" % (path,dataset) # 每个节点label 8字节
     featsbin = "%s/%s/feats_%d.bin" % (path,dataset,featlen)
@@ -201,12 +201,12 @@ def load_dataset(dataset,path,featlen,mode=None):
     srcs = torch.tensor(edges[::2]).to(torch.int64)
     dsts = torch.tensor(edges[1::2]).to(torch.int64)
     # 读取特征
-    feats = np.fromfile(featsbin,dtype=np.float32).reshape(nodenum,featlen)
+    feats = np.fromfile(featsbin,dtype=np.float32).reshape(-1,featlen)
     feats = torch.Tensor(feats)
     # label长度，comfr是8字节，其余4字节
     if dataset == 'com_fr':
         label = np.fromfile(labelbin,dtype=np.int32)
-    elif dataset == 'twitter' or dataset == 'uk-2007-05':
+    elif dataset == 'twitter' or dataset == 'uk-2006-05':
         label = np.fromfile(labelbin,dtype=np.int64)
     label = torch.Tensor(label).to(torch.int64)
     edgeList = torch.stack((srcs,dsts),dim=0)
@@ -220,9 +220,9 @@ def load_dataset(dataset,path,featlen,mode=None):
         trainmask = np.fromfile(trainbin,dtype=np.int32)
         train_idx = np.argwhere(trainmask > 0).squeeze()
     else:                                                     # 直接取1%作为训练节点
-        trainnum = int(nodenum * 0.01)
-        #train_idx = np.arange(trainnum,dtype=np.int32)
-        train_idx = srcs[:trainnum]
+        trainnum = int(len(srcs) * 0.01)
+        train_idx = np.arange(trainnum,dtype=np.int64)
+        # train_idx = srcs[:trainnum]
     return data,train_idx
 
 
@@ -230,7 +230,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='pyg gcn program')
     parser.add_argument('--fanout', type=ast.literal_eval, default=[10, 10, 10], help='Fanout value')
     parser.add_argument('--layers', type=int, default=3, help='Number of layers')
-    parser.add_argument('--dataset', type=str, default='uk-2007-05', help='Dataset name')
+    parser.add_argument('--dataset', type=str, default='uk-2006-05', help='Dataset name')
     parser.add_argument('--maxloop', type=int, default=10, help='max loop number')
     parser.add_argument('--model', type=str, default="SAGE", help='train model')
 
@@ -241,7 +241,7 @@ if __name__ == '__main__':
     print('Layers:', args.layers)
     print('Dataset:', args.dataset)
 
-    datasetpath = "/home/bear/workspace/single-gnn/data/raid"
+    datasetpath = "/raid/bear/dataset"
 
     if args.dataset == 'Reddit':
         dataset = Reddit('/home/bear/workspace/singleGNN/data/reddit/pyg_reddit')
@@ -268,11 +268,12 @@ if __name__ == '__main__':
         Gdata,train_idx = load_dataset(args.dataset,datasetpath,300,'id_ordered')
         out_size = 150
         testRun(args,Gdata,train_idx)
-    elif args.dataset == 'uk-2007-05':
+    elif args.dataset == 'uk-2006-05':
         Gdata,train_idx = load_dataset(args.dataset,datasetpath,100)
         out_size = 150
         testRun(args,Gdata,train_idx)
     else:
+        print("dataset name error....")
         exit(0)
     # else:
     #     raise ValueError(f"Unsupported dataset: {args.dataset}")

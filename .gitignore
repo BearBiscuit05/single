@@ -36,3 +36,4 @@ build.txt
 **/**.jar
 Makefile
 **/build/
+**/**_memory_**

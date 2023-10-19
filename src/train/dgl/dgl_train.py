@@ -107,33 +107,27 @@ def load_reddit(self_loop=True):
     return g, data,train_idx,val_idx,test_idx
 
 def load_dataset(dataset,path,featlen,mode=None):
-    if dataset == 'com_fr':
-        nodenum = 65608366
-    elif dataset == 'twitter':
-        nodenum = 41652230
-    # elif dataset == 'uk-2007-05':
-    #     nodenum = 105896555
-    # elif dataset == 'uk-2006-05':
-    #     nodenum = 77741046
-    else:
-        exit(-1)
     graphbin = "%s/%s/graph.bin" % (path,dataset)
     labelbin = "%s/%s/labels.bin" % (path,dataset) # 每个节点label 8字节
     featsbin = "%s/%s/feats_%d.bin" % (path,dataset,featlen)
     edges = np.fromfile(graphbin,dtype=np.int32)
-    srcs = torch.tensor(edges[::2])
-    dsts = torch.tensor(edges[1::2])
-    feats = np.fromfile(featsbin,dtype=np.float32).reshape(nodenum,-1)
+    # srcs = torch.tensor(edges[::2]).to(torch.int64)
+    # dsts = torch.tensor(edges[1::2]).to(torch.int64)
+    
+    srcs = edges[::2]
+    dsts = edges[1::2]
+    # srcs = torch.from_numpy(srcs)
+    # dsts = torch.from_numpy(dsts)
+    feats = np.fromfile(featsbin,dtype=np.float32).reshape(-1,100)
+    
     if dataset == 'com_fr':
         label = np.fromfile(labelbin,dtype=np.int32)
-    elif dataset == 'twitter': #or dataset == 'uk-2007-05' or dataset == 'uk-2006-05':
+    elif dataset == 'twitter' or dataset == 'uk-2007-05' or dataset == 'uk-2006-05':
         label = np.fromfile(labelbin,dtype=np.int64)
-    # 构建dgl.Graph
-    if dataset == 'com_fr' or dataset == 'twitter':
-        g = dgl.graph((srcs,dsts),num_nodes=nodenum,idtype=torch.int32)
-    else:
-        g = dgl.graph((srcs,dsts))
-    g.ndata['feat'] = torch.tensor(feats[:g.num_nodes()])
+
+    g = dgl.graph((srcs,dsts))
+    feats_tmp = feats[:g.num_nodes()]
+    g.ndata['feat'] = torch.tensor(feats_tmp)
     g.ndata['label'] = torch.tensor(label[:g.num_nodes()])
 
     if mode == 'id_ordered' or mode == 'id_random':           # 以加载id二进制文件方法拿到训练节点
@@ -155,7 +149,7 @@ if __name__ == '__main__':
                              "'puregpu' for pure-GPU training.")
     parser.add_argument('--fanout', type=ast.literal_eval, default=[10, 10, 10], help='Fanout value')
     parser.add_argument('--layers', type=int, default=3, help='Number of layers')
-    parser.add_argument('--dataset', type=str, default='ogb-products', help='Dataset name')
+    parser.add_argument('--dataset', type=str, default='uk-2006-05', help='Dataset name')
     parser.add_argument('--maxloop', type=int, default=10, help='max loop number')
     parser.add_argument('--model', type=str, default="SAGE", help='train model')
     args = parser.parse_args()
@@ -163,7 +157,7 @@ if __name__ == '__main__':
         args.mode = 'cpu'
     print(f'Training in {args.mode} mode.')
     
-    default_datasetpath = "/home/bear/workspace/single-gnn/data/raid"
+    default_datasetpath = "/raid/bear/dataset"
     print('Loading data')
     out_size = 0
     if args.dataset == 'ogb-products':
@@ -187,16 +181,16 @@ if __name__ == '__main__':
         out_size = 150
         data = (train_idx,[],[])
         dataset = None
-    # elif args.dataset == 'uk-2007-05':
-    #     g,train_idx = load_dataset(args.dataset,"/raid/bear/dataset",300,'mask')
-    #     out_size = 150
-    #     data = (train_idx,[],[])
-    # elif args.dataset == 'uk-2006-05':
-    #     g,train_idx = load_dataset(args.dataset,"/raid/bear/dataset",100)
-    #     train_idx = torch.tensor(train_idx).to(torch.int64)
-    #     out_size = 150
-    #     data = (train_idx,[],[])
-    #     dataset = None
+    elif args.dataset == 'uk-2007-05':
+        g,train_idx = load_dataset(args.dataset,"/raid/bear/dataset",100,'mask')
+        out_size = 150
+        data = (train_idx,[],[])
+    elif args.dataset == 'uk-2006-05':
+        g,train_idx = load_dataset(args.dataset,"/raid/bear/dataset",100)
+        train_idx = torch.tensor(train_idx).to(torch.int64)
+        out_size = 150
+        data = (train_idx,[],[])
+        dataset = None
     else:
         exit(0)
     g = g.to('cuda' if args.mode == 'puregpu' else 'cpu')
