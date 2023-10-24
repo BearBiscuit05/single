@@ -157,7 +157,7 @@ if __name__ == '__main__':
         args.mode = 'cpu'
     print(f'Training in {args.mode} mode.')
     
-    default_datasetpath = "/raid/bear/dataset"
+    default_datasetpath = "/home/bear/workspace/single-gnn/data/raid"
     print('Loading data')
     out_size = 0
     if args.dataset == 'ogb-products':
@@ -182,11 +182,11 @@ if __name__ == '__main__':
         data = (train_idx,[],[])
         dataset = None
     elif args.dataset == 'uk-2007-05':
-        g,train_idx = load_dataset(args.dataset,"/raid/bear/dataset",100,'mask')
+        g,train_idx = load_dataset(args.dataset,default_datasetpath,100,'mask')
         out_size = 150
         data = (train_idx,[],[])
     elif args.dataset == 'uk-2006-05':
-        g,train_idx = load_dataset(args.dataset,"/raid/bear/dataset",100)
+        g,train_idx = load_dataset(args.dataset,default_datasetpath,100)
         train_idx = torch.tensor(train_idx).to(torch.int64)
         out_size = 150
         data = (train_idx,[],[])

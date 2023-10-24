@@ -1,112 +1,94 @@
-import numpy as np
-import dgl
-import torch
-import os
 from scipy.sparse import csr_matrix
-"""
-input:
-    multi file with edges in this partition (bin)
-output:
-    每个分区包含
-    indptr,indices
-    subGFeat
-    trainMask
-"""
-def bin2tensor(filePath, datatype=np.int64):
-    tensor = np.fromfile(filePath, dtype=datatype)
-    return tensor
-
-def saveBin(tensor,savePath):
-    tensor.tofile(savePath)
-
-def checkFilePath(path):
-    if not os.path.exists(path):
-        os.makedirs(path)
-    else:
-        print(f"file '{path}' exist...")
-
-def loadingFeat(featPath,featLen,nodeNUM=0,useMmap=False):
-    if useMmap:
-        fpr = np.memmap(featPath, dtype='float32', mode='r', shape=(nodeNUM,featLen))
-    else:
-        fpr = np.fromfile(featPath,dtype=np.float32).reshape(-1,featLen)
-    return fpr
-    
-def nodeShuffle(raw_graph,savePath=None,saveRes=False):
-    srcs = raw_graph[::2]
-    dsts = raw_graph[1::2]
-    srcs_tensor = torch.Tensor(srcs).to(torch.int32).cuda()
-    dsts_tensor = torch.Tensor(dsts).to(torch.int32).cuda()
-    uni = torch.ones(len(dsts)*2).to(torch.int32).cuda()
-    srcShuffled,dstShuffled,uni = dgl.remappingNode(srcs_tensor,dsts_tensor,uni)
-    srcShuffled = srcShuffled.cpu()
-    dstShuffled = dstShuffled.cpu()
-    uni = uni.cpu()
-    if saveRes:
-        graph = torch.stack((srcShuffled,dstShuffled),dim=1)
-        graph = graph.reshape(-1).numpy()
-        graph.tofile(savePath)
-    return srcShuffled,dstShuffled,uni
-
-def featMerge(featTable,nodes,savePath=None,saveRes=False):
-    subFeat = featTable[nodes]
-    if saveRes:
-        subFeat.tofile(savePath)
-    return subFeat
-
-def trainIdxSubG(subGNode,trainSet):
-    localTrainId = torch.full(trainSet.shape, -1, dtype=torch.long)
-    mask = (subGNode[:, None] == trainSet)
-    table = mask.nonzero().reshape(-1)
-    col_indices = table[::2]
-    row_indices = table[1::2]
-    localTrainId[row_indices] = col_indices
-    localTrainId = localTrainId[localTrainId >= 0]
-    return localTrainId
-
-def coo2csrFromFile(graphbinPath,savePath=None,saveRes=False):
-    edges = np.fromfile(graphbinPath,dtype=np.int32)
-    row = edges[::2]
-    col = edges[1::2]
-    data = np.ones(len(col),dtype=np.int32)
-    m = csr_matrix((data, (row, col)))
-    indptr = m.indptr
-    indices = m.indices
-    return indptr,indices
-    # g = dgl.graph((src, dst))
-    # g = g.formats('csc')
-    # indptr, indices, _ = g.adj_sparse(fmt='csc')
-
-def coo2csr(srcs,dsts):
-    row,col = srcs,dsts
-    data = np.ones(len(col),dtype=np.int32)
-    m = csr_matrix((data, (row, col)))
-    return m.indptr,m.indices
-
-def rawData2GNNData(RAWDATAPATH,partitionNUM,FEATPATH,SAVEPATH):
-    fpr = loadingFeat(FEATPATH,100)
-    for i in range(partitionNUM):
-        rawDataPath = RAWDATAPATH + f"/partition_{i}.bin"
-        PATH = SAVEPATH + f"/part{i}"
-        SubFeatPath = SAVEPATH + "/feat.bin"
-        SubIndptrPath = SAVEPATH + "/indptr.bin"
-        SubIndicesPath = SAVEPATH + "/indices.bin"
-        checkFilePath(PATH)
-        data = np.fromfile(rawDataPath,dtype=np.int32)
-        srcShuffled,dstShuffled,uni = nodeShuffle(data)
-        subfeat = featMerge(fpr,uni)
-        indptr, indices = coo2csr(srcShuffled,dstShuffled)
-        saveBin(subfeat,SubFeatPath)
-        saveBin(indptr,SubIndptrPath)
-        saveBin(indices,SubIndicesPath)
-        print(f"subG_{i} success processed...")
+from scipy.sparse import coo_matrix
+import numpy as np 
+import torch
+import dgl
+import time 
+import copy
 
 
+### config 
+datasets = {
+    "FR": {
+        "GRAPHPATH": "/home/bear/workspace/single-gnn/data/raid/com_fr",
+        "maxID": 65608366
+    },
+    "PA": {
+        "GRAPHPATH": "/home/bear/workspace/single-gnn/data/raid/papers100M",
+        "maxID": 111059956
+    },
+    "PD": {
+        "GRAPHPATH": "/home/bear/workspace/single-gnn/data/raid/ogbn_products",
+        "maxID": 2449029
+    },
+    "TW": {
+        "GRAPHPATH": "/home/bear/workspace/single-gnn/data/raid/twitter",
+        "maxID": 41652230
+    },
+    "UK": {
+        "GRAPHPATH": "/home/bear/workspace/single-gnn/data/raid/uk-2006-05",
+        "maxID": 77741046
+    }
+}
+
+
+def acc_ana(tensor):
+    num_ones = torch.sum(tensor == 1).item()  
+    total_elements = tensor.numel()  
+    percentage_ones = (num_ones / total_elements) * 100 
+    print(f"only use by one train node : {percentage_ones:.2f}%")
+
+
+    num_greater_than_1 = torch.sum(tensor > 1).item() 
+    percentage_greater_than_1 = (num_greater_than_1 / total_elements) * 100
+    print(f"use by multi train nodes : {percentage_greater_than_1:.2f}%")
+
+
+## bfs 遍历获取基础子图
+
+
+
+def analysisG(graph,maxID):
+    src = torch.tensor(graph[::2])
+    dst = torch.tensor(graph[1::2])
+    ids = torch.arange(int(maxID*0.01),dtype=torch.int64)
+    nodeTable = torch.zeros(maxID,dtype=torch.int32)
+    nodeTable[ids] = 1
+
+    batch_size = 1
+    src_batches = torch.chunk(src, batch_size, dim=0)
+    dst_batches = torch.chunk(dst, batch_size, dim=0)
+    batch = [src_batches, dst_batches]
+
+    repeats = 3
+    acc = True
+    start = time.time()
+    for index in range(1,repeats+1):
+        acc_tabel = torch.zeros_like(nodeTable,dtype=torch.int32)
+        raw_nodeTabel = copy.deepcopy(nodeTable)
+        print(f"before {index} BFS has {torch.nonzero(nodeTable).size(0)} nodes, "
+            f"{torch.nonzero(nodeTable).size(0) * 1.0 / maxID * 100 :.2f}% of total nodes")
+        for src_batch,dst_batch in zip(*batch):
+            tmp_nodeTabel = copy.deepcopy(nodeTable)
+            tmp_nodeTabel = tmp_nodeTabel.cuda()
+            src_batch = src_batch.cuda()
+            dst_batch = dst_batch.cuda()
+            dgl.fastFindNeighbor(tmp_nodeTabel, src_batch, dst_batch, acc)
+            tmp_nodeTabel = tmp_nodeTabel.cpu()
+            acc_tabel = acc_tabel + tmp_nodeTabel - raw_nodeTabel
+        print("end bfs...")
+        acc_ana(acc_tabel)
+        nodeTable = raw_nodeTabel + acc_tabel
+        print(f"after {index} BFS has {torch.nonzero(nodeTable).size(0)} nodes, "
+              f"{torch.nonzero(nodeTable).size(0) * 1.0 / maxID * 100 :.2f}% of total nodes")
+        print('-'*10)
+    print(f"all bfs cost {time.time()-start:.3f}s")
 
 if __name__ == '__main__':
-    RAWDATAPATH = "/home/bear/workspace/single-gnn/src/datapart/data"
-    FEATPATH = "/home/bear/workspace/single-gnn/data/raid/papers100M/feats.bin"
-    SAVEPATH = "/home/bear/workspace/single-gnn/src/datapart/data"
-    partitionNUM = 32
-    rawData2GNNData(RAWDATAPATH,partitionNUM,FEATPATH,SAVEPATH)
-        
+    selected_dataset = ["FR"] 
+    for NAME in selected_dataset:
+        dataset = datasets[NAME]
+        GRAPHPATH = dataset["GRAPHPATH"]
+        maxID = dataset["maxID"]
+    graph = np.fromfile(GRAPHPATH+"/graph.bin",dtype=np.int32)
+    analysisG(graph,maxID)

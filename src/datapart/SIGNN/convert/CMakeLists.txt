@@ -18,16 +18,3 @@ include_directories("/home/bear/workspace/singleGNN/3rdparty/parallel-hashmap")
 
 add_executable(main main.cpp readGraph.cpp)
 target_link_libraries(main PRIVATE Threads::Threads)
-# target_link_libraries(main PRIVATE CThreadPool)
-# add_executable(main main.cpp globalConfig.cpp graph.cpp StreamCluster.cpp
-#                 ClusterGameTask.cpp ClusterPackGame.cpp Partitioner.cpp)
-# 添加头文件搜索路径
-
-
-# 可以将需要链接的库添加在这里
-# target_link_libraries(main PRIVATE your_library)
-
-# 可以设置编译选项，比如 C++ 标准
-
-# set(CMAKE_CXX_STANDARD_REQUIRED ON)
-# set(CMAKE_CXX_EXTENSIONS OFF)
