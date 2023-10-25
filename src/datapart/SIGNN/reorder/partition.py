@@ -47,16 +47,21 @@ def checkFilePath(path):
     else:
         print(f"file '{path}' exist...")
 
-def saveBin(tensor,savePath):
-    if isinstance(tensor, torch.Tensor):
-        tensor.numpy().tofile(savePath)
-    elif isinstance(tensor, np.ndarray):
-        tensor.tofile(savePath)
+def saveBin(tensor,savePath,addSave=False):
+    if addSave :
+        with open(savePath, 'ab') as f:
+            if isinstance(tensor, torch.Tensor):
+                tensor.numpy().tofile(f)
+            elif isinstance(tensor, np.ndarray):
+                tensor.tofile(f)
+    else:
+        if isinstance(tensor, torch.Tensor):
+            tensor.numpy().tofile(savePath)
+        elif isinstance(tensor, np.ndarray):
+            tensor.tofile(savePath)
 
 ## bfs 遍历获取基础子图
 def analysisG(graph,maxID,partID,trainId=None,savePath=None):
-    # src = torch.tensor(graph[::2])
-    # dst = torch.tensor(graph[1::2])
     dst = torch.tensor(graph[::2])
     src = torch.tensor(graph[1::2])
     if trainId == None:
@@ -77,7 +82,7 @@ def analysisG(graph,maxID,partID,trainId=None,savePath=None):
     allEdgeNUM = src.numel()
     for index in range(1,repeats+1):
         acc_tabel = torch.zeros_like(nodeTable,dtype=torch.int32)
-        raw_nodeTabel = copy.deepcopy(nodeTable)
+        #raw_nodeTabel = copy.deepcopy(nodeTable)
         print(f"before {index} BFS has {torch.nonzero(nodeTable).size(0)} nodes, "
             f"{torch.nonzero(nodeTable).size(0) * 1.0 / maxID * 100 :.2f}% of total nodes")
         for src_batch,dst_batch in zip(*batch):
@@ -88,12 +93,12 @@ def analysisG(graph,maxID,partID,trainId=None,savePath=None):
             #dgl.fastFindNeighbor(tmp_nodeTabel, src_batch, dst_batch, acc)
             dgl.fastFindNeigEdge(tmp_nodeTabel,edgeTable,src_batch, dst_batch)
             tmp_nodeTabel = tmp_nodeTabel.cpu()
-            acc_tabel = acc_tabel + tmp_nodeTabel - raw_nodeTabel
+            acc_tabel = acc_tabel + tmp_nodeTabel - nodeTable
         print("end bfs...")
         acc_ana(acc_tabel)
         edgeNUM = edgeTable.cpu().sum() - edgeNUM
         print(f"edge add to subG : {edgeNUM} , {edgeNUM * 1.0 / allEdgeNUM * 100 :.2f}% of total edges")
-        nodeTable = raw_nodeTabel + acc_tabel
+        nodeTable = nodeTable + acc_tabel
         print(f"after {index} BFS has {torch.nonzero(nodeTable).size(0)} nodes, "
               f"{torch.nonzero(nodeTable).size(0) * 1.0 / maxID * 100 :.2f}% of total nodes")
         print('-'*10)
@@ -106,11 +111,12 @@ def analysisG(graph,maxID,partID,trainId=None,savePath=None):
     DataPath = savePath + processPath + f"/part{partID}.bin"
     TrainPath = savePath + processPath + f"/trainIds{partID}.bin"
     edgeTable = torch.nonzero(edgeTable).reshape(-1).to(torch.int32)
-    # print("graph:",graph)
-    # print("edgeTable:",edgeTable)
+    # ==== 这个地方增量写入
+    # ====
+    selfLoop = np.repeat(trainId.to(torch.int32), 2)
     subGEdge = graph[edgeTable]
-    # print("subGEdge:",subGEdge)
-    saveBin(subGEdge,DataPath)
+    saveBin(selfLoop,DataPath)
+    saveBin(subGEdge,DataPath,addSave=True)
     saveBin(trainId,TrainPath)
     print(f"all bfs cost {time.time()-start:.3f}s")
 

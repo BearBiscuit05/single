@@ -19,7 +19,7 @@ class SAGE(nn.Module):
         self.layers = nn.ModuleList()
         # three-layer GraphSAGE-mean
         self.layers.append(dglnn.SAGEConv(in_size, hid_size, 'mean'))
-        #self.layers.append(dglnn.SAGEConv(hid_size, hid_size, 'mean'))
+        self.layers.append(dglnn.SAGEConv(hid_size, hid_size, 'mean'))
         self.layers.append(dglnn.SAGEConv(hid_size, out_size, 'mean'))
         self.dropout = nn.Dropout(0.5)
         self.hid_size = hid_size
@@ -83,7 +83,7 @@ def layerwise_infer(device, graph, nid, model, batch_size):
     return sklearn.metrics.accuracy_score(label.cpu().numpy(), pred.argmax(1).cpu().numpy())
 
 def train(args, device, g, train_idx, model):
-    sampler = NeighborSampler([10, 25],  # fanout for [layer-0, layer-1, layer-2]
+    sampler = NeighborSampler([10, 10, 10],  # fanout for [layer-0, layer-1, layer-2]
                               prefetch_node_feats=['feat'],
                               prefetch_labels=['label'])
     use_uva = (args.mode == 'mixed')
@@ -96,7 +96,7 @@ def train(args, device, g, train_idx, model):
                                   use_uva=use_uva)
         )
     opt = torch.optim.Adam(model.parameters(), lr=1e-3, weight_decay=5e-4)
-    for epoch in range(20):
+    for epoch in range(40):
         model.train()
         total_loss = 0
         for i in range(partNUM):
@@ -112,6 +112,8 @@ def train(args, device, g, train_idx, model):
                 total_loss += loss.item()
                 #accuracy = sklearn.metrics.accuracy_score(y.cpu().numpy(), y_hat.argmax(1).detach().cpu().numpy())
             acc = torch.Tensor([0.00])
+        if total_loss / (it+1) < 1.3:
+            break
         print("Epoch {:05d} | Loss {:.4f} | Accuracy {:.4f} "
               .format(epoch, total_loss / (it+1), acc.item()))
 
