@@ -17,7 +17,10 @@ def bin2tensor(filePath, datatype=np.int64):
     return tensor
 
 def saveBin(tensor,savePath):
-    tensor.tofile(savePath)
+    if isinstance(tensor, torch.Tensor):
+        tensor.numpy().tofile(savePath)
+    elif isinstance(tensor, np.ndarray):
+        tensor.tofile(savePath)
 
 def checkFilePath(path):
     if not os.path.exists(path):
@@ -55,14 +58,11 @@ def featMerge(featTable,nodes,savePath=None,saveRes=False):
     return subFeat
 
 def trainIdxSubG(subGNode,trainSet):
-    localTrainId = torch.full(trainSet.shape, -1, dtype=torch.long)
-    mask = (subGNode[:, None] == trainSet)
-    table = mask.nonzero().reshape(-1)
-    col_indices = table[::2]
-    row_indices = table[1::2]
-    localTrainId[row_indices] = col_indices
-    localTrainId = localTrainId[localTrainId >= 0]
-    return localTrainId
+    trainSet = torch.tensor(trainSet).to(torch.int32)
+    Lid = torch.zeros_like(trainSet).to(torch.int32).cuda()
+    dgl.mapLocalId(subGNode.cuda(),trainSet.cuda(),Lid)
+    Lid = Lid.cpu()
+    return Lid
 
 def coo2csrFromFile(graphbinPath,savePath=None,saveRes=False):
     edges = np.fromfile(graphbinPath,dtype=np.int32)
@@ -80,33 +80,42 @@ def coo2csrFromFile(graphbinPath,savePath=None,saveRes=False):
 def coo2csr(srcs,dsts):
     row,col = srcs,dsts
     data = np.ones(len(col),dtype=np.int32)
-    m = csr_matrix((data, (row, col)))
+    m = csr_matrix((data, (row.numpy(), col.numpy())))
     return m.indptr,m.indices
 
-def rawData2GNNData(RAWDATAPATH,partitionNUM,FEATPATH,SAVEPATH):
-    fpr = loadingFeat(FEATPATH,100)
+def rawData2GNNData(RAWDATAPATH,partitionNUM,FEATPATH,LABELPATH,SAVEPATH,featLen):
+    fpr = loadingFeat(FEATPATH,featLen)
+    labels = np.fromfile(LABELPATH,dtype=np.int64)
     for i in range(partitionNUM):
-        rawDataPath = RAWDATAPATH + f"/partition_{i}.bin"
+        rawDataPath = RAWDATAPATH + f"/part{i}.bin"
+        rawTrainPath = RAWDATAPATH + f"/trainIds{i}.bin"
         PATH = SAVEPATH + f"/part{i}"
-        SubFeatPath = SAVEPATH + "/feat.bin"
-        SubIndptrPath = SAVEPATH + "/indptr.bin"
-        SubIndicesPath = SAVEPATH + "/indices.bin"
+        SubFeatPath = PATH + "/feat.bin"
+        SubTrainIdPath = PATH + "/trainIds.bin"
+        SubIndptrPath = PATH + "/indptr.bin"
+        SubIndicesPath = PATH + "/indices.bin"
+        SubLabelPath = PATH + "/labels.bin"
         checkFilePath(PATH)
         data = np.fromfile(rawDataPath,dtype=np.int32)
+        trainidx = np.fromfile(rawTrainPath,dtype=np.int64)
         srcShuffled,dstShuffled,uni = nodeShuffle(data)
         subfeat = featMerge(fpr,uni)
+        subLabel = labels[uni.to(torch.int64)]
         indptr, indices = coo2csr(srcShuffled,dstShuffled)
+        trainidx = trainIdxSubG(uni,trainidx)
+        saveBin(subLabel,SubLabelPath)
+        saveBin(trainidx,SubTrainIdPath)
         saveBin(subfeat,SubFeatPath)
         saveBin(indptr,SubIndptrPath)
         saveBin(indices,SubIndicesPath)
         print(f"subG_{i} success processed...")
 
 
-
 if __name__ == '__main__':
-    RAWDATAPATH = "/home/bear/workspace/single-gnn/src/datapart/data"
-    FEATPATH = "/home/bear/workspace/single-gnn/data/raid/papers100M/feats.bin"
-    SAVEPATH = "/home/bear/workspace/single-gnn/src/datapart/data"
-    partitionNUM = 32
-    rawData2GNNData(RAWDATAPATH,partitionNUM,FEATPATH,SAVEPATH)
-        
+    RAWDATAPATH = "/home/bear/workspace/single-gnn/data/partition/PD"
+    FEATPATH = "/home/bear/workspace/single-gnn/data/raid/ogbn_products/feat.bin"
+    SAVEPATH = "/home/bear/workspace/single-gnn/data/partition/PD/processed"
+    LABELPATH = "/home/bear/workspace/single-gnn/data/raid/ogbn_products/labels_64.bin"
+    partitionNUM = 4
+    featLen = 100
+    rawData2GNNData(RAWDATAPATH,partitionNUM,FEATPATH,LABELPATH,SAVEPATH,featLen)

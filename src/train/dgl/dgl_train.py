@@ -52,7 +52,7 @@ def train(args, device, g, dataset, model,data=None ,basicLoop=0,loop=10):
     sampler = NeighborSampler(args.fanout)
     use_uva = (args.mode == 'mixed')
     train_dataloader = DataLoader(g, train_idx, sampler, device=device,
-                                  batch_size=1024, shuffle=False,
+                                  batch_size=1024, shuffle=True,
                                   drop_last=False, num_workers=0,
                                   use_uva=use_uva)
     if val_idx != []:
@@ -147,10 +147,10 @@ if __name__ == '__main__':
     parser.add_argument("--mode", default='mixed', choices=['cpu', 'mixed', 'puregpu'],
                         help="Training mode. 'cpu' for CPU training, 'mixed' for CPU-GPU mixed training, "
                              "'puregpu' for pure-GPU training.")
-    parser.add_argument('--fanout', type=ast.literal_eval, default=[10, 10, 10], help='Fanout value')
-    parser.add_argument('--layers', type=int, default=3, help='Number of layers')
-    parser.add_argument('--dataset', type=str, default='uk-2006-05', help='Dataset name')
-    parser.add_argument('--maxloop', type=int, default=10, help='max loop number')
+    parser.add_argument('--fanout', type=ast.literal_eval, default=[10, 25], help='Fanout value')
+    parser.add_argument('--layers', type=int, default=2, help='Number of layers')
+    parser.add_argument('--dataset', type=str, default='ogb-products', help='Dataset name')
+    parser.add_argument('--maxloop', type=int, default=20, help='max loop number')
     parser.add_argument('--model', type=str, default="SAGE", help='train model')
     args = parser.parse_args()
     if not torch.cuda.is_available():
@@ -251,4 +251,3 @@ if __name__ == '__main__':
         if args.dataset in ['ogb-products','Reddit','ogb-papers100M']:
             print("Test Accuracy {:.4f}".format(acc.item()))
             print("-"*20)
-            break
