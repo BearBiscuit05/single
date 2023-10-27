@@ -52,7 +52,7 @@ def train(args, device, g, dataset, model,data=None ,basicLoop=0,loop=10):
     sampler = NeighborSampler(args.fanout)
     use_uva = (args.mode == 'mixed')
     train_dataloader = DataLoader(g, train_idx, sampler, device=device,
-                                  batch_size=1024, shuffle=True,
+                                  batch_size=1024, shuffle=False,
                                   drop_last=False, num_workers=0,
                                   use_uva=use_uva)
     if val_idx != []:
@@ -149,7 +149,7 @@ if __name__ == '__main__':
                              "'puregpu' for pure-GPU training.")
     parser.add_argument('--fanout', type=ast.literal_eval, default=[10, 10, 10], help='Fanout value')
     parser.add_argument('--layers', type=int, default=3, help='Number of layers')
-    parser.add_argument('--dataset', type=str, default='ogb-products', help='Dataset name')
+    parser.add_argument('--dataset', type=str, default='ogb-papers100M', help='Dataset name')
     parser.add_argument('--maxloop', type=int, default=20, help='max loop number')
     parser.add_argument('--model', type=str, default="SAGE", help='train model')
     args = parser.parse_args()
@@ -221,12 +221,6 @@ if __name__ == '__main__':
             break
         _loop = loopList[index] - loopList[index - 1]
         train(args, device, g, dataset, model,data=data,basicLoop=loopList[index - 1],loop=_loop)
-        # model = torch.load("save.pt")
-        # model = model.to(device) 
-        
-        # test the model
-    
-    
         print('Testing with after loop {}:...'.format(loopList[index]))
         if args.dataset == 'ogb-products':
             acc = layerwise_infer(device, g, dataset.test_idx, model, batch_size=4096)
@@ -234,20 +228,20 @@ if __name__ == '__main__':
             acc = layerwise_infer(device, g, test_idx, model, batch_size=4096) 
         elif args.dataset == 'ogb-papers100M':
             model.eval()
-            # if args.layers == 2:
-            #     sampler_test = NeighborSampler([100,100],  # fanout for [layer-0, layer-1, layer-2]
-            #                         prefetch_node_feats=['feat'],
-            #                         prefetch_labels=['label'])
-            # else:
-            #     sampler_test = NeighborSampler([20,50,50],  # fanout for [layer-0, layer-1, layer-2]
-            #                         prefetch_node_feats=['feat'],
-            #                         prefetch_labels=['label'])
-            # test_dataloader = DataLoader(g, dataset.test_idx, sampler_test, device=device,
-            #                         batch_size=4096, shuffle=True,
-            #                         drop_last=False, num_workers=0,
-            #                         use_uva=True)
-            acc = layerwise_infer('cpu', g, dataset.test_idx, model, batch_size=4096) 
-            # acc = evaluate(model, g, test_dataloader)
+            if args.layers == 2:
+                sampler_test = NeighborSampler([100,100],  # fanout for [layer-0, layer-1, layer-2]
+                                    prefetch_node_feats=['feat'],
+                                    prefetch_labels=['label'])
+            else:
+                sampler_test = NeighborSampler([20,50,50],  # fanout for [layer-0, layer-1, layer-2]
+                                    prefetch_node_feats=['feat'],
+                                    prefetch_labels=['label'])
+            test_dataloader = DataLoader(g, dataset.test_idx, sampler_test, device=device,
+                                    batch_size=4096, shuffle=True,
+                                    drop_last=False, num_workers=0,
+                                    use_uva=True)
+            # acc = layerwise_infer('cpu', g, dataset.test_idx, model, batch_size=4096) 
+            acc = evaluate(model, g, test_dataloader)
         if args.dataset in ['ogb-products','Reddit','ogb-papers100M']:
             print("Test Accuracy {:.4f}".format(acc.item()))
             print("-"*20)

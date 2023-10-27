@@ -11,7 +11,7 @@ import tqdm
 import argparse
 import sklearn.metrics
 import numpy as np
-partNUM = 4
+partNUM = 8
 
 class SAGE(nn.Module):
     def __init__(self, in_size, hid_size, out_size):
@@ -19,7 +19,7 @@ class SAGE(nn.Module):
         self.layers = nn.ModuleList()
         # three-layer GraphSAGE-mean
         self.layers.append(dglnn.SAGEConv(in_size, hid_size, 'mean'))
-        self.layers.append(dglnn.SAGEConv(hid_size, hid_size, 'mean'))
+        #self.layers.append(dglnn.SAGEConv(hid_size, hid_size, 'mean'))
         self.layers.append(dglnn.SAGEConv(hid_size, out_size, 'mean'))
         self.dropout = nn.Dropout(0.5)
         self.hid_size = hid_size
@@ -83,7 +83,7 @@ def layerwise_infer(device, graph, nid, model, batch_size):
     return sklearn.metrics.accuracy_score(label.cpu().numpy(), pred.argmax(1).cpu().numpy())
 
 def train(args, device, g, train_idx, model):
-    sampler = NeighborSampler([10, 10, 10],  # fanout for [layer-0, layer-1, layer-2]
+    sampler = NeighborSampler([10, 25],  # fanout for [layer-0, layer-1, layer-2]
                               prefetch_node_feats=['feat'],
                               prefetch_labels=['label'])
     use_uva = (args.mode == 'mixed')
@@ -96,7 +96,7 @@ def train(args, device, g, train_idx, model):
                                   use_uva=use_uva)
         )
     opt = torch.optim.Adam(model.parameters(), lr=1e-3, weight_decay=5e-4)
-    for epoch in range(40):
+    for epoch in range(20):
         model.train()
         total_loss = 0
         for i in range(partNUM):
@@ -115,7 +115,7 @@ def train(args, device, g, train_idx, model):
         if total_loss / (it+1) < 1.3:
             break
         print("Epoch {:05d} | Loss {:.4f} | Accuracy {:.4f} "
-              .format(epoch, total_loss / (it+1), acc.item()))
+              .format(epoch, total_loss / ((it+1) * partNUM), acc.item()))
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -128,46 +128,51 @@ if __name__ == '__main__':
     print(f'Training in {args.mode} mode.')
     
     # load and preprocess dataset
-    print('Loading data')
-    graph_dir = '/home/bear/workspace/single-gnn/data/products/raw-products_4/'#'data_4/'
-    part_config = graph_dir + 'ogb-product.json'
     print('loading partitions')
     
     device = torch.device('cpu' if args.mode == 'cpu' else 'cuda')
-    model = SAGE(100, 256, 47).to(device)
-    g_list = []
-    train_list = []
-    PATH = "/home/bear/workspace/single-gnn/data/partition/PD/processed/part"
-    for i in range(partNUM):
-        indices = np.fromfile(PATH + f"{i}/indices.bin",dtype=np.int32)
-        indptr = np.fromfile(PATH + f"{i}/indptr.bin",dtype=np.int32)
-        indptr = torch.tensor(indptr).to(torch.int64)
-        indices = torch.tensor(indices).to(torch.int64)
-        feat = np.fromfile(PATH + f"{i}/feat.bin",dtype=np.float32).reshape(-1,100)
-        trainIds = np.fromfile(PATH + f"{i}/trainIds.bin",dtype=np.int32)
-        trainIds = torch.tensor(trainIds).to(torch.int64)
-        labels = np.fromfile(PATH + f"{i}/labels.bin",dtype=np.int64)
-        device = torch.device('cpu' if args.mode == 'cpu' else 'cuda')
-        g = dgl.graph(('csr', (indptr, indices, [])))
-        
-        # g.nodes['_N'] = g.nodes['_N'].to(torch.int64)
-        
-        feat = torch.tensor(feat)
-        g.ndata['feat'] = feat
-        # print(g.nodes('_N'))
-        labels = torch.tensor(labels)
-        g.ndata['label'] = labels
-        g_list.append(g)
-        train_list.append(trainIds)
-    print('Training...')
-    train(args, device, g_list, train_list , model)
-
+    model = SAGE(128, 256, 172).to(device)
     
-    dataset = AsNodePredDataset(DglNodePropPredDataset('ogbn-products',root="/home/bear/workspace/single-gnn/data/dataset"))
+    # g_list = []
+    # train_list = []
+    # PATH = "/home/bear/workspace/single-gnn/data/partition/PA/part"
+    # for i in range(partNUM):
+    #     indices = np.fromfile(PATH + f"{i}/indices.bin",dtype=np.int32)
+    #     indptr = np.fromfile(PATH + f"{i}/indptr.bin",dtype=np.int32)
+    #     indptr = torch.tensor(indptr).to(torch.int64)
+    #     indices = torch.tensor(indices).to(torch.int64)
+    #     feat = np.fromfile(PATH + f"{i}/feats.bin",dtype=np.float32).reshape(-1,128)
+    #     trainIds = np.fromfile(PATH + f"{i}/trainIds.bin",dtype=np.int32)
+    #     trainIds = torch.tensor(trainIds).to(torch.int64)
+    #     labels = np.fromfile(PATH + f"{i}/labels.bin",dtype=np.int64)
+    #     device = torch.device('cpu' if args.mode == 'cpu' else 'cuda')
+    #     g = dgl.graph(('csr', (indptr, indices, [])))        
+    #     feat = torch.tensor(feat)
+    #     g.ndata['feat'] = feat
+    #     labels = torch.tensor(labels).to(torch.int64)
+    #     g.ndata['label'] = labels
+    #     g_list.append(g)
+    #     train_list.append(trainIds)
+    # print('Training...')
+    # train(args, device, g_list, train_list , model)
+
+    # torch.save(model.state_dict(), 'model_parameters.pth')
+
+    model.load_state_dict(torch.load('model_parameters.pth'))
+    model.eval()
+    dataset = AsNodePredDataset(DglNodePropPredDataset('ogbn-papers100M',root="/home/bear/workspace/single-gnn/data/dataset"))
     g = dataset[0]
     g = g.to('cuda' if args.mode == 'puregpu' else 'cpu')
     device = torch.device('cpu' if args.mode == 'cpu' else 'cuda')
     # test the model
     print('Testing...')
-    acc = layerwise_infer(device, g, dataset.test_idx, model, batch_size=4096)
+    sampler_test = NeighborSampler([50,50],  # fanout for [layer-0, layer-1, layer-2]
+                            prefetch_node_feats=['feat'],
+                            prefetch_labels=['label'])
+    test_dataloader = DataLoader(g, dataset.test_idx, sampler_test, device=device,
+                            batch_size=4096, shuffle=True,
+                            drop_last=False, num_workers=0,
+                            use_uva=True)
+    # acc = layerwise_infer(device, g, dataset.test_idx, model, batch_size=4096) 
+    acc = evaluate(model, g, test_dataloader)
     print("Test Accuracy {:.4f}".format(acc.item()))

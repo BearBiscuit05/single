@@ -3,6 +3,10 @@ import dgl
 import torch
 import os
 from scipy.sparse import csr_matrix
+import copy
+import gc
+import time
+
 """
 input:
     multi file with edges in this partition (bin)
@@ -12,15 +16,24 @@ output:
     subGFeat
     trainMask
 """
+MERGETIME = 0
+
 def bin2tensor(filePath, datatype=np.int64):
     tensor = np.fromfile(filePath, dtype=datatype)
     return tensor
 
-def saveBin(tensor,savePath):
-    if isinstance(tensor, torch.Tensor):
-        tensor.numpy().tofile(savePath)
-    elif isinstance(tensor, np.ndarray):
-        tensor.tofile(savePath)
+def saveBin(tensor,savePath,addSave=False):
+    if addSave :
+        with open(savePath, 'ab') as f:
+            if isinstance(tensor, torch.Tensor):
+                tensor.numpy().tofile(f)
+            elif isinstance(tensor, np.ndarray):
+                tensor.tofile(f)
+    else:
+        if isinstance(tensor, torch.Tensor):
+            tensor.numpy().tofile(savePath)
+        elif isinstance(tensor, np.ndarray):
+            tensor.tofile(savePath)
 
 def checkFilePath(path):
     if not os.path.exists(path):
@@ -35,13 +48,21 @@ def loadingFeat(featPath,featLen,nodeNUM=0,useMmap=False):
         fpr = np.fromfile(featPath,dtype=np.float32).reshape(-1,featLen)
     return fpr
     
-def nodeShuffle(raw_graph,savePath=None,saveRes=False):
+def nodeShuffle(raw_node,raw_graph,savePath=None,saveRes=False):
+    torch.cuda.empty_cache()
+    gc.collect()
     srcs = raw_graph[::2]
     dsts = raw_graph[1::2]
-    srcs_tensor = torch.Tensor(srcs).to(torch.int32).cuda()
-    dsts_tensor = torch.Tensor(dsts).to(torch.int32).cuda()
-    uni = torch.ones(len(dsts)*2).to(torch.int32).cuda()
-    srcShuffled,dstShuffled,uni = dgl.remappingNode(srcs_tensor,dsts_tensor,uni)
+    print(len(srcs))
+    raw_node = torch.tensor(raw_node).cuda()
+    srcs_tensor = torch.tensor(srcs).cuda()
+    dsts_tensor = torch.tensor(dsts).cuda()
+    uni = torch.ones(len(raw_node)*2).to(torch.int32).cuda()
+    print("begin shuffle...")
+    #srcShuffled,dstShuffled,uni = dgl.remappingNode(srcs_tensor,dsts_tensor,uni)
+    srcShuffled,dstShuffled,uni = dgl.mapByNodeSet(raw_node,uni,srcs_tensor,dsts_tensor)
+    srcs_tensor = srcs_tensor.cpu()
+    dsts_tensor = dsts_tensor.cpu()
     srcShuffled = srcShuffled.cpu()
     dstShuffled = dstShuffled.cpu()
     uni = uni.cpu()
@@ -49,12 +70,17 @@ def nodeShuffle(raw_graph,savePath=None,saveRes=False):
         graph = torch.stack((srcShuffled,dstShuffled),dim=1)
         graph = graph.reshape(-1).numpy()
         graph.tofile(savePath)
+    print("shuffle end...")
     return srcShuffled,dstShuffled,uni
 
-def featMerge(featTable,nodes,savePath=None,saveRes=False):
-    subFeat = featTable[nodes]
-    if saveRes:
-        subFeat.tofile(savePath)
+def featMerge(featTable,nodes):
+    batch_size = 10
+    nodes_batches = torch.chunk(nodes, batch_size, dim=0)
+    subFeat = np.zeros((len(nodes),128),dtype=np.float32)
+    offset = 0
+    for nodebatch in nodes_batches:
+        subFeat[offset:offset+len(nodebatch)] = featTable[nodebatch.numpy()]
+        offset += len(nodebatch)
     return subFeat
 
 def trainIdxSubG(subGNode,trainSet):
@@ -84,38 +110,95 @@ def coo2csr(srcs,dsts):
     return m.indptr,m.indices
 
 def rawData2GNNData(RAWDATAPATH,partitionNUM,FEATPATH,LABELPATH,SAVEPATH,featLen):
-    fpr = loadingFeat(FEATPATH,featLen)
+    global MERGETIME
     labels = np.fromfile(LABELPATH,dtype=np.int64)
     for i in range(partitionNUM):
-        rawDataPath = RAWDATAPATH + f"/part{i}.bin"
-        rawTrainPath = RAWDATAPATH + f"/trainIds{i}.bin"
-        PATH = SAVEPATH + f"/part{i}"
+        startTime = time.time()
+        PATH = RAWDATAPATH + f"/part{i}" 
+        rawDataPath = PATH + f"/raw_G.bin"
+        rawTrainPath = PATH + f"/raw_trainIds.bin"
+        rawNodePath = PATH + f"/raw_nodes.bin"
         SubFeatPath = PATH + "/feat.bin"
         SubTrainIdPath = PATH + "/trainIds.bin"
         SubIndptrPath = PATH + "/indptr.bin"
         SubIndicesPath = PATH + "/indices.bin"
         SubLabelPath = PATH + "/labels.bin"
+        # SubUniPath = PATH + "/GidMap.bin"
         checkFilePath(PATH)
         data = np.fromfile(rawDataPath,dtype=np.int32)
+        node = np.fromfile(rawNodePath,dtype=np.int32)
         trainidx = np.fromfile(rawTrainPath,dtype=np.int64)
-        srcShuffled,dstShuffled,uni = nodeShuffle(data)
-        subfeat = featMerge(fpr,uni)
+        srcShuffled,dstShuffled,uni = nodeShuffle(node,data)
+        #subfeat = featMerge(fpr,uni)
         subLabel = labels[uni.to(torch.int64)]
         indptr, indices = coo2csr(srcShuffled,dstShuffled)
         trainidx = trainIdxSubG(uni,trainidx)
+        #saveBin(uni,SubUniPath)
         saveBin(subLabel,SubLabelPath)
         saveBin(trainidx,SubTrainIdPath)
-        saveBin(subfeat,SubFeatPath)
+        #saveBin(subfeat,SubFeatPath)
         saveBin(indptr,SubIndptrPath)
         saveBin(indices,SubIndicesPath)
         print(f"subG_{i} success processed...")
+        MERGETIME += time.time() - startTime
 
+
+# ===============
+def featSlice(FEATPATH,beginIndex,endIndex,featLen):
+    featPath = "/home/bear/workspace/single-gnn/data/raid/papers100M/feats.bin"
+    blockByte = 4 # float32 4byte
+    offset = (featLen * beginIndex) * blockByte
+    subFeat = np.fromfile(featPath, dtype=np.float32, count=(endIndex - beginIndex) * featLen, offset=offset)
+    return subFeat.reshape(-1,featLen)
+
+def sliceIds(Ids,sliceTable):
+    beginIndex = 0
+    ans = []
+    for tar in sliceTable[1:]:
+        position = torch.searchsorted(Ids, tar)
+        slice = Ids[beginIndex:position]
+        ans.append(slice)
+        beginIndex = position
+    return ans
+
+
+def genSubGFeat(SAVEPATH,partNUM,nodeNUM,sliceNUM,featLen):
+    # 获得切片
+    slice = nodeNUM // sliceNUM + 1
+    boundList = [0]
+    start = slice
+    for i in range(sliceNUM):
+        boundList.append(start)
+        start += slice
+    boundList[-1] = nodeNUM
+    print("bound:",boundList)
+
+    idsSliceList = [[] for i in range(partNUM)]
+    for i in range(partNUM):
+        file = SAVEPATH + f"/part{i}/raw_nodes.bin"
+        ids = torch.tensor(np.fromfile(file,dtype=np.int32))
+        idsSliceList[i] = sliceIds(ids,boundList)
+        #print("idsSliceList:",idsSliceList[i])
+    
+    for sliceIndex in range(sliceNUM):
+        beginIdx = boundList[sliceIndex]
+        endIdx = boundList[sliceIndex+1]
+        sliceFeat = featSlice("",beginIdx,endIdx,featLen)
+        for index in range(partNUM):
+            fileName = SAVEPATH + f"/part{index}/feats.bin"
+            SubIdsList = idsSliceList[index][sliceIndex]
+            t_SubIdsList = SubIdsList - beginIdx
+            subFeat = sliceFeat[t_SubIdsList]
+            saveBin(subFeat,fileName,addSave=sliceIndex)
 
 if __name__ == '__main__':
-    RAWDATAPATH = "/home/bear/workspace/single-gnn/data/partition/PD"
-    FEATPATH = "/home/bear/workspace/single-gnn/data/raid/ogbn_products/feat.bin"
-    SAVEPATH = "/home/bear/workspace/single-gnn/data/partition/PD/processed"
-    LABELPATH = "/home/bear/workspace/single-gnn/data/raid/ogbn_products/labels_64.bin"
-    partitionNUM = 4
-    featLen = 100
-    rawData2GNNData(RAWDATAPATH,partitionNUM,FEATPATH,LABELPATH,SAVEPATH,featLen)
+    RAWDATAPATH = "/home/bear/workspace/single-gnn/data/partition/PA"
+    FEATPATH = "/home/bear/workspace/single-gnn/data/raid/papers100M/feats.bin"
+    SAVEPATH = "/home/bear/workspace/single-gnn/data/partition/PA"
+    LABELPATH = "/home/bear/workspace/single-gnn/data/raid/papers100M/labels.bin"
+    partitionNUM = 8
+    nodeNUM = 111059956
+    # featLen = 128
+    # rawData2GNNData(RAWDATAPATH,partitionNUM,FEATPATH,LABELPATH,SAVEPATH,featLen)
+    # print(f"all do cost time{MERGETIME:.3f}...")
+    genSubGFeat(SAVEPATH,partitionNUM,nodeNUM,5,128)
