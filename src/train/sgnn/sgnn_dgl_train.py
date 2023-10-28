@@ -93,10 +93,10 @@ def load_reddit(self_loop=True):
     return g, data,train_idx,val_idx,test_idx
 
 def Testing(model,name,data,device="cuda:0",tid=None):
-    if name == "products_4":
+    if name == "PD":
         g = data[0]
         acc = layerwise_infer(device, g, data.test_idx, model, batch_size=4096)
-    elif name == "reddit_8":
+    elif name == "RD":
         acc = layerwise_infer(device, data, tid, model, batch_size=4096)  
     print("Test Accuracy {:.4f}".format(acc.item()))
     
@@ -131,7 +131,7 @@ if __name__ == '__main__':
         sys.exit(1)
     
     print('Training...')
-    dataset = CustomDataset(args.json_path)  # 使用 args.json_path 作为 JSON 文件路径
+    dataset = CustomDataset(args.json_path,pre_fetch=True)  # 使用 args.json_path 作为 JSON 文件路径
     epochInterval = data["epochInterval"]
     maxEpoch = dataset.maxEpoch
     epoch = 0
@@ -139,10 +139,10 @@ if __name__ == '__main__':
     for BLoop in range(0,maxEpoch,epochInterval):
         train(dataset, model,basicLoop=BLoop,loop=epochInterval)
     
-    if data["dataset"] == "products_4":
+    if data["dataset"] == "PD":
         TestDataset = AsNodePredDataset(DglNodePropPredDataset('ogbn-products',root=curDir+'/../../../data/dataset/'))
         Testing(model,data["dataset"],TestDataset)
-    elif data["dataset"] == "reddit_8":
+    elif data["dataset"] == "RD":
         g, Testdata,train_idx,val_idx,test_idx = load_reddit()
         Testing(model,data["dataset"],g,device="cuda:0",tid=test_idx)
 

@@ -89,8 +89,8 @@ def analysisG(graph,maxID,partID,trainId=None,savePath=None):
 def nodeShuffle(raw_node,raw_graph,savePath=None,saveRes=False):
     torch.cuda.empty_cache()
     gc.collect()
-    srcs = raw_graph[::2]
-    dsts = raw_graph[1::2]
+    srcs = raw_graph[1::2]
+    dsts = raw_graph[::2]
     print(len(srcs))
     raw_node = torch.tensor(raw_node).cuda()
     srcs_tensor = torch.tensor(srcs).cuda()
@@ -115,7 +115,7 @@ def trainIdxSubG(subGNode,trainSet):
     trainSet = torch.tensor(trainSet).to(torch.int32)
     Lid = torch.zeros_like(trainSet).to(torch.int32).cuda()
     dgl.mapLocalId(subGNode.cuda(),trainSet.cuda(),Lid)
-    Lid = Lid.cpu()
+    Lid = Lid.cpu().to(torch.int64)
     return Lid
 
 def coo2csr(srcs,dsts):
@@ -192,7 +192,7 @@ def genSubGFeat(SAVEPATH,FEATPATH,partNUM,nodeNUM,sliceNUM,featLen):
         endIdx = boundList[sliceIndex+1]
         sliceFeat = featSlice(FEATPATH,beginIdx,endIdx,featLen)
         for index in range(partNUM):
-            fileName = SAVEPATH + f"/part{index}/feats.bin"
+            fileName = SAVEPATH + f"/part{index}/feat.bin"
             SubIdsList = idsSliceList[index][sliceIndex]
             t_SubIdsList = SubIdsList - beginIdx
             subFeat = sliceFeat[t_SubIdsList]
@@ -204,7 +204,7 @@ if __name__ == '__main__':
     sliceNUM = 2
     with open(JSONPATH, 'r') as file:
         data = json.load(file)
-    datasetName = ["RD"] 
+    datasetName = ["PD"] 
     for NAME in datasetName:
         GRAPHPATH = data[NAME]["rawFilePath"]
         maxID = data[NAME]["nodes"]
