@@ -19,7 +19,7 @@ from memory_profiler import profile
 
 curFilePath = os.path.abspath(__file__)
 curDir = os.path.dirname(curFilePath)
-.
+
 # 禁用操作
 #logging.disable(logging.CRITICAL)
 logging.basicConfig(level=logging.INFO,filename=curDir+'/../../log/loader.log',filemode='w',
@@ -95,8 +95,6 @@ class CustomDataset(Dataset):
 
         #### 数据预取 ####
         self.template_cache_graph= self.initCacheData()
-        #self.loadingGraph()
-        self.loadingMemFeat(self.trainSubGTrack[self.subGptr//self.partNUM][self.subGptr%self.partNUM])
         self.initNextGraphData()
         self.uniTable = torch.zeros(len(self.template_cache_graph[0])*2,dtype=torch.int32).to('cuda:0')
 
@@ -286,6 +284,9 @@ class CustomDataset(Dataset):
         self.nodeLabels = torch.tensor(np.fromfile(filePath+"/labels.bin", dtype=np.int64))
 
     def loadingMemFeat(self, rank, preFetch=False,preFeat=None):
+        self.feats = []
+        torch.cuda.empty_cache()
+        gc.collect()
         if preFetch and preFeat is None:
             raise ValueError("If preFetch is set to True, preFeat must not be None.")
         filePath = self.dataPath + "/part" + str(rank)
@@ -588,14 +589,14 @@ def collate_fn(data):
 
 
 if __name__ == "__main__":
-    dataset = CustomDataset(curDir+"/../../config/train_config.json",pre_fetch=False)
+    dataset = CustomDataset(curDir+"/../../config/train_config.json",pre_fetch=True)
     with open(curDir+"/../../config/train_config.json", 'r') as f:
         config = json.load(f)
         batchsize = config['batchsize']
         epoch = config['maxEpoch']
     train_loader = DataLoader(dataset=dataset, batch_size=batchsize,collate_fn=collate_fn)
     count = 0
-    for index in range(2):
+    for index in range(1):
         start = time.time()
         loopTime = time.time()
         for graph,feat,label,number in train_loader:

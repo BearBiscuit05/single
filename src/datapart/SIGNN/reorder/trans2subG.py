@@ -226,9 +226,6 @@ if __name__ == '__main__':
         maxID = data[NAME]["nodes"]
         subGSavePath = data[NAME]["processedPath"]
         trainId = torch.tensor(np.fromfile(GRAPHPATH + "/trainIds.bin",dtype=np.int64))
-        # trainId = torch.randint(maxID, (int(maxID*0.01),))
-        # trainBatch = torch.chunk(trainId, partitionNUM, dim=0)
-
         shuffled_indices = torch.randperm(trainId.size(0))
         trainId = trainId[shuffled_indices]
         trainBatch = torch.chunk(trainId, partitionNUM, dim=0)
@@ -250,7 +247,7 @@ if __name__ == '__main__':
         featLen = data[NAME]["featLen"]
         
         MERGETIME = time.time()
-        #rawData2GNNData(RAWDATAPATH,partitionNUM,FEATPATH,LABELPATH,SAVEPATH,featLen)
+        rawData2GNNData(RAWDATAPATH,partitionNUM,FEATPATH,LABELPATH,SAVEPATH,featLen)
         print(f"trans graph cost time{time.time() - MERGETIME:.3f}...")
         FEATTIME = time.time()
         genSubGFeat(SAVEPATH,FEATPATH,partitionNUM,nodeNUM,sliceNUM,featLen)
