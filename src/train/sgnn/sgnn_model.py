@@ -31,7 +31,7 @@ class DGL_SAGE(nn.Module):
 
     def forward(self, blocks, x):
         h = x
-        for l, (layer, block) in enumerate(zip(self.layers, blocks)):
+        for l, (layer, block) in enumerate(zip(self.layers, blocks)):        
             h = layer(block, h)
             if l != len(self.layers) - 1:
                 h = F.relu(h)

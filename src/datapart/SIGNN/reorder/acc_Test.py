@@ -11,7 +11,7 @@ import tqdm
 import argparse
 import sklearn.metrics
 import numpy as np
-partNUM = 8
+partNUM = 4
 
 class SAGE(nn.Module):
     def __init__(self, in_size, hid_size, out_size):
@@ -141,8 +141,8 @@ if __name__ == '__main__':
     #     indptr = np.fromfile(PATH + f"{i}/indptr.bin",dtype=np.int32)
     #     indptr = torch.tensor(indptr).to(torch.int64)
     #     indices = torch.tensor(indices).to(torch.int64)
-    #     feat = np.fromfile(PATH + f"{i}/feats.bin",dtype=np.float32).reshape(-1,128)
-    #     trainIds = np.fromfile(PATH + f"{i}/trainIds.bin",dtype=np.int32)
+    #     feat = np.fromfile(PATH + f"{i}/feat.bin",dtype=np.float32).reshape(-1,128)
+    #     trainIds = np.fromfile(PATH + f"{i}/trainIds.bin",dtype=np.int64)
     #     trainIds = torch.tensor(trainIds).to(torch.int64)
     #     labels = np.fromfile(PATH + f"{i}/labels.bin",dtype=np.int64)
     #     device = torch.device('cpu' if args.mode == 'cpu' else 'cuda')

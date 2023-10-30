@@ -19,7 +19,7 @@ from memory_profiler import profile
 
 curFilePath = os.path.abspath(__file__)
 curDir = os.path.dirname(curFilePath)
-
+.
 # 禁用操作
 #logging.disable(logging.CRITICAL)
 logging.basicConfig(level=logging.INFO,filename=curDir+'/../../log/loader.log',filemode='w',
@@ -212,6 +212,7 @@ class CustomDataset(Dataset):
         
         self.subGptr += 1
         self.GID = self.trainSubGTrack[self.subGptr // self.partNUM][self.subGptr % self.partNUM]
+        print(f"loading GID :{self.GID}...")
         # 先判断是否为第一个，或者是已经存在发送过预取命令
         if self.subGptr == 0 or not self.pre_fetch:
             # 如果两个都没有，则全部从头加载

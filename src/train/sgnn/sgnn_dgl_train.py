@@ -60,7 +60,7 @@ def train(dataset, model,basicLoop=0,loop=10):
             tmp = [block.to('cuda:0') for block in tmp]
             y_hat = model(tmp, feat)
             try:
-                loss = F.cross_entropy(y_hat[:number], label[:number].to(torch.int64).to('cuda:0'))
+                loss = F.cross_entropy(y_hat[:number], label[:number].to('cuda:0'))
             except:
                 print("error info : y_hat :{} , label :{} ,number :{}".format(y_hat.shape,label.shape,number))
             opt.zero_grad()
@@ -121,7 +121,7 @@ if __name__ == '__main__':
 
     device = torch.device('cpu' if args.mode == 'cpu' else 'cuda:0')
     if data["model"] == "SAGE":
-        model = DGL_SAGE(data['featlen'], 256, data['classes'],arg_layers).to('cuda:0')  # 请确保 SAGE 模型的参数正确
+        model = DGL_SAGE(data['featlen'], 256, data['classes'],arg_layers).to('cuda:0')
     elif data["model"] == "GCN":
         model = DGL_GCN(data['featlen'], 256, data['classes'] ,arg_layers,F.relu,0.5).to('cuda:0')
     elif data["model"] == "GAT":
@@ -138,12 +138,12 @@ if __name__ == '__main__':
     
     for BLoop in range(0,maxEpoch,epochInterval):
         train(dataset, model,basicLoop=BLoop,loop=epochInterval)
-    
-    if data["dataset"] == "PD":
-        TestDataset = AsNodePredDataset(DglNodePropPredDataset('ogbn-products',root=curDir+'/../../../data/dataset/'))
-        Testing(model,data["dataset"],TestDataset)
-    elif data["dataset"] == "RD":
-        g, Testdata,train_idx,val_idx,test_idx = load_reddit()
-        Testing(model,data["dataset"],g,device="cuda:0",tid=test_idx)
+    torch.save(model.state_dict(), 'model_parameters.pth')
+    # if data["dataset"] == "PD":
+    #     TestDataset = AsNodePredDataset(DglNodePropPredDataset('ogbn-products',root=curDir+'/../../../data/dataset/'))
+    #     Testing(model,data["dataset"],TestDataset)
+    # elif data["dataset"] == "RD":
+    #     g, Testdata,train_idx,val_idx,test_idx = load_reddit()
+    #     Testing(model,data["dataset"],g,device="cuda:0",tid=test_idx)
 
         
