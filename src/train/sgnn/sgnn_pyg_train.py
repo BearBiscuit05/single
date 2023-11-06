@@ -102,7 +102,7 @@ if __name__ == '__main__':
         print("Invalid model option. Please choose from 'SAGE', 'GCN', or 'GAT'.")
         sys.exit(1)
     
-    dataset = CustomDataset(args.json_path)
+    dataset = CustomDataset(args.json_path,pre_fetch=True)
     epochInterval = data["epochInterval"]
     maxEpoch = dataset.maxEpoch
     epoch = 0

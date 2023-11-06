@@ -38,7 +38,3 @@ NUM_CLASS=150
 NUM_TRAIN_SET=1000000
 NUM_VALID_SET=200000
 NUM_TEST_SET=100000
-
-mkdir -p $OUTPUT_DATA_DIR
-dd if=/dev/zero of="${OUTPUT_DATA_DIR}/feats.bin" bs=4 count=$((NUM_NODE * FEAT_DIM))
-dd if=/dev/zero of="${OUTPUT_DATA_DIR}/labels.bin" bs=8 count=$NUM_NODE

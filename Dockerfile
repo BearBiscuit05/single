@@ -7,7 +7,7 @@ COPY ./docker/pip.conf /root/.pip/pip.conf
 
 
 # apt software
-RUN apt-get update && apt-get install -y wget gnuplot git vim\
+RUN apt-get update && apt-get install -y wget gnuplot git vim pip \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 

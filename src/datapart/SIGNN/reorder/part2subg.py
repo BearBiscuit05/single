@@ -216,7 +216,7 @@ def genSubGFeat(SAVEPATH,FEATPATH,partNUM,nodeNUM,sliceNUM,featLen):
 
 if __name__ == '__main__':
     JSONPATH = "/home/bear/workspace/single-gnn/datasetInfo.json"
-    partitionNUM = 4
+    partitionNUM = 8
     sliceNUM = 5
     with open(JSONPATH, 'r') as file:
         data = json.load(file)

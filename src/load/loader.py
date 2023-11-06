@@ -102,28 +102,33 @@ class CustomDataset(Dataset):
         return self.NodeLen
     
     def __getitem__(self, index):
-        if index % self.preRating == 0:
-            self.sampleFlagQueue.put(self.executor.submit(self.preGraphBatch))
-        
-        # 获取采样数据
         if index % self.batchsize == 0:
-            if self.graphPipe.qsize() > 0:
-                self.sampleFlagQueue.get()
-                cacheData = self.graphPipe.get()
-                if self.train_name == "LP":
-                    return tuple(cacheData[:6])
-                else:
-                    return tuple(cacheData[:4])
+            self.preGraphBatch()
+            cacheData = self.graphPipe.get()
+            return tuple(cacheData[:4])
+        
+        # if index % self.preRating == 0:
+        #     self.sampleFlagQueue.put(self.executor.submit(self.preGraphBatch))
+        
+        # # 获取采样数据
+        # if index % self.batchsize == 0:
+        #     if self.graphPipe.qsize() > 0:
+        #         self.sampleFlagQueue.get()
+        #         cacheData = self.graphPipe.get()
+        #         if self.train_name == "LP":
+        #             return tuple(cacheData[:6])
+        #         else:
+        #             return tuple(cacheData[:4])
                 
-            else: #需要等待
-                flag = self.sampleFlagQueue.get()
-                flag.result()
-                cacheData = self.graphPipe.get()
-                if self.train_name == "LP":
-                    return tuple(cacheData[:6])
-                else:
-                    return tuple(cacheData[:4])
-        return 0,0
+        #     else: #需要等待
+        #         flag = self.sampleFlagQueue.get()
+        #         flag.result()
+        #         cacheData = self.graphPipe.get()
+        #         if self.train_name == "LP":
+        #             return tuple(cacheData[:6])
+        #         else:
+        #             return tuple(cacheData[:4])
+        # return 0,0
 
 ########################## 初始化训练数据 ##########################
     def readConfig(self,confPath):
@@ -596,7 +601,7 @@ if __name__ == "__main__":
         epoch = config['maxEpoch']
     train_loader = DataLoader(dataset=dataset, batch_size=batchsize,collate_fn=collate_fn)
     count = 0
-    for index in range(1):
+    for index in range(2):
         start = time.time()
         loopTime = time.time()
         for graph,feat,label,number in train_loader:

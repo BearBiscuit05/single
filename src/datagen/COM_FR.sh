@@ -41,7 +41,4 @@ NUM_VALID_SET=100000
 NUM_TEST_SET=200000
 
 mkdir -p $OUTPUT_DATA_DIR
-# 生成特征数据集文件
-dd if=/dev/zero of="${OUTPUT_DATA_DIR}/feats.bin" bs=4 count=$((NUM_NODE * FEAT_DIM))
-dd if=/dev/zero of="${OUTPUT_DATA_DIR}/labels.bin" bs=8 count=$NUM_NODE
-# 生成训练集/验证集/测试
+

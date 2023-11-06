@@ -49,7 +49,7 @@ def run(args, dataset,split_idx=None):
     data = dataset[0]
     data.y = data.y.to(torch.int64)
     #data = data.to('cuda:0', 'x', 'y')  # Move to device for faster feature fetch.
-    data = data.to('cuda:0', 'y')
+    #data = data.to('cuda:0', 'y')
     if args.dataset == 'Reddit':
         train_idx = data.train_mask.nonzero(as_tuple=False).view(-1)
     elif args.dataset == 'ogb-products' or args.dataset == 'ogb-papers100M':
@@ -230,7 +230,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='pyg gcn program')
     parser.add_argument('--fanout', type=ast.literal_eval, default=[10, 10, 10], help='Fanout value')
     parser.add_argument('--layers', type=int, default=3, help='Number of layers')
-    parser.add_argument('--dataset', type=str, default='uk-2006-05', help='Dataset name')
+    parser.add_argument('--dataset', type=str, default='ogb-products', help='Dataset name')
     parser.add_argument('--maxloop', type=int, default=10, help='max loop number')
     parser.add_argument('--model', type=str, default="SAGE", help='train model')
 
@@ -247,7 +247,7 @@ if __name__ == '__main__':
         dataset = Reddit('/home/bear/workspace/singleGNN/data/reddit/pyg_reddit')
         run(args, dataset,split_idx=None)
     elif args.dataset == 'ogb-products':
-        root = osp.join(osp.dirname(osp.realpath(__file__)), '/home/bear/workspace/singleGNN/data/', 'dataset')
+        root = osp.join(osp.dirname(osp.realpath(__file__)), '/home/bear/workspace/single-gnn/data/', 'dataset')
         dataset = PygNodePropPredDataset('ogbn-products', root)
         split_idx = dataset.get_idx_split()
         evaluator = Evaluator(name='ogbn-products')
