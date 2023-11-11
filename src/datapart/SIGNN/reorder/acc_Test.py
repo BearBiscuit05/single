@@ -160,7 +160,8 @@ if __name__ == '__main__':
 
     # model.load_state_dict(torch.load('model_parameters.pth'))
     # model.eval()
-    # dataset = AsNodePredDataset(DglNodePropPredDataset('ogbn-papers100M',root="/home/bear/workspace/single-gnn/data/dataset"))
+    # # dataset = AsNodePredDataset(DglNodePropPredDataset('ogbn-papers100M',root="/home/bear/workspace/single-gnn/data/dataset"))
+    # dataset = AsNodePredDataset(DglNodePropPredDataset('ogbn-products',root="/home/bear/workspace/single-gnn/data/dataset"))
     # g = dataset[0]
     # g = g.to('cuda' if args.mode == 'puregpu' else 'cpu')
     # device = torch.device('cpu' if args.mode == 'cpu' else 'cuda')

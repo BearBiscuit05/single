@@ -22,8 +22,12 @@ def saveBin(tensor,savePath,addSave=False):
 def checkFilePath(path):
     if not os.path.exists(path):
         os.makedirs(path)
+
+def convert_to_tensor(data, dtype=torch.int32):
+    if isinstance(data, np.ndarray):
+        return torch.from_numpy(data).to(dtype)
     else:
-        print(f"file '{path}' exist...")
+        return data.to(dtype)
 
 def coo2csr(row,col):
     """

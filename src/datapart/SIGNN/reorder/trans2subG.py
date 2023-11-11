@@ -29,10 +29,12 @@ RUNTIME = 0
 SAVETIME = 0
 MERGETIME = 0
 MAXEDGE = 100000000
+
 ## bfs 遍历获取基础子图
 def analysisG(graph,maxID,trainId=None,savePath=None):
     global RUNTIME
     global SAVETIME
+    print(f"analysisG train len:{trainId.shape}")
     dst = torch.tensor(graph[::2])
     src = torch.tensor(graph[1::2])
     if trainId == None:
@@ -47,23 +49,24 @@ def analysisG(graph,maxID,trainId=None,savePath=None):
 
     repeats = 3
     start = time.time()
-    edgeTable = torch.zeros_like(src,dtype=torch.int32).cuda()
-    edgeNUM = 0
-    allEdgeNUM = src.numel()
+    edgeTable = torch.zeros_like(src,dtype=torch.int32)
+    tmpEtable = torch.zeros_like(dst_batches[0],dtype=torch.int32).cuda()
     for index in range(1,repeats+1):
-        acc_tabel = torch.zeros_like(nodeTable,dtype=torch.int32)
+        acc_table = torch.zeros_like(nodeTable,dtype=torch.int32)
         offset = 0
         for src_batch,dst_batch in zip(*batch):
-            tmp_nodeTabel = copy.deepcopy(nodeTable)
-            tmp_nodeTabel = tmp_nodeTabel.cuda()
+            tmp_nodeTable = copy.deepcopy(nodeTable)
+            tmp_nodeTable = tmp_nodeTable.cuda()
             src_batch = src_batch.cuda()
             dst_batch = dst_batch.cuda()
-            dgl.fastFindNeigEdge(tmp_nodeTabel,edgeTable,src_batch, dst_batch, offset)
+            tmpEtable.fill_(0)
+            dgl.fastFindNeigEdge(tmp_nodeTable,tmpEtable,src_batch, dst_batch)
+            edgeTable[offset:offset+len(src_batch)] = tmpEtable.cpu()[:len(src_batch)]
             offset += len(src_batch)
-            tmp_nodeTabel = tmp_nodeTabel.cpu()
-            acc_tabel = acc_tabel | tmp_nodeTabel
-        nodeTable = acc_tabel
-    edgeTable = edgeTable.cpu()
+            tmp_nodeTable = tmp_nodeTable.cpu()
+            acc_table = acc_table | tmp_nodeTable
+        nodeTable = acc_table
+    tmpEtable = None
     graph = graph.reshape(-1,2)
     nodeSet =  torch.nonzero(nodeTable).reshape(-1).to(torch.int32)
     edgeTable = torch.nonzero(edgeTable).reshape(-1).to(torch.int32)
@@ -81,7 +84,6 @@ def analysisG(graph,maxID,trainId=None,savePath=None):
     saveBin(subGEdge,DataPath,addSave=True)
     saveBin(trainId,TrainPath)
     SAVETIME += time.time()-saveTime
-    return RUNTIME,SAVETIME
 
 def PRgenG(RAWPATH,nodeNUM,partNUM,savePath=None):
     GRAPHPATH = RAWPATH + "/graph.bin"
@@ -97,11 +99,17 @@ def PRgenG(RAWPATH,nodeNUM,partNUM,savePath=None):
     edgeTable = torch.zeros_like(src).to(torch.int32)
     template_array = torch.zeros(nodeNUM,dtype=torch.int32)
 
-    inNodeTable = copy.deepcopy(template_array)
-    outNodeTable = copy.deepcopy(template_array)
-    inNodeTable,outNodeTable = dgl.sumDegree(inNodeTable.cuda(),outNodeTable.cuda(),src.cuda(),dst.cuda())
-    inNodeTable = inNodeTable.cpu()
-    outNodeTable = outNodeTable.cpu()
+    batch_size = len(src) // MAXEDGE + 1
+    src_batches = torch.chunk(src, batch_size, dim=0)
+    dst_batches = torch.chunk(dst, batch_size, dim=0)
+    batch = [src_batches, dst_batches]
+
+    inNodeTable, outNodeTable = copy.deepcopy(template_array).cuda(), copy.deepcopy(template_array).cuda()
+    for src_batch,dst_batch in zip(*batch):
+        src_batch = src_batch.cuda()
+        dst_batch = dst_batch.cuda()
+        inNodeTable,outNodeTable = dgl.sumDegree(inNodeTable,outNodeTable,src_batch,dst_batch)
+    outNodeTable = outNodeTable.cpu() # innodeTable still in GPU for next use
 
     nodeValue = copy.deepcopy(template_array)
     nodeInfo = copy.deepcopy(template_array)
@@ -109,9 +117,8 @@ def PRgenG(RAWPATH,nodeNUM,partNUM,savePath=None):
 
     # random method
     shuffled_indices = torch.randperm(trainIds.size(0))
-    r_trainId = trainIds[shuffled_indices]
-    trainBatch = torch.chunk(r_trainId, partNUM, dim=0)
-
+    trainIds = trainIds[shuffled_indices]
+    trainBatch = torch.chunk(trainIds, partNUM, dim=0)
     for index,ids in enumerate(trainBatch):
         info = 1 << index
         nodeInfo[ids] = info
@@ -119,16 +126,29 @@ def PRgenG(RAWPATH,nodeNUM,partNUM,savePath=None):
         PATH = savePath + f"/part{index}" 
         TrainPath = PATH + f"/raw_trainIds.bin"
         saveBin(ids,TrainPath)
-    
-    dst = dst.cuda()
-    src = src.cuda()
-    edgeTable, inNodeTable = edgeTable.cuda(), inNodeTable.cuda()
-    nodeValue, nodeInfo = nodeValue.cuda(), nodeInfo.cuda()
-    for _ in range(3):    
-        dgl.per_pagerank(dst,src,edgeTable,inNodeTable,nodeValue,nodeInfo)
-    dst,src = dst.cpu(),src.cpu()
-    edgeTable,inNodeTable = edgeTable.cpu(),inNodeTable.cpu()
-    nodeValue,nodeInfo = nodeValue.cpu(),nodeInfo.cpu()
+    # ====
+
+    tmp_etable = torch.zeros_like(dst_batches[0],dtype=torch.int32).cuda()
+    for _ in range(3):
+        offset = 0
+        acc_nodeValue = torch.zeros_like(nodeValue,dtype=torch.int32)
+        acc_nodeInfo = torch.zeros_like(nodeInfo,dtype=torch.int32)
+        for src_batch,dst_batch in zip(*batch):  
+            batchLen = len(src_batch)
+            tmp_nodeValue = nodeValue.clone().cuda()
+            tmp_nodeInfo = nodeInfo.clone().cuda() 
+            src_batch = src_batch.cuda()
+            dst_batch = dst_batch.cuda()  
+            tmp_etable.fill_(0)
+            dgl.per_pagerank(dst_batch,src_batch,tmp_etable,inNodeTable,tmp_nodeValue,tmp_nodeInfo)
+            edgeTable[offset:offset+batchLen] = tmp_etable[:batchLen].cpu()
+            tmp_nodeValue = tmp_nodeValue.cpu()
+            acc_nodeValue += tmp_nodeValue - nodeValue
+            acc_nodeInfo = acc_nodeInfo | tmp_nodeInfo.cpu()
+            offset += len(src_batch)
+        nodeValue = nodeValue + acc_nodeValue
+        nodeInfo = acc_nodeInfo
+    inNodeTable = None
 
     for bit_position in range(partNUM):
         nodeIndex = (nodeInfo & (1 << bit_position)) != 0
@@ -137,11 +157,9 @@ def PRgenG(RAWPATH,nodeNUM,partNUM,savePath=None):
         eid = torch.nonzero(edgeIndex).reshape(-1)
         graph = graph.reshape(-1,2)
         subEdge = graph[eid]
-        partValue = nodeValue[nid]    
-        selfLoop = np.repeat(nid.to(torch.int32), 2)
-        
+        partValue = nodeValue[nid.to(torch.int64)]    
+        selfLoop = np.repeat(nid, 2)
         PATH = savePath + f"/part{bit_position}" 
-        TrainPath = PATH + f"/raw_trainIds.bin"
         DataPath = PATH + f"/raw_G.bin"
         NodePath = PATH + f"/raw_nodes.bin"
         PRvaluePath = PATH + f"/raw_value.bin"
@@ -156,14 +174,10 @@ def nodeShuffle(raw_node,raw_graph,savePath=None,saveRes=False):
     gc.collect()
     srcs = raw_graph[1::2]
     dsts = raw_graph[::2]
-    if isinstance(data, np.ndarray):
-        raw_node = torch.tensor(raw_node).to(torch.int32).cuda()
-        srcs_tensor = torch.from_numpy(srcs).to(torch.int32)
-        dsts_tensor = torch.from_numpy(dsts).to(torch.int32)
-    else:
-        raw_node = raw_node.to(torch.int32).cuda()
-        srcs_tensor = srcs.to(torch.int32)
-        dsts_tensor = dsts.to(torch.int32)
+    raw_node = convert_to_tensor(raw_node, dtype=torch.int32).cuda()
+    srcs_tensor = convert_to_tensor(srcs, dtype=torch.int32)
+    dsts_tensor = convert_to_tensor(dsts, dtype=torch.int32)
+    
     uni = torch.ones(len(raw_node)*2).to(torch.int32).cuda()
     print("begin shuffle...")
     
@@ -275,7 +289,7 @@ def raw2subGwithPR(RAWDATAPATH,partitionNUM,FEATPATH,LABELPATH,featLen):
         
         random_dst = sort_dstList[position:]
         random_src = sort_srcList[position:]
-        randomG = torch.stack((random_dst, random_src), dim=1).to(torch.int32)
+        randomG = torch.stack((random_src,random_dst), dim=1).to(torch.int32)
 
         saveBin(subLabel,SubLabelPath)
         saveBin(trainidx,SubTrainIdPath)
@@ -309,7 +323,6 @@ def genSubGFeat(SAVEPATH,FEATPATH,partNUM,nodeNUM,sliceNUM,featLen):
         boundList.append(start)
         start += slice
     boundList[-1] = nodeNUM
-    print("bound:",boundList)
 
     idsSliceList = [[] for i in range(partNUM)]
     for i in range(partNUM):
@@ -363,50 +376,52 @@ if __name__ == '__main__':
     sliceNUM = 5
     with open(JSONPATH, 'r') as file:
         data = json.load(file)
-    datasetName = ["PD"] 
-
-    for NAME in datasetName:
-        subGSavePath = data[NAME]["processedPath"]
-        GRAPHPATH = data[NAME]["rawFilePath"]
-        maxID = data[NAME]["nodes"]
-        PRgenG(GRAPHPATH,maxID,partitionNUM,savePath=subGSavePath)
-        print("PR run success...")
-        FEATPATH = data[NAME]["rawFilePath"] + "/feat.bin"
-        LABELPATH = data[NAME]["rawFilePath"] + "/labels.bin"
-        featLen = data[NAME]["featLen"]
-        raw2subGwithPR(subGSavePath,partitionNUM,FEATPATH,LABELPATH,featLen)
-
-        randomGen(subGSavePath,0,maxID)
-        
+    datasetName = ["RD"] 
 
     # for NAME in datasetName:
+    #     subGSavePath = data[NAME]["processedPath"]
     #     GRAPHPATH = data[NAME]["rawFilePath"]
     #     maxID = data[NAME]["nodes"]
-    #     subGSavePath = data[NAME]["processedPath"]
-    #     trainId = torch.tensor(np.fromfile(GRAPHPATH + "/trainIds.bin",dtype=np.int64))
-    #     shuffled_indices = torch.randperm(trainId.size(0))
-    #     trainId = trainId[shuffled_indices]
-    #     trainBatch = torch.chunk(trainId, partitionNUM, dim=0)
-
-    #     graph = np.fromfile(GRAPHPATH+"/graph.bin",dtype=np.int32)
-    #     startTime = time.time()
-    #     for index,trainids in enumerate(trainBatch):
-    #         analysisG(graph,maxID,trainId=trainids,savePath=subGSavePath+f"/part{index}")
-    #     print(f"run time cost:{RUNTIME:.3f}")
-    #     print(f"save time cost:{SAVETIME:.3f}")
-    #     print(f"partition all cost:{time.time()-startTime:.3f}")
-    
-    # for NAME in datasetName:
-    #     RAWDATAPATH = data[NAME]["processedPath"]
+    #     PRgenG(GRAPHPATH,maxID,partitionNUM,savePath=subGSavePath)
+    #     print("PR run success...")
     #     FEATPATH = data[NAME]["rawFilePath"] + "/feat.bin"
     #     LABELPATH = data[NAME]["rawFilePath"] + "/labels.bin"
-    #     SAVEPATH = data[NAME]["processedPath"]
-    #     nodeNUM = data[NAME]["nodes"]
     #     featLen = data[NAME]["featLen"]
+    #     raw2subGwithPR(subGSavePath,partitionNUM,FEATPATH,LABELPATH,featLen)
+    #     randomGen(subGSavePath,0,maxID)
         
-    #     MERGETIME = time.time()
-    #     rawData2GNNData(RAWDATAPATH,partitionNUM,FEATPATH,LABELPATH,SAVEPATH,featLen)
-    #     print(f"trans graph cost time{time.time() - MERGETIME:.3f}...")
-    #     FEATTIME = time.time()
-    #     genSubGFeat(SAVEPATH,FEATPATH,partitionNUM,nodeNUM,sliceNUM,featLen)
-    #     print(f"graph feat gen cost time{time.time() - FEATTIME:.3f}...")
+
+    for NAME in datasetName:
+        GRAPHPATH = data[NAME]["rawFilePath"]
+        maxID = data[NAME]["nodes"]
+        subGSavePath = data[NAME]["processedPath"]
+        
+        # trainId = torch.tensor(np.fromfile(GRAPHPATH + "/trainIds.bin",dtype=np.int64))
+        # shuffled_indices = torch.randperm(trainId.size(0))
+        # trainId = trainId[shuffled_indices]
+        # trainBatch = torch.chunk(trainId, partitionNUM, dim=0)
+        # graph = np.fromfile(GRAPHPATH+"/graph.bin",dtype=np.int32)
+        # startTime = time.time()
+        # for index,trainids in enumerate(trainBatch):
+        #     t = analysisG(graph,maxID,trainId=trainids,savePath=subGSavePath+f"/part{index}")
+        
+        startTime = time.time()
+        t1 = PRgenG(GRAPHPATH,maxID,partitionNUM,savePath=subGSavePath)
+        print(f"run time cost:{RUNTIME:.3f}")
+        print(f"save time cost:{SAVETIME:.3f}")
+        print(f"partition all cost:{time.time()-startTime:.3f}")
+    
+    for NAME in datasetName:
+        RAWDATAPATH = data[NAME]["processedPath"]
+        FEATPATH = data[NAME]["rawFilePath"] + "/feat.bin"
+        LABELPATH = data[NAME]["rawFilePath"] + "/labels.bin"
+        SAVEPATH = data[NAME]["processedPath"]
+        nodeNUM = data[NAME]["nodes"]
+        featLen = data[NAME]["featLen"]
+        
+        MERGETIME = time.time()
+        rawData2GNNData(RAWDATAPATH,partitionNUM,FEATPATH,LABELPATH,SAVEPATH,featLen)
+        print(f"trans graph cost time{time.time() - MERGETIME:.3f}...")
+        FEATTIME = time.time()
+        genSubGFeat(SAVEPATH,FEATPATH,partitionNUM,nodeNUM,sliceNUM,featLen)
+        print(f"graph feat gen cost time{time.time() - FEATTIME:.3f}...")
