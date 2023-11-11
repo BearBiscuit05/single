@@ -30,7 +30,7 @@ SAVETIME = 0
 MERGETIME = 0
 MAXEDGE = 100000000
 ## bfs 遍历获取基础子图
-def analysisG(graph,maxID,partID,trainId=None,savePath=None):
+def analysisG(graph,maxID,trainId=None,savePath=None):
     global RUNTIME
     global SAVETIME
     dst = torch.tensor(graph[::2])
@@ -46,15 +46,12 @@ def analysisG(graph,maxID,partID,trainId=None,savePath=None):
     batch = [src_batches, dst_batches]
 
     repeats = 3
-    acc = True
     start = time.time()
     edgeTable = torch.zeros_like(src,dtype=torch.int32).cuda()
     edgeNUM = 0
     allEdgeNUM = src.numel()
     for index in range(1,repeats+1):
         acc_tabel = torch.zeros_like(nodeTable,dtype=torch.int32)
-        # print(f"before {index} BFS has {torch.nonzero(nodeTable).size(0)} nodes, "
-        #     f"{torch.nonzero(nodeTable).size(0) * 1.0 / maxID * 100 :.2f}% of total nodes")
         offset = 0
         for src_batch,dst_batch in zip(*batch):
             tmp_nodeTabel = copy.deepcopy(nodeTable)
@@ -65,7 +62,6 @@ def analysisG(graph,maxID,partID,trainId=None,savePath=None):
             offset += len(src_batch)
             tmp_nodeTabel = tmp_nodeTabel.cpu()
             acc_tabel = acc_tabel | tmp_nodeTabel
-        #acc_ana(acc_tabel)
         nodeTable = acc_tabel
     edgeTable = edgeTable.cpu()
     graph = graph.reshape(-1,2)
@@ -87,17 +83,87 @@ def analysisG(graph,maxID,partID,trainId=None,savePath=None):
     SAVETIME += time.time()-saveTime
     return RUNTIME,SAVETIME
 
+def PRgenG(RAWPATH,nodeNUM,partNUM,savePath=None):
+    GRAPHPATH = RAWPATH + "/graph.bin"
+    TRAINPATH = RAWPATH + "/trainIds.bin"
+
+    for i in range(partNUM):
+        PATH = savePath + f"/part{i}" 
+        checkFilePath(PATH)
+    
+    graph = torch.tensor(np.fromfile(GRAPHPATH,dtype=np.int32))
+    src,dst = graph[::2],graph[1::2]
+    trainIds = torch.tensor(np.fromfile(TRAINPATH,dtype=np.int64))
+    edgeTable = torch.zeros_like(src).to(torch.int32)
+    template_array = torch.zeros(nodeNUM,dtype=torch.int32)
+
+    inNodeTable = copy.deepcopy(template_array)
+    outNodeTable = copy.deepcopy(template_array)
+    inNodeTable,outNodeTable = dgl.sumDegree(inNodeTable.cuda(),outNodeTable.cuda(),src.cuda(),dst.cuda())
+    inNodeTable = inNodeTable.cpu()
+    outNodeTable = outNodeTable.cpu()
+
+    nodeValue = copy.deepcopy(template_array)
+    nodeInfo = copy.deepcopy(template_array)
+    nodeValue[trainIds] = 10000
+
+    # random method
+    shuffled_indices = torch.randperm(trainIds.size(0))
+    r_trainId = trainIds[shuffled_indices]
+    trainBatch = torch.chunk(r_trainId, partNUM, dim=0)
+
+    for index,ids in enumerate(trainBatch):
+        info = 1 << index
+        nodeInfo[ids] = info
+        # 存储训练集
+        PATH = savePath + f"/part{index}" 
+        TrainPath = PATH + f"/raw_trainIds.bin"
+        saveBin(ids,TrainPath)
+    
+    dst = dst.cuda()
+    src = src.cuda()
+    edgeTable, inNodeTable = edgeTable.cuda(), inNodeTable.cuda()
+    nodeValue, nodeInfo = nodeValue.cuda(), nodeInfo.cuda()
+    for _ in range(3):    
+        dgl.per_pagerank(dst,src,edgeTable,inNodeTable,nodeValue,nodeInfo)
+    dst,src = dst.cpu(),src.cpu()
+    edgeTable,inNodeTable = edgeTable.cpu(),inNodeTable.cpu()
+    nodeValue,nodeInfo = nodeValue.cpu(),nodeInfo.cpu()
+
+    for bit_position in range(partNUM):
+        nodeIndex = (nodeInfo & (1 << bit_position)) != 0
+        edgeIndex = (edgeTable & (1 << bit_position)) != 0
+        nid = torch.nonzero(nodeIndex).reshape(-1).to(torch.int32)
+        eid = torch.nonzero(edgeIndex).reshape(-1)
+        graph = graph.reshape(-1,2)
+        subEdge = graph[eid]
+        partValue = nodeValue[nid]    
+        selfLoop = np.repeat(nid.to(torch.int32), 2)
+        
+        PATH = savePath + f"/part{bit_position}" 
+        TrainPath = PATH + f"/raw_trainIds.bin"
+        DataPath = PATH + f"/raw_G.bin"
+        NodePath = PATH + f"/raw_nodes.bin"
+        PRvaluePath = PATH + f"/raw_value.bin"
+        saveBin(nid,NodePath)
+        saveBin(selfLoop,DataPath)
+        saveBin(subEdge,DataPath,addSave=True)
+        saveBin(partValue,PRvaluePath)
+
 # =============== 2.graphToSub    
 def nodeShuffle(raw_node,raw_graph,savePath=None,saveRes=False):
     torch.cuda.empty_cache()
     gc.collect()
     srcs = raw_graph[1::2]
     dsts = raw_graph[::2]
-    raw_node = torch.tensor(raw_node).cuda()
-    print(len(srcs))
-    print(len(raw_node))
-    srcs_tensor = torch.from_numpy(srcs).to(torch.int32)
-    dsts_tensor = torch.from_numpy(dsts).to(torch.int32)
+    if isinstance(data, np.ndarray):
+        raw_node = torch.tensor(raw_node).to(torch.int32).cuda()
+        srcs_tensor = torch.from_numpy(srcs).to(torch.int32)
+        dsts_tensor = torch.from_numpy(dsts).to(torch.int32)
+    else:
+        raw_node = raw_node.to(torch.int32).cuda()
+        srcs_tensor = srcs.to(torch.int32)
+        dsts_tensor = dsts.to(torch.int32)
     uni = torch.ones(len(raw_node)*2).to(torch.int32).cuda()
     print("begin shuffle...")
     
@@ -106,9 +172,6 @@ def nodeShuffle(raw_node,raw_graph,savePath=None,saveRes=False):
     dst_batches = list(torch.chunk(dsts_tensor, batch_size, dim=0))
 
     batch = [src_batches, dst_batches]
-    # print(src_batches)
-    # print(dst_batches)
-    # print('-'*20)
     for index,(src_batch,dst_batch) in enumerate(zip(*batch)):
         src_batch = src_batch.cuda()
         dst_batch = dst_batch.cuda()
@@ -169,6 +232,57 @@ def rawData2GNNData(RAWDATAPATH,partitionNUM,FEATPATH,LABELPATH,SAVEPATH,featLen
         saveBin(indptr,SubIndptrPath)
         saveBin(indices,SubIndicesPath)
 
+def raw2subGwithPR(RAWDATAPATH,partitionNUM,FEATPATH,LABELPATH,featLen):
+    labels = np.fromfile(LABELPATH,dtype=np.int64)
+    feat = np.fromfile(FEATPATH,dtype=np.float32).reshape(-1,featLen)
+    for i in range(partitionNUM):
+        PATH = RAWDATAPATH + f"/part{i}" 
+        # raw
+        rawDataPath = PATH + f"/raw_G.bin"
+        rawTrainPath = PATH + f"/raw_trainIds.bin"
+        rawNodePath = PATH + f"/raw_nodes.bin"
+        rawPRvaluePath = PATH + f"/raw_value.bin"
+        # new
+        SubTrainIdPath = PATH + "/trainIds.bin"
+        SubIndptrPath = PATH + "/indptr.bin"
+        SubIndicesPath = PATH + "/indices.bin"
+        SubLabelPath = PATH + "/labels.bin"
+        SubGRandomPath = PATH + "/randomG.bin"
+
+        graph = torch.tensor(np.fromfile(rawDataPath,dtype=np.int32))
+        nodeIds = torch.tensor(np.fromfile(rawNodePath,dtype=np.int64))
+        trainidx = torch.tensor(np.fromfile(rawTrainPath,dtype=np.int64))
+        prValue = torch.tensor(np.fromfile(rawPRvaluePath,dtype=np.int32))
+        subLabel = labels[nodeIds]
+        subfeat = feat[nodeIds]
+
+        r_prValue, indices = torch.sort(prValue, descending=True)
+        nodeIds = nodeIds[indices]
+        subfeat = subfeat[indices]
+        subLabel = subLabel[indices]
+        
+        srcShuffled,dstShuffled,uni = nodeShuffle(nodeIds,graph)
+        trainidx = trainIdxSubG(uni,trainidx)
+
+        sort_dstList,indice = torch.sort(dstShuffled,dim=0) # 有待提高
+        sort_srcList = srcShuffled[indice]
+        
+        nodeSize = uni.shape[0]
+        fix_NUM = int(nodeSize * 0.1)
+        position = torch.searchsorted(sort_dstList, fix_NUM)
+        fix_indice = sort_srcList[:position]
+        fix_inptr = torch.cat([torch.Tensor([0]).to(torch.int32),torch.cumsum(torch.bincount(sort_dstList[:position]), dim=0)]).to(torch.int32)
+        
+        random_dst = sort_dstList[position:]
+        random_src = sort_srcList[position:]
+        randomG = torch.stack((random_dst, random_src), dim=1).to(torch.int32)
+
+        saveBin(subLabel,SubLabelPath)
+        saveBin(trainidx,SubTrainIdPath)
+        saveBin(fix_inptr,SubIndptrPath)
+        saveBin(fix_indice,SubIndicesPath)
+        saveBin(randomG,SubGRandomPath)
+
 # =============== 3.featTrans
 def featSlice(FEATPATH,beginIndex,endIndex,featLen):
     blockByte = 4 # float32 4byte
@@ -214,13 +328,57 @@ def genSubGFeat(SAVEPATH,FEATPATH,partNUM,nodeNUM,sliceNUM,featLen):
             subFeat = sliceFeat[t_SubIdsList]
             saveBin(subFeat,fileName,addSave=sliceIndex)
 
+
+# =============== 4. randomGen
+def randomGen(PATH,partid,nodeNUM):
+    raw_ptr = torch.tensor(np.fromfile(PATH + f"/part{partid}/indptr.bin",dtype=np.int32))
+    raw_indice = torch.tensor(np.fromfile(PATH + f"/part{partid}/indices.bin",dtype=np.int32))
+    randomG = torch.tensor(np.fromfile(PATH + f"/part{partid}/randomG.bin",dtype=np.int32))
+    
+    mapTable = torch.zeros(nodeNUM).to(torch.int32) - 1
+    fix_NUM = raw_ptr.shape[0] - 1
+    fix_index = torch.arange(fix_NUM).to(torch.int32)
+    mapTable[fix_index.to(torch.int64)] = fix_index
+
+    coo_src= randomG[::2][:4000000]
+    coo_dst = randomG[1::2][:4000000]
+
+    bincount = torch.bincount(coo_dst)
+    gid = torch.nonzero(bincount).reshape(-1)
+    lid = torch.arange(len(gid)).to(torch.int32) + fix_NUM
+    mapTable[gid] = lid
+    cumList = bincount[gid]
+
+    new_inptr = torch.cumsum(cumList, dim=0).to(torch.int32) + raw_ptr[-1]
+
+    inptr = torch.cat([raw_ptr,new_inptr])
+    indice = torch.cat([raw_indice,coo_src])
+
+    return inptr,indice,mapTable
+
+
 if __name__ == '__main__':
     JSONPATH = "/home/bear/workspace/single-gnn/datasetInfo.json"
     partitionNUM = 4
     sliceNUM = 5
     with open(JSONPATH, 'r') as file:
         data = json.load(file)
-    datasetName = ["RD"] 
+    datasetName = ["PD"] 
+
+    for NAME in datasetName:
+        subGSavePath = data[NAME]["processedPath"]
+        GRAPHPATH = data[NAME]["rawFilePath"]
+        maxID = data[NAME]["nodes"]
+        PRgenG(GRAPHPATH,maxID,partitionNUM,savePath=subGSavePath)
+        print("PR run success...")
+        FEATPATH = data[NAME]["rawFilePath"] + "/feat.bin"
+        LABELPATH = data[NAME]["rawFilePath"] + "/labels.bin"
+        featLen = data[NAME]["featLen"]
+        raw2subGwithPR(subGSavePath,partitionNUM,FEATPATH,LABELPATH,featLen)
+
+        randomGen(subGSavePath,0,maxID)
+        
+
     # for NAME in datasetName:
     #     GRAPHPATH = data[NAME]["rawFilePath"]
     #     maxID = data[NAME]["nodes"]
@@ -233,22 +391,22 @@ if __name__ == '__main__':
     #     graph = np.fromfile(GRAPHPATH+"/graph.bin",dtype=np.int32)
     #     startTime = time.time()
     #     for index,trainids in enumerate(trainBatch):
-    #         analysisG(graph,maxID,index,trainId=trainids,savePath=subGSavePath+f"/part{index}")
+    #         analysisG(graph,maxID,trainId=trainids,savePath=subGSavePath+f"/part{index}")
     #     print(f"run time cost:{RUNTIME:.3f}")
     #     print(f"save time cost:{SAVETIME:.3f}")
     #     print(f"partition all cost:{time.time()-startTime:.3f}")
     
-    for NAME in datasetName:
-        RAWDATAPATH = data[NAME]["processedPath"]
-        FEATPATH = data[NAME]["rawFilePath"] + "/feat.bin"
-        LABELPATH = data[NAME]["rawFilePath"] + "/labels.bin"
-        SAVEPATH = data[NAME]["processedPath"]
-        nodeNUM = data[NAME]["nodes"]
-        featLen = data[NAME]["featLen"]
+    # for NAME in datasetName:
+    #     RAWDATAPATH = data[NAME]["processedPath"]
+    #     FEATPATH = data[NAME]["rawFilePath"] + "/feat.bin"
+    #     LABELPATH = data[NAME]["rawFilePath"] + "/labels.bin"
+    #     SAVEPATH = data[NAME]["processedPath"]
+    #     nodeNUM = data[NAME]["nodes"]
+    #     featLen = data[NAME]["featLen"]
         
-        MERGETIME = time.time()
-        rawData2GNNData(RAWDATAPATH,partitionNUM,FEATPATH,LABELPATH,SAVEPATH,featLen)
-        print(f"trans graph cost time{time.time() - MERGETIME:.3f}...")
-        FEATTIME = time.time()
-        genSubGFeat(SAVEPATH,FEATPATH,partitionNUM,nodeNUM,sliceNUM,featLen)
-        print(f"graph feat gen cost time{time.time() - FEATTIME:.3f}...")
+    #     MERGETIME = time.time()
+    #     rawData2GNNData(RAWDATAPATH,partitionNUM,FEATPATH,LABELPATH,SAVEPATH,featLen)
+    #     print(f"trans graph cost time{time.time() - MERGETIME:.3f}...")
+    #     FEATTIME = time.time()
+    #     genSubGFeat(SAVEPATH,FEATPATH,partitionNUM,nodeNUM,sliceNUM,featLen)
+    #     print(f"graph feat gen cost time{time.time() - FEATTIME:.3f}...")

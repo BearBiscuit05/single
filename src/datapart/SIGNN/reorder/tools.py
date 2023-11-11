@@ -24,3 +24,13 @@ def checkFilePath(path):
         os.makedirs(path)
     else:
         print(f"file '{path}' exist...")
+
+def coo2csr(row,col):
+    """
+        row = torch.Tensor([0,0,1,1,2,3,3]).to(torch.int32)
+        col = torch.Tensor([0,1,1,2,0,2,3]).to(torch.int32)
+    """
+    sort_row,indice = torch.sort(row,dim=0)
+    indice = col[indice]
+    inptr = torch.cat([torch.Tensor([0]).to(torch.int32),torch.cumsum(torch.bincount(sort_row), dim=0)])
+    return inptr,indice
