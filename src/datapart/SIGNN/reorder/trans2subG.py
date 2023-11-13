@@ -221,7 +221,7 @@ def coo2csr(srcs,dsts):
     # m = csr_matrix((data, (row.numpy(), col.numpy())))
     # return m.indptr,m.indices
 
-def rawData2GNNData(RAWDATAPATH,partitionNUM,FEATPATH,LABELPATH,SAVEPATH,featLen):
+def rawData2GNNData(RAWDATAPATH,partitionNUM,LABELPATH):
     labels = np.fromfile(LABELPATH,dtype=np.int64)
     for i in range(partitionNUM):
         startTime = time.time()
@@ -372,11 +372,11 @@ def randomGen(PATH,partid,nodeNUM):
 
 if __name__ == '__main__':
     JSONPATH = "/home/bear/workspace/single-gnn/datasetInfo.json"
-    partitionNUM = 4
+    partitionNUM = 8
     sliceNUM = 5
     with open(JSONPATH, 'r') as file:
         data = json.load(file)
-    datasetName = ["RD"] 
+    datasetName = ["PA"] 
 
     # for NAME in datasetName:
     #     subGSavePath = data[NAME]["processedPath"]
@@ -396,20 +396,20 @@ if __name__ == '__main__':
         maxID = data[NAME]["nodes"]
         subGSavePath = data[NAME]["processedPath"]
         
-        # trainId = torch.tensor(np.fromfile(GRAPHPATH + "/trainIds.bin",dtype=np.int64))
-        # shuffled_indices = torch.randperm(trainId.size(0))
-        # trainId = trainId[shuffled_indices]
-        # trainBatch = torch.chunk(trainId, partitionNUM, dim=0)
-        # graph = np.fromfile(GRAPHPATH+"/graph.bin",dtype=np.int32)
-        # startTime = time.time()
-        # for index,trainids in enumerate(trainBatch):
-        #     t = analysisG(graph,maxID,trainId=trainids,savePath=subGSavePath+f"/part{index}")
-        
+        trainId = torch.tensor(np.fromfile(GRAPHPATH + "/trainIds.bin",dtype=np.int64))
+        shuffled_indices = torch.randperm(trainId.size(0))
+        trainId = trainId[shuffled_indices]
+        trainBatch = torch.chunk(trainId, partitionNUM, dim=0)
+        graph = np.fromfile(GRAPHPATH+"/graph.bin",dtype=np.int32)
         startTime = time.time()
-        t1 = PRgenG(GRAPHPATH,maxID,partitionNUM,savePath=subGSavePath)
+        for index,trainids in enumerate(trainBatch):
+            t = analysisG(graph,maxID,trainId=trainids,savePath=subGSavePath+f"/part{index}")
+        
+        # startTime = time.time()
+        # t1 = PRgenG(GRAPHPATH,maxID,partitionNUM,savePath=subGSavePath)
         print(f"run time cost:{RUNTIME:.3f}")
         print(f"save time cost:{SAVETIME:.3f}")
-        print(f"partition all cost:{time.time()-startTime:.3f}")
+        print(f"partition all cost:{time.time()-startTime:.3f}s")
     
     for NAME in datasetName:
         RAWDATAPATH = data[NAME]["processedPath"]
@@ -420,8 +420,8 @@ if __name__ == '__main__':
         featLen = data[NAME]["featLen"]
         
         MERGETIME = time.time()
-        rawData2GNNData(RAWDATAPATH,partitionNUM,FEATPATH,LABELPATH,SAVEPATH,featLen)
-        print(f"trans graph cost time{time.time() - MERGETIME:.3f}...")
+        rawData2GNNData(RAWDATAPATH,partitionNUM,LABELPATH)
+        print(f"trans graph cost time{time.time() - MERGETIME:.3f}s ...")
         FEATTIME = time.time()
         genSubGFeat(SAVEPATH,FEATPATH,partitionNUM,nodeNUM,sliceNUM,featLen)
         print(f"graph feat gen cost time{time.time() - FEATTIME:.3f}...")

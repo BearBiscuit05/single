@@ -82,17 +82,22 @@ g = dataset[0]
 model = SAGE(100, 256, 47,3).to("cuda:0")
 train_idx = dataset.train_idx.to("cuda:0")
 
-LSampler = dgl.dataloading.LaborSampler([10,10,10])
+LSampler = dgl.dataloading.LaborSampler([50,50,50])
 train_dataloader = DataLoader(g, train_idx, LSampler, device='cuda:0',
                                   batch_size=1024, shuffle=False,
                                   drop_last=False, num_workers=0,
                                   use_uva=True)
 
-# sampler = NeighborSampler([10,10,10])
-# train_dataloader = DataLoader(g, train_idx, sampler, device='cuda:0',
-#                                   batch_size=1024, shuffle=False,
-#                                   drop_last=False, num_workers=0,
-#                                   use_uva=True)
+for it, (input_nodes, output_nodes, blocks) in enumerate(train_dataloader):
+    print(blocks)
+    if it == 10:
+        break
+print('-'*30)
+sampler = NeighborSampler([100,100,100])
+train_dataloader = DataLoader(g, train_idx, sampler, device='cuda:0',
+                                  batch_size=1024, shuffle=False,
+                                  drop_last=False, num_workers=0,
+                                  use_uva=True)
 
 for it, (input_nodes, output_nodes, blocks) in enumerate(train_dataloader):
     print(blocks)
