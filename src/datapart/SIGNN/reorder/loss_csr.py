@@ -29,6 +29,15 @@ def genSliceBound(sliceNUM,nodeNUM):
     boundList[-1] = nodeNUM
     return boundList
 
+def countMem(edgeNUM,nodeNUM,featLen):
+    int32Byte = 4
+    int64Byte = 8
+    float32Byte = 4
+    MemNeed = edgeNUM * 2 * int32Byte + nodeNUM * featLen * float32Byte + nodeNUM * int64Byte
+    MemNeed_GB = MemNeed / (1024 ** 3)
+    print(f"Estimated Memory Needed: {MemNeed_GB:.2f} GB")
+    return MemNeed
+
 def loss_csr(FILEPATH,featLen,sliceNUM,lossNode):
     PTRPATH = FILEPATH +f"/indptr.bin"
     INDICEPATH = FILEPATH +f"/indices.bin"
@@ -76,8 +85,9 @@ def loss_csr(FILEPATH,featLen,sliceNUM,lossNode):
     # feat
     boundList = genSliceBound(sliceNUM,new_ptr.numel())
     idsSliceList = sliceIds(node_save_idx,boundList)
-    feat_cuda = torch.zeros([node_save_idx.numel(),100],dtype=torch.float32).cuda()
-
+    
+    # allFeat = torch.tensor(np.fromfile(FEATPATH, dtype=np.float32).reshape(-1,featLen)).cuda()
+    feat_cuda = torch.zeros([node_save_idx.numel(),featLen],dtype=torch.float32).cuda()
     start = time.time()
     offset = 0
     for sliceIndex in range(sliceNUM):
@@ -90,10 +100,10 @@ def loss_csr(FILEPATH,featLen,sliceNUM,lossNode):
         feat_cuda[offset:offset+sliceSize] = add_feat
         offset += sliceSize
     print(f"all feat slice time {time.time() - start : .4f}")
-    return new_ptr,raw_indice,feat_cuda,id2featMap
+    return new_ptr,new_indice,feat_cuda,id2featMap
 
 if __name__ == '__main__':
-    FILEPATH = "/home/bear/workspace/single-gnn/data/partition/PD/part0"
-    featLen = 100
+    FILEPATH = "/home/bear/workspace/single-gnn/data/partition/PA/part0"
+    featLen = 128
     # 有损csr函数测试，传入文件路径，遵循ptr,indice,feat的修改顺序
     loss_csr(FILEPATH,featLen,4,None)

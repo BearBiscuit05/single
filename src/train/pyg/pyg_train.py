@@ -247,14 +247,13 @@ if __name__ == '__main__':
         dataset = Reddit('/home/bear/workspace/singleGNN/data/reddit/pyg_reddit')
         run(args, dataset,split_idx=None)
     elif args.dataset == 'ogb-products':
-        root = osp.join(osp.dirname(osp.realpath(__file__)), '/home/bear/workspace/single-gnn/data/', 'dataset')
+        root = '/raid/bear/data/dataset'
         dataset = PygNodePropPredDataset('ogbn-products', root)
         split_idx = dataset.get_idx_split()
         evaluator = Evaluator(name='ogbn-products')
         run(args, dataset,split_idx)
     elif args.dataset == 'ogb-papers100M':
-        root = "/raid/bear/wget_paper"
-        print("root:",root)
+        root = "/raid/bear/data/"
         dataset = PygNodePropPredDataset('ogbn-papers100M', root)
         split_idx = dataset.get_idx_split()
         print("加载完毕")

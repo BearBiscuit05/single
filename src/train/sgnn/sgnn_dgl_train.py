@@ -74,7 +74,7 @@ def collate_fn(data):
 
 def load_reddit(self_loop=True):
     from dgl.data import RedditDataset
-    data = RedditDataset(self_loop=self_loop,raw_dir=curDir+'/../../../data/dataset/')
+    data = RedditDataset(self_loop=self_loop,raw_dir="/raid/bear/data/dataset")
     g = data[0]
     g.ndata['feat'] = g.ndata.pop('feat')
     g.ndata['label'] = g.ndata.pop('label')
@@ -138,12 +138,24 @@ if __name__ == '__main__':
     
     for BLoop in range(0,maxEpoch,epochInterval):
         train(dataset, model,basicLoop=BLoop,loop=epochInterval)
-    torch.save(model.state_dict(), 'model_parameters.pth')
-    # if data["dataset"] == "PD":
-    #     TestDataset = AsNodePredDataset(DglNodePropPredDataset('ogbn-products',root=curDir+'/../../../data/dataset/'))
-    #     Testing(model,data["dataset"],TestDataset)
-    # elif data["dataset"] == "RD":
-    #     g, Testdata,train_idx,val_idx,test_idx = load_reddit()
-    #     Testing(model,data["dataset"],g,device="cuda:0",tid=test_idx)
-
+    #torch.save(model.state_dict(), 'model_parameters.pth')
+    if data["dataset"] == "PD":
+        TestDataset = AsNodePredDataset(DglNodePropPredDataset('ogbn-products',root="/raid/bear/data/dataset"))
+        Testing(model,data["dataset"],TestDataset)
+    elif data["dataset"] == "RD":
+        g, Testdata,train_idx,val_idx,test_idx = load_reddit()
+        Testing(model,data["dataset"],g,device="cuda:0",tid=test_idx)
+    elif data["dataset"] == "PA":
+        if arg_layers == 2:
+            sampler_test = NeighborSampler([100,100])
+        elif arg_layers == 3:
+            sampler_test = NeighborSampler([20,50,50])
+        dataset = AsNodePredDataset(DglNodePropPredDataset('ogbn-papers100M',root="/raid/bear/data/dataset"))
+        g = dataset[0]
+        test_dataloader = dgl.dataloading.DataLoader(g, dataset.test_idx, sampler_test, device=device,
+                                batch_size=4096, shuffle=True,
+                                drop_last=False, num_workers=0,
+                                use_uva=True)
+        acc = evaluate(model, g, test_dataloader)
+        print("Test Accuracy {:.4f}".format(acc.item()))
         

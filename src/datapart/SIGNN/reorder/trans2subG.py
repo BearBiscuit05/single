@@ -158,6 +158,8 @@ def PRgenG(RAWPATH,nodeNUM,partNUM,savePath=None):
         graph = graph.reshape(-1,2)
         subEdge = graph[eid]
         partValue = nodeValue[nid.to(torch.int64)]    
+        sort_pr , sort_indice = torch.sort(partValue,dim=0)
+        sort_nodeid = nid[sort_indice]
         selfLoop = np.repeat(nid, 2)
         PATH = savePath + f"/part{bit_position}" 
         DataPath = PATH + f"/raw_G.bin"
@@ -166,10 +168,10 @@ def PRgenG(RAWPATH,nodeNUM,partNUM,savePath=None):
         saveBin(nid,NodePath)
         saveBin(selfLoop,DataPath)
         saveBin(subEdge,DataPath,addSave=True)
-        saveBin(partValue,PRvaluePath)
+        saveBin(sort_nodeid,PRvaluePath)
 
 # =============== 2.graphToSub    
-def nodeShuffle(raw_node,raw_graph,savePath=None,saveRes=False):
+def nodeShuffle(raw_node,raw_graph):
     torch.cuda.empty_cache()
     gc.collect()
     srcs = raw_graph[1::2]
@@ -179,8 +181,6 @@ def nodeShuffle(raw_node,raw_graph,savePath=None,saveRes=False):
     dsts_tensor = convert_to_tensor(dsts, dtype=torch.int32)
     
     uni = torch.ones(len(raw_node)*2).to(torch.int32).cuda()
-    print("begin shuffle...")
-    
     batch_size = len(srcs) // MAXEDGE + 1
     src_batches = list(torch.chunk(srcs_tensor, batch_size, dim=0))
     dst_batches = list(torch.chunk(dsts_tensor, batch_size, dim=0))
@@ -198,11 +198,6 @@ def nodeShuffle(raw_node,raw_graph,savePath=None,saveRes=False):
     # print(dsts_tensor)
     # exit(-1)
     uni = uni.cpu()
-    if saveRes:
-        graph = torch.stack((srcShuffled,dstShuffled),dim=1)
-        graph = graph.reshape(-1).numpy()
-        graph.tofile(savePath)
-    print("shuffle end...")
     return srcs_tensor,dsts_tensor,uni
 
 def trainIdxSubG(subGNode,trainSet):
@@ -216,10 +211,6 @@ def coo2csr(srcs,dsts):
     g = dgl.graph((srcs, dsts)).formats('csr')
     indptr, indices, _ = g.adj_sparse(fmt='csr')
     return indptr,indices
-    # row,col = srcs,dsts
-    # data = np.ones(len(col),dtype=np.int32)
-    # m = csr_matrix((data, (row.numpy(), col.numpy())))
-    # return m.indptr,m.indices
 
 def rawData2GNNData(RAWDATAPATH,partitionNUM,LABELPATH):
     labels = np.fromfile(LABELPATH,dtype=np.int64)
@@ -372,11 +363,11 @@ def randomGen(PATH,partid,nodeNUM):
 
 if __name__ == '__main__':
     JSONPATH = "/home/bear/workspace/single-gnn/datasetInfo.json"
-    partitionNUM = 8
+    partitionNUM = 4
     sliceNUM = 5
     with open(JSONPATH, 'r') as file:
         data = json.load(file)
-    datasetName = ["PA"] 
+    datasetName = ["RD"] 
 
     # for NAME in datasetName:
     #     subGSavePath = data[NAME]["processedPath"]
@@ -396,17 +387,17 @@ if __name__ == '__main__':
         maxID = data[NAME]["nodes"]
         subGSavePath = data[NAME]["processedPath"]
         
-        trainId = torch.tensor(np.fromfile(GRAPHPATH + "/trainIds.bin",dtype=np.int64))
-        shuffled_indices = torch.randperm(trainId.size(0))
-        trainId = trainId[shuffled_indices]
-        trainBatch = torch.chunk(trainId, partitionNUM, dim=0)
-        graph = np.fromfile(GRAPHPATH+"/graph.bin",dtype=np.int32)
-        startTime = time.time()
-        for index,trainids in enumerate(trainBatch):
-            t = analysisG(graph,maxID,trainId=trainids,savePath=subGSavePath+f"/part{index}")
-        
+        # trainId = torch.tensor(np.fromfile(GRAPHPATH + "/trainIds.bin",dtype=np.int64))
+        # shuffled_indices = torch.randperm(trainId.size(0))
+        # trainId = trainId[shuffled_indices]
+        # trainBatch = torch.chunk(trainId, partitionNUM, dim=0)
+        # graph = np.fromfile(GRAPHPATH+"/graph.bin",dtype=np.int32)
         # startTime = time.time()
-        # t1 = PRgenG(GRAPHPATH,maxID,partitionNUM,savePath=subGSavePath)
+        # for index,trainids in enumerate(trainBatch):
+        #     t = analysisG(graph,maxID,trainId=trainids,savePath=subGSavePath+f"/part{index}")
+        
+        startTime = time.time()
+        t1 = PRgenG(GRAPHPATH,maxID,partitionNUM,savePath=subGSavePath)
         print(f"run time cost:{RUNTIME:.3f}")
         print(f"save time cost:{SAVETIME:.3f}")
         print(f"partition all cost:{time.time()-startTime:.3f}s")

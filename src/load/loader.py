@@ -7,7 +7,6 @@ import time
 import mmap
 import dgl
 import torch
-import torch
 from dgl.heterograph import DGLBlock
 import random
 import copy
@@ -15,6 +14,7 @@ import sys
 import logging
 import os
 import gc
+from tools import *
 from memory_profiler import profile
 
 curFilePath = os.path.abspath(__file__)
@@ -215,7 +215,6 @@ class CustomDataset(Dataset):
         
         self.subGptr += 1
         self.GID = self.trainSubGTrack[self.subGptr // self.partNUM][self.subGptr % self.partNUM]
-        print(f"loading GID :{self.GID}...")
         # 先判断是否为第一个，或者是已经存在发送过预取命令
         if self.subGptr == 0 or not self.pre_fetch:
             # 如果两个都没有，则全部从头加载
@@ -360,13 +359,7 @@ class CustomDataset(Dataset):
         mappingTime = time.time()        
         cacheGraph[0] = cacheGraph[0][:mapping_ptr[-1]]
         cacheGraph[1] = cacheGraph[1][:mapping_ptr[-1]]
-        # uniqueNUM = torch.Tensor([0]).to(torch.int64).to('cuda:0')
-        # edgeNUM = mapping_ptr[-1]
-        
-        # TODO: 需要优化
-        # all_node = torch.cat([cacheGraph[1],cacheGraph[0]])
-        
-        #unique = torch.zeros(mapping_ptr[-1]*2,dtype=torch.int32).to('cuda:0')
+
         unique = copy.deepcopy(self.uniTable)
 
         logger.info("construct remapping data Time {:.5f}s".format(time.time()-mappingTime))
@@ -408,93 +401,7 @@ class CustomDataset(Dataset):
         logger.info("==>sampleNeigGPU_NC() func time {:.5f}s".format(time.time()-sampleStart))
         logger.info("-"*30)
         return blocks,unique
-
-    def getNegNode(self,sampleIDs,batchlen,negNUM=1):
-        sampleIDs = sampleIDs.to(torch.int32).to('cuda:0')
-        out_src = torch.zeros(batchlen).to(torch.int32).to('cuda:0')
-        out_dst = torch.zeros(batchlen).to(torch.int32).to('cuda:0')
-        seed_num = batchlen
-        fan_num = 1
-        out_num = torch.Tensor([0]).to(torch.int64).to('cuda:0')
-        signn.torch_sample_hop(
-                self.cacheData[0][:self.graphEdgeNUM],self.cacheData[1][:self.graphNodeNUM*2],
-                sampleIDs,seed_num,fan_num,
-                out_src,out_dst,out_num)
-        out_src = out_src[:out_num.item()]
-        out_dst = out_dst[:out_num.item()]
-        raw_src = copy.deepcopy(out_src)
-        raw_dst = copy.deepcopy(out_dst)
-        # print(raw_src.shape + raw_src.shape)
-
-        neg_dst = torch.randint(low=0, high=self.graphNodeNUM, size=raw_src.shape).to(torch.int32).to("cuda:0")
-        
-        all_tensor = torch.cat([raw_src,raw_dst,raw_src,neg_dst])
-        raw_edges = torch.cat([raw_src,raw_dst])
-        src_cat = torch.cat([raw_src,raw_src])
-        dst_cat = torch.cat([raw_dst,neg_dst])
-        raw_src = copy.deepcopy(out_src)
-        raw_dst = copy.deepcopy(out_dst)
-        edgeNUM = len(src_cat)     
-        uniqueNUM = torch.Tensor([0]).to(torch.int64).to('cuda:0')
-        unique = torch.zeros(len(all_tensor),dtype=torch.int32).to('cuda:0')
-
-        signn.torch_graph_mapping(all_tensor,src_cat,dst_cat,src_cat,dst_cat,unique,edgeNUM,uniqueNUM)
-        return unique[:uniqueNUM.item()],raw_edges,src_cat,dst_cat
     
-    def sampleNeigGPU_LP(self,sampleIDs,raw_edges,cacheGraph,batchlen):     
-        sampleIDs = sampleIDs.to(torch.int32).to('cuda:0')
-        ptr = 0
-        mapping_ptr = [ptr]
-        sampleStart = time.time()
-        for l, fan_num in enumerate(self.fanout):
-            if l == 0:
-                seed_num = batchlen
-            else:
-                seed_num = len(sampleIDs)
-            out_src = cacheGraph[0][ptr:ptr+seed_num*fan_num]
-            out_dst = cacheGraph[1][ptr:ptr+seed_num*fan_num]
-            out_num = torch.Tensor([0]).to(torch.int64).to('cuda:0')
-            signn.torch_sample_hop(
-                self.cacheData[0],self.cacheData[1],
-                sampleIDs,seed_num,fan_num,
-                out_src,out_dst,out_num)
-
-            sampleIDs = cacheGraph[0][ptr:ptr+out_num.item()]
-            ptr=ptr+out_num.item()
-            mapping_ptr.append(ptr)
-        logger.info("sample Time {:.5f}s".format(time.time()-sampleStart))
-
-        mappingTime = time.time()        
-        cacheGraph[0] = cacheGraph[0][:mapping_ptr[-1]]
-        cacheGraph[1] = cacheGraph[1][:mapping_ptr[-1]]
-        uniqueNUM = torch.Tensor([0]).to(torch.int64).to('cuda:0')
-        edgeNUM = mapping_ptr[-1]
-        all_node = torch.cat([cacheGraph[1],cacheGraph[0]])
-        unique = torch.zeros(mapping_ptr[-1]*2,dtype=torch.int32).to('cuda:0')
-        signn.torch_graph_mapping(all_node,cacheGraph[0],cacheGraph[1],cacheGraph[0],cacheGraph[1],unique,edgeNUM,uniqueNUM)
-        unique = unique[:uniqueNUM.item()]
-        logger.info("mapping Time {:.5f}s".format(time.time()-mappingTime))
-
-        transTime = time.time()
-        
-        if self.framework == "dgl":
-            layer = len(mapping_ptr) - 1
-            blocks = []
-            save_num = 0
-            for index in range(1,layer+1):
-                src = cacheGraph[0][:mapping_ptr[-index]]
-                dst = cacheGraph[1][:mapping_ptr[-index]]
-                data = (src,dst)               
-                g = dgl.graph(data)
-                block = dgl.to_block(g)
-                blocks.append(block)
-        elif self.framework == "pyg":
-            src = cacheGraph[0][:mapping_ptr[-1]].to(torch.int64)
-            dst = cacheGraph[1][:mapping_ptr[-1]].to(torch.int64)
-            blocks = torch.stack((src, dst), dim=0)
-        logger.info("trans Time {:.5f}s".format(time.time()-transTime))
-        return blocks,unique
-
     def initCacheData(self):
         if self.train_name == "NC":
             number = self.batchsize
@@ -567,7 +474,6 @@ class CustomDataset(Dataset):
         logger.info("="*30)
         logger.info("\t")
         return 0
-
 
 ########################## 特征提取 ##########################
     def featMerge(self,uniqueList):
