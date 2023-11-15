@@ -29,7 +29,7 @@ logging.basicConfig(level=logging.INFO,filename=curDir+'/../../log/loader.log',f
 logger = logging.getLogger(__name__)
 
 """
-数据加载的逻辑:@profile
+数据加载的逻辑:#@profile
     1.生成训练随机序列
     2.预加载训练节点(所有的训练节点都被加载进入)
     2.预加载图集合(从初始开始就存入2个)
@@ -114,29 +114,6 @@ class CustomDataset(Dataset):
             self.preGraphBatch()
             cacheData = self.graphPipe.get()
             return tuple(cacheData[:4])
-        
-        # if index % self.preRating == 0:
-        #     self.sampleFlagQueue.put(self.executor.submit(self.preGraphBatch))
-        
-        # # 获取采样数据
-        # if index % self.batchsize == 0:
-        #     if self.graphPipe.qsize() > 0:
-        #         self.sampleFlagQueue.get()
-        #         cacheData = self.graphPipe.get()
-        #         if self.train_name == "LP":
-        #             return tuple(cacheData[:6])
-        #         else:
-        #             return tuple(cacheData[:4])
-                
-        #     else: #需要等待
-        #         flag = self.sampleFlagQueue.get()
-        #         flag.result()
-        #         cacheData = self.graphPipe.get()
-        #         if self.train_name == "LP":
-        #             return tuple(cacheData[:6])
-        #         else:
-        #             return tuple(cacheData[:4])
-        # return 0,0
 
 ########################## 初始化训练数据 ##########################
     def readConfig(self,confPath):
@@ -218,6 +195,7 @@ class CustomDataset(Dataset):
         return epochList
 
 ########################## 加载/释放 图结构数据 ##########################
+    #@profile
     def initNextGraphData(self):
         # 先拿到本次加载的内容，然后发送预取命令
         logger.info("----------initNextGraphData----------")
@@ -277,6 +255,7 @@ class CustomDataset(Dataset):
         self.preFetchDataCache.put([indices,indptr,tmp_feat,graphNodeNUM,graphEdgeNUM])
         return 0
 
+    #@profile
     def loadingGraphData(self,subGID,preFetch=False,predata=None):
         if preFetch and predata is None:
             raise ValueError("If preFetch is set to True, srcList and rangeList must not be None.")
