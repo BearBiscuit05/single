@@ -14,6 +14,7 @@ import sys
 import logging
 import os
 import gc
+import psutil
 from tools import *
 from memory_profiler import profile
 
@@ -38,13 +39,13 @@ logger = logging.getLogger(__name__)
 class CustomDataset(Dataset):
     def __init__(self,confPath,pre_fetch=False):
         self.pre_fetch = pre_fetch
-        
         self.cacheData = []  # 子图存储部分
         self.indptr = [] # dst / bound
         self.indices = [] # src / edgelist
         self.graphPipe = Queue()  # 采样存储管道
         self.sampleFlagQueue = Queue()
         self.executor = concurrent.futures.ThreadPoolExecutor(1) # 线程池      
+        self.lossG = False
 
         if self.pre_fetch == True:
             self.preFetchExecutor = concurrent.futures.ThreadPoolExecutor(1)  # 线程池
@@ -57,12 +58,17 @@ class CustomDataset(Dataset):
             self.preFetchPtr = 0  # 数据预取位置
             self.preFetchNUM = 0  # 数据预取数目
 
+        #### 系统部分
+        gpu = torch.cuda.get_device_properties(0) # use cuda:0
+        self.gpumem = int(gpu.total_memory)
+
         #### config json 部分 ####
         self.dataPath = ''
         self.batchsize,self.cacheNUM,self.partNUM = 0,0,0
         self.maxEpoch,self.preRating,self.classes,self.epochInterval = 0,0,0,0
         self.featlen = 0
         self.fanout = []
+        self.mem = 0
         self.train_name,self.framework,self.mode,self.dataset = "","","",""
         self.readConfig(confPath)
         # ================
@@ -90,6 +96,7 @@ class CustomDataset(Dataset):
         self.nextGID = 0                # 下一个训练子图
         self.trainptr = 0               # 当前训练集读取位置
         self.trainLoop = 0              # 当前子图可读取次数      
+        self.lossMap = []
         #### mmap 特征部分 ####
         self.feats = []
 
@@ -148,6 +155,7 @@ class CustomDataset(Dataset):
         self.mode = config['mode']
         self.classes = config['classes']
         self.epochInterval = config['epochInterval']
+        self.mem = config['memUse']
 
     def custom_sort(self):
         idMap={}
@@ -212,14 +220,13 @@ class CustomDataset(Dataset):
         # 先拿到本次加载的内容，然后发送预取命令
         logger.info("----------initNextGraphData----------")
         start = time.time()
-        
+        #print(f"loading G :{self.GID}..")
         self.subGptr += 1
         self.GID = self.trainSubGTrack[self.subGptr // self.partNUM][self.subGptr % self.partNUM]
         # 先判断是否为第一个，或者是已经存在发送过预取命令
         if self.subGptr == 0 or not self.pre_fetch:
             # 如果两个都没有，则全部从头加载
-            self.loadingGraph(self.GID) # graph
-            self.loadingMemFeat(self.GID) # feat
+            self.loadingGraphData(self.GID) # graph
         elif self.pre_fetch:
             # 如果已经有预取命令，则获得预取数据，并补充完整剩下的内容
             prefetch = False
@@ -228,8 +235,7 @@ class CustomDataset(Dataset):
                 taskFlag = self.preFetchFlagQueue.get()
                 taskFlag.result()
                 preCacheData = self.preFetchDataCache.get()
-                self.loadingGraph(self.GID,preFetch=True,srcList=preCacheData[0],rangeList=preCacheData[1])
-                self.loadingMemFeat(self.GID,preFetch=True,preFeat=preCacheData[2])
+                self.loadingGraphData(self.GID,preFetch=True,predata=preCacheData)
 
         self.loadingLabels(self.GID)
         self.trainNodes = self.trainNodeDict[self.GID]
@@ -237,6 +243,7 @@ class CustomDataset(Dataset):
         self.trainLoop = ((self.subGtrainNodesNUM - 1) // self.batchsize) + 1
         if self.pre_fetch:
             self.preFetchFlagQueue.put(self.preFetchExecutor.submit(self.preloadingGraphData))
+        logger.info(f"loading next graph with {time.time() - start :.4f}s")
 
     def loadingTrainID(self):
         # 加载子图所有训练集
@@ -262,41 +269,59 @@ class CustomDataset(Dataset):
         filePath = self.dataPath + "/part" + str(rank)
         indices = np.fromfile(filePath + "/indices.bin", dtype=np.int32)
         indptr = np.fromfile(filePath + "/indptr.bin", dtype=np.int32)
+        graphNodeNUM = int(len(self.indptr) - 1 )
+        graphEdgeNUM = len(self.indices)
         tmp_feat = np.fromfile(filePath + "/feat.bin", dtype=np.float32)
-        self.preFetchDataCache.put([indices,indptr,tmp_feat])
+        self.preFetchDataCache.put([indices,indptr,tmp_feat,graphNodeNUM,graphEdgeNUM])
         return 0
 
-    def loadingGraph(self,subGID,preFetch=False,srcList=None,rangeList=None):
-        """
-        merge 表示此处需要融合两个图结构
-        preFetch 表示下一需要融合的图已经被加载
-        """
-        if preFetch and (srcList is None or rangeList is None):
+    def loadingGraphData(self,subGID,preFetch=False,predata=None):
+        if preFetch and predata is None:
             raise ValueError("If preFetch is set to True, srcList and rangeList must not be None.")
         filePath = self.dataPath + "/part" + str(subGID)
+            
         if preFetch == False:
             self.indices = torch.tensor(np.fromfile(filePath + "/indices.bin", dtype=np.int32), device=('cuda:0'))
             self.indptr = torch.tensor(np.fromfile(filePath + "/indptr.bin", dtype=np.int32), device=('cuda:0'))
+            
         else:
-            self.indices = torch.tensor(srcList, device=('cuda:0'))
-            self.indptr = torch.tensor(rangeList, device=('cuda:0'))
-        self.graphNodeNUM = int(len(self.indices) - 1 )
+            self.indices = torch.tensor(predata[0], device=('cuda:0'))
+            self.indptr = torch.tensor(predata[1], device=('cuda:0'))
+
+        self.graphNodeNUM = int(len(self.indptr) - 1 )
         self.graphEdgeNUM = len(self.indices)
+
+        if countMemToLoss(self.graphEdgeNUM,self.graphNodeNUM,self.featlen,self.mem):
+            # self.lossG = True
+            # need loss ,暂时切0.1
+            sortNode = torch.tensor(np.fromfile(filePath + "/sortIds.bin", dtype=np.int32))
+            cutNode = sortNode[int(len(sortNode)*0.9):]
+            saveNode = sortNode[:int(len(sortNode)*0.9)]
+            self.indptr,self.indices,self.lossMap = loss_csr(self.indptr,self.indices,cutNode,saveNode)
+            self.feats = []
+            torch.cuda.empty_cache()
+            gc.collect()
+        #     if preFetch == False:
+        #         preFeat = np.fromfile(filePath + "/feat.bin", dtype=np.float32).reshape(-1, self.featlen)
+        #         self.feats = loss_feat(preFeat,4,self.lossMap,self.featlen)
+        #         # self.feats = torch.from_numpy(preFeat).reshape(-1, self.featlen).to("cuda:0")
+        #     else:
+        #         # print("get in loss feat")
+        #         predata[2] = predata[2].reshape(-1, self.featlen)
+        #         self.feats = loss_feat(predata[2],4,self.lossMap,self.featlen)
+        # else:
+        #     # 如果不需要切割，则之间加载全部feat
+        #     self.lossG = False
+            self.feats = []
+            if preFetch == False:
+                preFeat = np.fromfile(filePath + "/feat.bin", dtype=np.float32)
+                self.feats = torch.from_numpy(preFeat).reshape(-1, self.featlen).to("cuda:0")
+            else:
+                self.feats = torch.from_numpy(predata[2]).reshape(-1, self.featlen).to("cuda:0")
 
     def loadingLabels(self,GID):
         filePath = self.dataPath + "/part" + str(GID)
         self.nodeLabels = torch.tensor(np.fromfile(filePath+"/labels.bin", dtype=np.int64))
-
-    def loadingMemFeat(self, rank, preFetch=False,preFeat=None):
-        self.feats = []
-        torch.cuda.empty_cache()
-        gc.collect()
-        if preFetch and preFeat is None:
-            raise ValueError("If preFetch is set to True, preFeat must not be None.")
-        filePath = self.dataPath + "/part" + str(rank)
-        if preFetch == False:
-            preFeat = np.fromfile(filePath + "/feat.bin", dtype=np.float32)
-        self.feats = torch.from_numpy(preFeat).reshape(-1, self.featlen).to("cuda:0")
 
 ########################## 采样图结构 ##########################
     def sampleNeig(self,sampleIDs,cacheGraph): 
@@ -349,8 +374,13 @@ class CustomDataset(Dataset):
             out_src = cacheGraph[0][ptr:ptr+seed_num*fan_num]
             out_dst = cacheGraph[1][ptr:ptr+seed_num*fan_num]
             
-            NUM = dgl.sampling.sample_with_edge(self.indptr,self.indices,
-                sampleIDs,seed_num,fan_num,out_src,out_dst)
+            if self.lossG == False:
+                NUM = dgl.sampling.sample_with_edge(self.indptr,self.indices,
+                    sampleIDs,seed_num,fan_num,out_src,out_dst)
+            elif self.lossG == True:
+                NUM = dgl.sampling.sample_with_edge_and_map(self.indptr,self.indices,
+                    sampleIDs,seed_num,fan_num,out_src,out_dst,self.lossMap)
+            
             sampleIDs = cacheGraph[0][ptr:ptr+NUM.item()]
             ptr=ptr+NUM.item()
             mapping_ptr.append(ptr)
@@ -460,7 +490,9 @@ class CustomDataset(Dataset):
         logger.info("sample subG all cost {:.5f}s".format(time.time()-sampleTime))
         ##
      
+        featTime = time.time()
         cacheFeat = self.featMerge(uniqueList)
+        logger.info("feat merge cost {:.5f}s".format(time.time()-featTime))
         
         if self.train_name == "LP":
             cacheData = [blocks,cacheFeat,cacheLabel,src_cat,dst_cat,batchlen]
@@ -477,8 +509,12 @@ class CustomDataset(Dataset):
 
 ########################## 特征提取 ##########################
     def featMerge(self,uniqueList):
-        featTime = time.time()           
-        test = self.feats[uniqueList.to(torch.int64).to(self.feats.device)]     
+        featTime = time.time() 
+        if self.lossG == False:
+            test = self.feats[uniqueList.to(torch.int64).to(self.feats.device)]
+        elif self.lossG == True:
+            mapIdx = self.lossMap[uniqueList.to(self.lossMap.device).to(torch.int64)]      
+            test = self.feats[mapIdx.to(torch.int64).to(self.feats.device)]        
         logger.info("subG feat merge cost {:.5f}s".format(time.time()-featTime))
         return test
 

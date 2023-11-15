@@ -158,13 +158,13 @@ def PRgenG(RAWPATH,nodeNUM,partNUM,savePath=None):
         graph = graph.reshape(-1,2)
         subEdge = graph[eid]
         partValue = nodeValue[nid.to(torch.int64)]    
-        sort_pr , sort_indice = torch.sort(partValue,dim=0)
+        sort_pr , sort_indice = torch.sort(partValue,dim=0,descending=True)
         sort_nodeid = nid[sort_indice]
         selfLoop = np.repeat(nid, 2)
         PATH = savePath + f"/part{bit_position}" 
         DataPath = PATH + f"/raw_G.bin"
         NodePath = PATH + f"/raw_nodes.bin"
-        PRvaluePath = PATH + f"/raw_value.bin"
+        PRvaluePath = PATH + f"/sortIds.bin"
         saveBin(nid,NodePath)
         saveBin(selfLoop,DataPath)
         saveBin(subEdge,DataPath,addSave=True)
@@ -367,7 +367,7 @@ if __name__ == '__main__':
     sliceNUM = 5
     with open(JSONPATH, 'r') as file:
         data = json.load(file)
-    datasetName = ["RD"] 
+    datasetName = ["PD"] 
 
     # for NAME in datasetName:
     #     subGSavePath = data[NAME]["processedPath"]
