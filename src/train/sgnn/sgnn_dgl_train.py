@@ -56,10 +56,10 @@ def train(dataset, model,basicLoop=0,loop=10):
         model.train()
         for it,(graph,feat,label,number) in enumerate(train_loader):
             feat = feat.to('cuda:0')
-            # tmp = copy.deepcopy(graph)
-            # tmp = [block.to('cuda:0') for block in tmp]
-            # y_hat = model(tmp, feat)
-            y_hat = model(graph, feat)
+            tmp = copy.deepcopy(graph)
+            tmp = [block.to('cuda:0') for block in tmp]
+            y_hat = model(tmp, feat)
+            #y_hat = model(graph, feat)
             try:
                 loss = F.cross_entropy(y_hat[:number], label[:number].to('cuda:0'))
             except:

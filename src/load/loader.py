@@ -68,6 +68,7 @@ class CustomDataset(Dataset):
         self.maxEpoch,self.preRating,self.classes,self.epochInterval = 0,0,0,0
         self.featlen = 0
         self.fanout = []
+        self.maxPartNodeNUM = 0
         self.mem = 0
         self.train_name,self.framework,self.mode,self.dataset = "","","",""
         self.readConfig(confPath)
@@ -98,8 +99,8 @@ class CustomDataset(Dataset):
         self.trainLoop = 0              # 当前子图可读取次数      
         self.lossMap = []
         #### mmap 特征部分 ####
-        self.feats = []
-
+        self.feats = torch.zeros([self.maxPartNodeNUM, self.featlen], dtype=torch.float32).cuda()
+        
         #### 数据预取 ####
         self.template_cache_graph= self.initCacheData()
         self.initNextGraphData()
@@ -156,6 +157,7 @@ class CustomDataset(Dataset):
         self.classes = config['classes']
         self.epochInterval = config['epochInterval']
         self.mem = config['memUse']
+        self.maxPartNodeNUM = config['maxPartNodeNUM']
 
     def custom_sort(self):
         idMap={}
@@ -220,7 +222,7 @@ class CustomDataset(Dataset):
         # 先拿到本次加载的内容，然后发送预取命令
         logger.info("----------initNextGraphData----------")
         start = time.time()
-        #print(f"loading G :{self.GID}..")
+        print(f"loading G :{self.GID}..")
         self.subGptr += 1
         self.GID = self.trainSubGTrack[self.subGptr // self.partNUM][self.subGptr % self.partNUM]
         # 先判断是否为第一个，或者是已经存在发送过预取命令
@@ -292,32 +294,37 @@ class CustomDataset(Dataset):
         self.graphEdgeNUM = len(self.indices)
 
         if countMemToLoss(self.graphEdgeNUM,self.graphNodeNUM,self.featlen,self.mem):
-            # self.lossG = True
+            self.lossG = True
             # need loss ,暂时切0.1
             sortNode = torch.tensor(np.fromfile(filePath + "/sortIds.bin", dtype=np.int32))
             cutNode = sortNode[int(len(sortNode)*0.9):]
             saveNode = sortNode[:int(len(sortNode)*0.9)]
+            start = time.time()
             self.indptr,self.indices,self.lossMap = loss_csr(self.indptr,self.indices,cutNode,saveNode)
-            self.feats = []
+            print(f"loss_csr time :{time.time() - start:.4f}s...")
+            
+            # 判断是否要扩展
+            # self.feats = []
             torch.cuda.empty_cache()
             gc.collect()
-        #     if preFetch == False:
-        #         preFeat = np.fromfile(filePath + "/feat.bin", dtype=np.float32).reshape(-1, self.featlen)
-        #         self.feats = loss_feat(preFeat,4,self.lossMap,self.featlen)
-        #         # self.feats = torch.from_numpy(preFeat).reshape(-1, self.featlen).to("cuda:0")
-        #     else:
-        #         # print("get in loss feat")
-        #         predata[2] = predata[2].reshape(-1, self.featlen)
-        #         self.feats = loss_feat(predata[2],4,self.lossMap,self.featlen)
-        # else:
-        #     # 如果不需要切割，则之间加载全部feat
-        #     self.lossG = False
-            self.feats = []
+            start = time.time()
             if preFetch == False:
-                preFeat = np.fromfile(filePath + "/feat.bin", dtype=np.float32)
-                self.feats = torch.from_numpy(preFeat).reshape(-1, self.featlen).to("cuda:0")
+                preFeat = np.fromfile(filePath + "/feat.bin", dtype=np.float32).reshape(-1, self.featlen)
+                loss_feat(self.feats, preFeat,4,self.lossMap,self.featlen)
             else:
-                self.feats = torch.from_numpy(predata[2]).reshape(-1, self.featlen).to("cuda:0")
+                predata[2] = predata[2].reshape(-1, self.featlen)
+                loss_feat(self.feats, predata[2],4,self.lossMap,self.featlen)
+            print(f"loading feat time :{time.time() - start:.4f}s...")
+        else:
+            # 如果不需要切割，则之间加载全部feat
+            self.lossG = False
+            # self.feats = []
+            if preFetch == False:
+                preFeat = np.fromfile(filePath + "/feat.bin", dtype=np.float32).reshape(-1, self.featlen)
+                self.feats[:len(preFeat)] = torch.from_numpy(preFeat).to("cuda:0")
+            else:
+                predata[2] = predata[2].reshape(-1, self.featlen)
+                self.feats[:len(predata[2])] = torch.from_numpy(predata[2]).to("cuda:0")
 
     def loadingLabels(self,GID):
         filePath = self.dataPath + "/part" + str(GID)
@@ -536,8 +543,10 @@ def collate_fn(data):
 
 
 if __name__ == "__main__":
-    dataset = CustomDataset(curDir+"/../../config/train_config.json",pre_fetch=True)
-    with open(curDir+"/../../config/train_config.json", 'r') as f:
+    # dataset = CustomDataset(curDir+"/../../config/train_config.json",pre_fetch=True)
+    # with open(curDir+"/../../config/train_config.json", 'r') as f:
+    dataset = CustomDataset(curDir+"/../../config/PA.json",pre_fetch=True)
+    with open(curDir+"/../../config/PA.json", 'r') as f:
         config = json.load(f)
         batchsize = config['batchsize']
         epoch = config['maxEpoch']
@@ -554,6 +563,8 @@ if __name__ == "__main__":
             # print(dst_cat)
             # exit()
             count = count + 1
-            if count % 20 == 0:
-                print("loop time:{:.5f}".format(time.time()-loopTime))
-            loopTime = time.time()
+            # if count % 20 == 0:
+            #     print("loop time:{:.5f}".format(time.time()-loopTime))
+        print("="*20)
+        print("all loop time:{:.5f}".format(time.time()-loopTime))
+        print("="*20)
