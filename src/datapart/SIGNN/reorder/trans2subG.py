@@ -158,13 +158,13 @@ def PRgenG(RAWPATH,nodeNUM,partNUM,savePath=None):
         graph = graph.reshape(-1,2)
         subEdge = graph[eid]
         partValue = nodeValue[nid.to(torch.int64)]    
-        sort_pr , sort_indice = torch.sort(partValue,dim=0)
+        sort_pr , sort_indice = torch.sort(partValue,dim=0,descending=True)
         sort_nodeid = nid[sort_indice]
         selfLoop = np.repeat(nid, 2)
         PATH = savePath + f"/part{bit_position}" 
         DataPath = PATH + f"/raw_G.bin"
         NodePath = PATH + f"/raw_nodes.bin"
-        PRvaluePath = PATH + f"/raw_value.bin"
+        PRvaluePath = PATH + f"/sortIds.bin"
         saveBin(nid,NodePath)
         saveBin(selfLoop,DataPath)
         saveBin(subEdge,DataPath,addSave=True)
@@ -194,9 +194,6 @@ def nodeShuffle(raw_node,raw_graph):
         dst_batches[index] = dstShuffled.cpu()
     srcs_tensor = torch.cat(src_batches)
     dsts_tensor = torch.cat(dst_batches)
-    # print(srcs_tensor)
-    # print(dsts_tensor)
-    # exit(-1)
     uni = uni.cpu()
     return srcs_tensor,dsts_tensor,uni
 
@@ -220,6 +217,7 @@ def rawData2GNNData(RAWDATAPATH,partitionNUM,LABELPATH):
         rawDataPath = PATH + f"/raw_G.bin"
         rawTrainPath = PATH + f"/raw_trainIds.bin"
         rawNodePath = PATH + f"/raw_nodes.bin"
+        PRvaluePath = PATH + f"/sortIds.bin"
         SubTrainIdPath = PATH + "/trainIds.bin"
         SubIndptrPath = PATH + "/indptr.bin"
         SubIndicesPath = PATH + "/indices.bin"
@@ -236,6 +234,15 @@ def rawData2GNNData(RAWDATAPATH,partitionNUM,LABELPATH):
         saveBin(trainidx,SubTrainIdPath)
         saveBin(indptr,SubIndptrPath)
         saveBin(indices,SubIndicesPath)
+
+        pridx = torch.tensor(np.fromfile(PRvaluePath,dtype=np.int32)).cuda()
+        emp = pridx.clone()
+        node = torch.tensor(node).cuda()
+        uni = torch.ones(len(node)).to(torch.int32).cuda()
+        
+        srcShuffled,dstShuffled,uni = dgl.mapByNodeSet(node,uni,pridx,emp)
+        srcShuffled = srcShuffled.cpu()
+        saveBin(srcShuffled,PRvaluePath)
 
 def raw2subGwithPR(RAWDATAPATH,partitionNUM,FEATPATH,LABELPATH,featLen):
     labels = np.fromfile(LABELPATH,dtype=np.int64)
@@ -363,11 +370,11 @@ def randomGen(PATH,partid,nodeNUM):
 
 if __name__ == '__main__':
     JSONPATH = "/home/bear/workspace/single-gnn/datasetInfo.json"
-    partitionNUM = 4
+    partitionNUM = 8
     sliceNUM = 5
     with open(JSONPATH, 'r') as file:
         data = json.load(file)
-    datasetName = ["RD"] 
+    datasetName = ["PA"] 
 
     # for NAME in datasetName:
     #     subGSavePath = data[NAME]["processedPath"]

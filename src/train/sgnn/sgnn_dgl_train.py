@@ -59,9 +59,11 @@ def train(dataset, model,basicLoop=0,loop=10):
             tmp = copy.deepcopy(graph)
             tmp = [block.to('cuda:0') for block in tmp]
             y_hat = model(tmp, feat)
+            #y_hat = model(graph, feat)
             try:
                 loss = F.cross_entropy(y_hat[:number], label[:number].to('cuda:0'))
             except:
+                print(f"max label:{torch.max(y_hat[:number])} , min label :{torch.min(y_hat[:number])}")
                 print("error info : y_hat :{} , label :{} ,number :{}".format(y_hat.shape,label.shape,number))
             opt.zero_grad()
             loss.backward()
