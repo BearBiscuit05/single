@@ -231,7 +231,7 @@ class CustomDataset(Dataset):
         numberList = [0 for i in range(self.partNUM)]  
         for index in range(self.partNUM):
             filePath = self.dataPath + "/part" + str(index)   
-            trainIDs = torch.tensor(np.fromfile(filePath+"/trainIds.bin",dtype=np.int64))
+            trainIDs = torch.as_tensor(np.fromfile(filePath+"/trainIds.bin",dtype=np.int64))
             idDict[index],_ = torch.sort(trainIDs)
             current_length = len(idDict[index])
             numberList[index] = current_length
@@ -244,6 +244,7 @@ class CustomDataset(Dataset):
 
     def preloadingGraphData(self):
         # 暂时只转换为numpy格式
+        start = time.time()
         ptr = self.subGptr + 1
         rank = self.trainSubGTrack[ptr // self.partNUM][ptr % self.partNUM]
         filePath = self.dataPath + "/part" + str(rank)
@@ -253,6 +254,7 @@ class CustomDataset(Dataset):
         graphEdgeNUM = len(self.indices)
         tmp_feat = np.fromfile(filePath + "/feat.bin", dtype=np.float32)
         self.preFetchDataCache.put([indices,indptr,tmp_feat,graphNodeNUM,graphEdgeNUM])
+        print(f"pre data time :{time.time() - start:.4f}s...")
         return 0
 
     #@profile
@@ -262,12 +264,12 @@ class CustomDataset(Dataset):
         filePath = self.dataPath + "/part" + str(subGID)
             
         if preFetch == False:
-            self.indices = torch.tensor(np.fromfile(filePath + "/indices.bin", dtype=np.int32), device=('cuda:0'))
-            self.indptr = torch.tensor(np.fromfile(filePath + "/indptr.bin", dtype=np.int32), device=('cuda:0'))
+            self.indices = torch.as_tensor(np.fromfile(filePath + "/indices.bin", dtype=np.int32), device=('cuda:0'))
+            self.indptr = torch.as_tensor(np.fromfile(filePath + "/indptr.bin", dtype=np.int32), device=('cuda:0'))
             
         else:
-            self.indices = torch.tensor(predata[0], device=('cuda:0'))
-            self.indptr = torch.tensor(predata[1], device=('cuda:0'))
+            self.indices = torch.as_tensor(predata[0], device=('cuda:0'))
+            self.indptr = torch.as_tensor(predata[1], device=('cuda:0'))
 
         self.graphNodeNUM = int(len(self.indptr) - 1 )
         self.graphEdgeNUM = len(self.indices)
@@ -275,7 +277,7 @@ class CustomDataset(Dataset):
         if countMemToLoss(self.graphEdgeNUM,self.graphNodeNUM,self.featlen,self.mem):
             self.lossG = True
             # need loss ,暂时切0.1
-            sortNode = torch.tensor(np.fromfile(filePath + "/sortIds.bin", dtype=np.int32))
+            sortNode = torch.as_tensor(np.fromfile(filePath + "/sortIds.bin", dtype=np.int32))
             cutNode = sortNode[int(len(sortNode)*0.9):]
             saveNode = sortNode[:int(len(sortNode)*0.9)]
             start = time.time()
@@ -283,7 +285,6 @@ class CustomDataset(Dataset):
             print(f"loss_csr time :{time.time() - start:.4f}s...")
             
             # 判断是否要扩展
-            # self.feats = []
             torch.cuda.empty_cache()
             gc.collect()
             start = time.time()
@@ -297,17 +298,21 @@ class CustomDataset(Dataset):
         else:
             # 如果不需要切割，则之间加载全部feat
             self.lossG = False
-            # self.feats = []
+            self.feats = []
+            torch.cuda.empty_cache()
+            gc.collect()
             if preFetch == False:
                 preFeat = np.fromfile(filePath + "/feat.bin", dtype=np.float32).reshape(-1, self.featlen)
-                self.feats[:len(preFeat)] = torch.from_numpy(preFeat).to("cuda:0")
+                #self.feats[:len(preFeat)] = torch.from_numpy(preFeat).to("cuda:0")
+                self.feats = torch.from_numpy(preFeat).to("cuda:0")
             else:
                 predata[2] = predata[2].reshape(-1, self.featlen)
-                self.feats[:len(predata[2])] = torch.from_numpy(predata[2]).to("cuda:0")
+                #self.feats[:len(predata[2])] = torch.from_numpy(predata[2]).to("cuda:0")
+                self.feats = torch.from_numpy(predata[2]).to("cuda:0")
 
     def loadingLabels(self,GID):
         filePath = self.dataPath + "/part" + str(GID)
-        self.nodeLabels = torch.tensor(np.fromfile(filePath+"/labels.bin", dtype=np.int64))
+        self.nodeLabels = torch.as_tensor(np.fromfile(filePath+"/labels.bin", dtype=np.int64))
 
 ########################## 采样图结构 ##########################
     def sampleNeig(self,sampleIDs,cacheGraph): 
@@ -342,8 +347,8 @@ class CustomDataset(Dataset):
                 cacheGraph[layer-l-1][0][offset:offset+fillsize] = sampled_values # src
                 cacheGraph[layer-l-1][1][offset:offset+fillsize] = [ids] * fillsize # dst
         for info in cacheGraph:
-            info[0] = torch.tensor(info[0])
-            info[1] = torch.tensor(info[1])
+            info[0] = torch.as_tensor(info[0])
+            info[1] = torch.as_tensor(info[1])
 
     def sampleNeigGPU_NC(self,sampleIDs,cacheGraph,batchlen):     
         logger.info("----------[sampleNeigGPU_NC]----------")
@@ -485,7 +490,8 @@ class CustomDataset(Dataset):
         else:
             cacheData = [blocks,cacheFeat,cacheLabel,batchlen]
         self.graphPipe.put(cacheData)
-        
+        #self.graphPipe.put([0,0,0,0])
+
         self.trainptr += 1
         logger.info("-"*30)
         logger.info("preGraphBatch() cost {:.5f}s".format(time.time()-preBatchTime))

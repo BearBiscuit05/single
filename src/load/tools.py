@@ -99,10 +99,8 @@ def loss_feat(loss_feat,raw_feat, sliceNUM, id2featMap, featLen):
         beginIdx = boundList[sliceIndex]
         endIdx = boundList[sliceIndex + 1]
         
-        #start_slice = time.time()
-        
+        #start_slice = time.time()      
         sliceFeat = torch.from_numpy(featSlice(raw_feat, beginIdx, endIdx, featLen))
-        print(sliceFeat.dtype)
         choice_ids = idsSliceList[sliceIndex] - boundList[sliceIndex]
         sliceSize = choice_ids.shape[0]
         loss_feat[offset:offset + sliceSize] = sliceFeat[choice_ids.to(torch.int64)].cuda()
