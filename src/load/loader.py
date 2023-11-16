@@ -29,7 +29,7 @@ logging.basicConfig(level=logging.INFO,filename=curDir+'/../../log/loader.log',f
 logger = logging.getLogger(__name__)
 
 """
-数据加载的逻辑:@profile
+数据加载的逻辑:#@profile
     1.生成训练随机序列
     2.预加载训练节点(所有的训练节点都被加载进入)
     2.预加载图集合(从初始开始就存入2个)
@@ -114,29 +114,6 @@ class CustomDataset(Dataset):
             self.preGraphBatch()
             cacheData = self.graphPipe.get()
             return tuple(cacheData[:4])
-        
-        # if index % self.preRating == 0:
-        #     self.sampleFlagQueue.put(self.executor.submit(self.preGraphBatch))
-        
-        # # 获取采样数据
-        # if index % self.batchsize == 0:
-        #     if self.graphPipe.qsize() > 0:
-        #         self.sampleFlagQueue.get()
-        #         cacheData = self.graphPipe.get()
-        #         if self.train_name == "LP":
-        #             return tuple(cacheData[:6])
-        #         else:
-        #             return tuple(cacheData[:4])
-                
-        #     else: #需要等待
-        #         flag = self.sampleFlagQueue.get()
-        #         flag.result()
-        #         cacheData = self.graphPipe.get()
-        #         if self.train_name == "LP":
-        #             return tuple(cacheData[:6])
-        #         else:
-        #             return tuple(cacheData[:4])
-        # return 0,0
 
 ########################## 初始化训练数据 ##########################
     def readConfig(self,confPath):
@@ -218,6 +195,7 @@ class CustomDataset(Dataset):
         return epochList
 
 ########################## 加载/释放 图结构数据 ##########################
+    #@profile
     def initNextGraphData(self):
         # 先拿到本次加载的内容，然后发送预取命令
         logger.info("----------initNextGraphData----------")
@@ -253,7 +231,7 @@ class CustomDataset(Dataset):
         numberList = [0 for i in range(self.partNUM)]  
         for index in range(self.partNUM):
             filePath = self.dataPath + "/part" + str(index)   
-            trainIDs = torch.tensor(np.fromfile(filePath+"/trainIds.bin",dtype=np.int64))
+            trainIDs = torch.as_tensor(np.fromfile(filePath+"/trainIds.bin",dtype=np.int64))
             idDict[index],_ = torch.sort(trainIDs)
             current_length = len(idDict[index])
             numberList[index] = current_length
@@ -266,6 +244,7 @@ class CustomDataset(Dataset):
 
     def preloadingGraphData(self):
         # 暂时只转换为numpy格式
+        start = time.time()
         ptr = self.subGptr + 1
         rank = self.trainSubGTrack[ptr // self.partNUM][ptr % self.partNUM]
         filePath = self.dataPath + "/part" + str(rank)
@@ -275,20 +254,22 @@ class CustomDataset(Dataset):
         graphEdgeNUM = len(self.indices)
         tmp_feat = np.fromfile(filePath + "/feat.bin", dtype=np.float32)
         self.preFetchDataCache.put([indices,indptr,tmp_feat,graphNodeNUM,graphEdgeNUM])
+        print(f"pre data time :{time.time() - start:.4f}s...")
         return 0
 
+    #@profile
     def loadingGraphData(self,subGID,preFetch=False,predata=None):
         if preFetch and predata is None:
             raise ValueError("If preFetch is set to True, srcList and rangeList must not be None.")
         filePath = self.dataPath + "/part" + str(subGID)
             
         if preFetch == False:
-            self.indices = torch.tensor(np.fromfile(filePath + "/indices.bin", dtype=np.int32), device=('cuda:0'))
-            self.indptr = torch.tensor(np.fromfile(filePath + "/indptr.bin", dtype=np.int32), device=('cuda:0'))
+            self.indices = torch.as_tensor(np.fromfile(filePath + "/indices.bin", dtype=np.int32), device=('cuda:0'))
+            self.indptr = torch.as_tensor(np.fromfile(filePath + "/indptr.bin", dtype=np.int32), device=('cuda:0'))
             
         else:
-            self.indices = torch.tensor(predata[0], device=('cuda:0'))
-            self.indptr = torch.tensor(predata[1], device=('cuda:0'))
+            self.indices = torch.as_tensor(predata[0], device=('cuda:0'))
+            self.indptr = torch.as_tensor(predata[1], device=('cuda:0'))
 
         self.graphNodeNUM = int(len(self.indptr) - 1 )
         self.graphEdgeNUM = len(self.indices)
@@ -296,7 +277,7 @@ class CustomDataset(Dataset):
         if countMemToLoss(self.graphEdgeNUM,self.graphNodeNUM,self.featlen,self.mem):
             self.lossG = True
             # need loss ,暂时切0.1
-            sortNode = torch.tensor(np.fromfile(filePath + "/sortIds.bin", dtype=np.int32))
+            sortNode = torch.as_tensor(np.fromfile(filePath + "/sortIds.bin", dtype=np.int32))
             cutNode = sortNode[int(len(sortNode)*0.9):]
             saveNode = sortNode[:int(len(sortNode)*0.9)]
             start = time.time()
@@ -304,7 +285,6 @@ class CustomDataset(Dataset):
             print(f"loss_csr time :{time.time() - start:.4f}s...")
             
             # 判断是否要扩展
-            # self.feats = []
             torch.cuda.empty_cache()
             gc.collect()
             start = time.time()
@@ -318,17 +298,21 @@ class CustomDataset(Dataset):
         else:
             # 如果不需要切割，则之间加载全部feat
             self.lossG = False
-            # self.feats = []
+            self.feats = []
+            torch.cuda.empty_cache()
+            gc.collect()
             if preFetch == False:
                 preFeat = np.fromfile(filePath + "/feat.bin", dtype=np.float32).reshape(-1, self.featlen)
-                self.feats[:len(preFeat)] = torch.from_numpy(preFeat).to("cuda:0")
+                #self.feats[:len(preFeat)] = torch.from_numpy(preFeat).to("cuda:0")
+                self.feats = torch.from_numpy(preFeat).to("cuda:0")
             else:
                 predata[2] = predata[2].reshape(-1, self.featlen)
-                self.feats[:len(predata[2])] = torch.from_numpy(predata[2]).to("cuda:0")
+                #self.feats[:len(predata[2])] = torch.from_numpy(predata[2]).to("cuda:0")
+                self.feats = torch.from_numpy(predata[2]).to("cuda:0")
 
     def loadingLabels(self,GID):
         filePath = self.dataPath + "/part" + str(GID)
-        self.nodeLabels = torch.tensor(np.fromfile(filePath+"/labels.bin", dtype=np.int64))
+        self.nodeLabels = torch.as_tensor(np.fromfile(filePath+"/labels.bin", dtype=np.int64))
 
 ########################## 采样图结构 ##########################
     def sampleNeig(self,sampleIDs,cacheGraph): 
@@ -363,8 +347,8 @@ class CustomDataset(Dataset):
                 cacheGraph[layer-l-1][0][offset:offset+fillsize] = sampled_values # src
                 cacheGraph[layer-l-1][1][offset:offset+fillsize] = [ids] * fillsize # dst
         for info in cacheGraph:
-            info[0] = torch.tensor(info[0])
-            info[1] = torch.tensor(info[1])
+            info[0] = torch.as_tensor(info[0])
+            info[1] = torch.as_tensor(info[1])
 
     def sampleNeigGPU_NC(self,sampleIDs,cacheGraph,batchlen):     
         logger.info("----------[sampleNeigGPU_NC]----------")
@@ -506,7 +490,8 @@ class CustomDataset(Dataset):
         else:
             cacheData = [blocks,cacheFeat,cacheLabel,batchlen]
         self.graphPipe.put(cacheData)
-        
+        #self.graphPipe.put([0,0,0,0])
+
         self.trainptr += 1
         logger.info("-"*30)
         logger.info("preGraphBatch() cost {:.5f}s".format(time.time()-preBatchTime))

@@ -2,6 +2,7 @@ import torch
 import dgl
 import numpy as np
 import time
+from memory_profiler import profile
 
 def featSlice(raw_feat,beginIndex,endIndex,featLen):
     blockByte = 4 # float32 4byte
@@ -41,7 +42,7 @@ def countMemToLoss(edgeNUM,nodeNUM,featLen,ratedMem):
         return False
     else:
         return True
-
+#@profile
 def loss_csr(raw_ptr,raw_indice,lossNode,saveNode):
     nodeNUM = raw_ptr.shape[0] - 1
     ptr_diff = torch.diff(raw_ptr).cuda()
@@ -78,8 +79,8 @@ def loss_csr(raw_ptr,raw_indice,lossNode,saveNode):
     raw_ptr,raw_indice = None,None
     return new_ptr,new_indice,id2featMap
 
-import time
 
+#@profile
 def loss_feat(loss_feat,raw_feat, sliceNUM, id2featMap, featLen):
     # from cup to gpu with loss
     #print('-'*20)
@@ -98,9 +99,8 @@ def loss_feat(loss_feat,raw_feat, sliceNUM, id2featMap, featLen):
         beginIdx = boundList[sliceIndex]
         endIdx = boundList[sliceIndex + 1]
         
-        #start_slice = time.time()
-        
-        sliceFeat = torch.tensor(featSlice(raw_feat, beginIdx, endIdx, featLen))
+        #start_slice = time.time()      
+        sliceFeat = torch.from_numpy(featSlice(raw_feat, beginIdx, endIdx, featLen))
         choice_ids = idsSliceList[sliceIndex] - boundList[sliceIndex]
         sliceSize = choice_ids.shape[0]
         loss_feat[offset:offset + sliceSize] = sliceFeat[choice_ids.to(torch.int64)].cuda()
