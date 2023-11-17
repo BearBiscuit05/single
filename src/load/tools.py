@@ -81,7 +81,7 @@ def loss_csr(raw_ptr,raw_indice,lossNode,saveNode):
 
 
 #@profile
-def loss_feat(loss_feat,raw_feat, sliceNUM, id2featMap, featLen):
+def loss_feat(loss_feat,raw_feat, sliceNUM, id2featMap, featLen,device):
     # from cup to gpu with loss
     #print('-'*20)
     #start_preprocess = time.time()
@@ -103,7 +103,7 @@ def loss_feat(loss_feat,raw_feat, sliceNUM, id2featMap, featLen):
         sliceFeat = torch.from_numpy(featSlice(raw_feat, beginIdx, endIdx, featLen))
         choice_ids = idsSliceList[sliceIndex] - boundList[sliceIndex]
         sliceSize = choice_ids.shape[0]
-        loss_feat[offset:offset + sliceSize] = sliceFeat[choice_ids.to(torch.int64)].cuda()
+        loss_feat[offset:offset + sliceSize] = sliceFeat.to(device)[choice_ids.to(torch.int64)]
         offset += sliceSize
         #print(f"Slice {sliceIndex + 1} time: {time.time() - start_slice : .4f} seconds")
     

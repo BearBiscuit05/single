@@ -68,8 +68,8 @@ class CustomDataset(Dataset):
         self.maxEpoch,self.preRating,self.classes,self.epochInterval = 0,0,0,0
         self.featlen = 0
         self.fanout = []
-        self.maxPartNodeNUM = 0
-        self.mem = 0
+        self.maxPartNodeNUM,self.mem = 0,0
+        self.edgecut, self.nodecut,self.featDevice = 0,0,""
         self.train_name,self.framework,self.mode,self.dataset = "","","",""
         self.readConfig(confPath)
         # ================
@@ -99,7 +99,7 @@ class CustomDataset(Dataset):
         self.trainLoop = 0              # 当前子图可读取次数      
         self.lossMap = []
         #### mmap 特征部分 ####
-        self.feats = torch.zeros([self.maxPartNodeNUM, self.featlen], dtype=torch.float32).cuda()
+        self.feats = torch.zeros([self.maxPartNodeNUM, self.featlen], dtype=torch.float32).to(self.featDevice)
         
         #### 数据预取 ####
         self.template_cache_graph= self.initCacheData()
@@ -126,7 +126,6 @@ class CustomDataset(Dataset):
         self.cacheNUM = config['cacheNUM']
         self.partNUM = config['partNUM']
         self.maxEpoch = config['maxEpoch']
-        self.preRating = config['preRating']
         self.featlen = config['featlen']
         self.fanout = config['fanout']
         self.framework = config['framework']
@@ -135,6 +134,11 @@ class CustomDataset(Dataset):
         self.epochInterval = config['epochInterval']
         self.mem = config['memUse']
         self.maxPartNodeNUM = config['maxPartNodeNUM']
+        self.edgecut = config['edgecut']
+        self.nodecut = config['nodecut']
+        self.featDevice = config['featDevice']
+        # print(self.featDevice)
+        # exit(-1)
 
     def custom_sort(self):
         idMap={}
@@ -181,15 +185,16 @@ class CustomDataset(Dataset):
         #epochList = self.custom_sort()
         epochList = []
         for i in range(self.maxEpoch + 1): # 额外多增加一行
-            random_array = np.random.choice(np.arange(0, self.partNUM), size=self.partNUM, replace=False)
-            if len(epochList) == 0:
-                epochList.append(random_array)
-            else:
-                # 已经存在列
-                lastid = epochList[-1][-1]
-                while(lastid == random_array[0]):
-                    random_array = np.random.choice(np.arange(0, self.partNUM), size=self.partNUM, replace=False)
-                epochList.append(random_array)
+            random_array = np.arange(0, self.partNUM, dtype=np.int32)
+            epochList.append(random_array)
+            # if len(epochList) == 0:
+            #     epochList.append(random_array)
+            # else:
+            #     # 已经存在列
+            #     lastid = epochList[-1][-1]
+            #     while(lastid == random_array[0]):
+            #         random_array = np.random.choice(np.arange(0, self.partNUM), size=self.partNUM, replace=False)
+            #     epochList.append(random_array)
 
         # logger.info("train track:{}".format(epochList))    
         return epochList
@@ -290,10 +295,10 @@ class CustomDataset(Dataset):
             start = time.time()
             if preFetch == False:
                 preFeat = np.fromfile(filePath + "/feat.bin", dtype=np.float32).reshape(-1, self.featlen)
-                loss_feat(self.feats, preFeat,4,self.lossMap,self.featlen)
+                loss_feat(self.feats, preFeat,8,self.lossMap,self.featlen,self.featDevice)
             else:
                 predata[2] = predata[2].reshape(-1, self.featlen)
-                loss_feat(self.feats, predata[2],4,self.lossMap,self.featlen)
+                loss_feat(self.feats, predata[2],8,self.lossMap,self.featlen,self.featDevice)
             print(f"loading feat time :{time.time() - start:.4f}s...")
         else:
             # 如果不需要切割，则之间加载全部feat
@@ -304,11 +309,11 @@ class CustomDataset(Dataset):
             if preFetch == False:
                 preFeat = np.fromfile(filePath + "/feat.bin", dtype=np.float32).reshape(-1, self.featlen)
                 #self.feats[:len(preFeat)] = torch.from_numpy(preFeat).to("cuda:0")
-                self.feats = torch.from_numpy(preFeat).to("cuda:0")
+                self.feats = torch.from_numpy(preFeat).to(self.featDevice)
             else:
                 predata[2] = predata[2].reshape(-1, self.featlen)
                 #self.feats[:len(predata[2])] = torch.from_numpy(predata[2]).to("cuda:0")
-                self.feats = torch.from_numpy(predata[2]).to("cuda:0")
+                self.feats = torch.from_numpy(predata[2]).to(self.featDevice)
 
     def loadingLabels(self,GID):
         filePath = self.dataPath + "/part" + str(GID)
@@ -528,10 +533,10 @@ def collate_fn(data):
 
 
 if __name__ == "__main__":
-    # dataset = CustomDataset(curDir+"/../../config/train_config.json",pre_fetch=True)
-    # with open(curDir+"/../../config/train_config.json", 'r') as f:
-    dataset = CustomDataset(curDir+"/../../config/PA.json",pre_fetch=True)
-    with open(curDir+"/../../config/PA.json", 'r') as f:
+    dataset = CustomDataset(curDir+"/../../config/train_config.json",pre_fetch=True)
+    with open(curDir+"/../../config/train_config.json", 'r') as f:
+    # dataset = CustomDataset(curDir+"/../../config/UK.json",pre_fetch=True)
+    # with open(curDir+"/../../config/UK.json", 'r') as f:
         config = json.load(f)
         batchsize = config['batchsize']
         epoch = config['maxEpoch']
