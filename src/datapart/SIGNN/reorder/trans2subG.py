@@ -116,9 +116,11 @@ def PRgenG(RAWPATH,nodeNUM,partNUM,savePath=None):
     nodeValue[trainIds] = 10000
 
     # random method
-    shuffled_indices = torch.randperm(trainIds.size(0))
-    trainIds = trainIds[shuffled_indices]
+    # shuffled_indices = torch.randperm(trainIds.size(0))
+    # trainIds = trainIds[shuffled_indices]
     trainBatch = torch.chunk(trainIds, partNUM, dim=0)
+    # print("trainBatch[0] :",trainBatch[0])
+    # print("trainBatch[0].shape :",trainBatch[0].shape)
     for index,ids in enumerate(trainBatch):
         info = 1 << index
         nodeInfo[ids] = info
@@ -160,7 +162,7 @@ def PRgenG(RAWPATH,nodeNUM,partNUM,savePath=None):
         partValue = nodeValue[nid.to(torch.int64)]    
         sort_pr , sort_indice = torch.sort(partValue,dim=0,descending=True)
         sort_nodeid = nid[sort_indice]
-        selfLoop = np.repeat(nid, 2)
+        selfLoop = np.repeat(trainBatch[bit_position].to(torch.int32), 2)
         PATH = savePath + f"/part{bit_position}" 
         DataPath = PATH + f"/raw_G.bin"
         NodePath = PATH + f"/raw_nodes.bin"
@@ -205,7 +207,7 @@ def trainIdxSubG(subGNode,trainSet):
     return Lid
 
 def coo2csr(srcs,dsts):
-    g = dgl.graph((srcs, dsts)).formats('csr')
+    g = dgl.graph((dsts,srcs)).formats('csr')
     indptr, indices, _ = g.adj_sparse(fmt='csr')
     return indptr,indices
 
@@ -370,11 +372,11 @@ def randomGen(PATH,partid,nodeNUM):
 
 if __name__ == '__main__':
     JSONPATH = "/home/bear/workspace/single-gnn/datasetInfo.json"
-    partitionNUM = 8
+    partitionNUM = 4
     sliceNUM = 5
     with open(JSONPATH, 'r') as file:
         data = json.load(file)
-    datasetName = ["PA"] 
+    datasetName = ["PD"] 
 
     # for NAME in datasetName:
     #     subGSavePath = data[NAME]["processedPath"]
