@@ -117,8 +117,8 @@ def PRgenG(RAWPATH,nodeNUM,partNUM,savePath=None):
     nodeValue[trainIds] = 10000
 
     # random method
-    shuffled_indices = torch.randperm(trainIds.size(0))
-    trainIds = trainIds[shuffled_indices]
+    # shuffled_indices = torch.randperm(trainIds.size(0))
+    # trainIds = trainIds[shuffled_indices]
     trainBatch = torch.chunk(trainIds, partNUM, dim=0)
     for index,ids in enumerate(trainBatch):
         info = 1 << index
@@ -162,7 +162,7 @@ def PRgenG(RAWPATH,nodeNUM,partNUM,savePath=None):
         DataPath = PATH + f"/raw_G.bin"
         NodePath = PATH + f"/raw_nodes.bin"
         PRvaluePath = PATH + f"/sortIds.bin"
-        selfLoop = np.repeat(nid, 2)
+        selfLoop = np.repeat(trainBatch[bit_position].to(torch.int32), 2)
         saveBin(nid,NodePath)
         saveBin(selfLoop,DataPath)
         graph = graph.reshape(-1,2)
@@ -316,7 +316,7 @@ def raw2subGwithPR(RAWDATAPATH,partitionNUM,FEATPATH,LABELPATH,featLen):
 def featSlice(FEATPATH,beginIndex,endIndex,featLen):
     blockByte = 4 # float32 4byte
     offset = (featLen * beginIndex) * blockByte
-    subFeat = np.fromfile(FEATPATH, dtype=np.float32, count=(endIndex - beginIndex) * featLen, offset=offset)
+    subFeat = torch.as_tensor(np.fromfile(FEATPATH, dtype=np.float32, count=(endIndex - beginIndex) * featLen, offset=offset))
     return subFeat.reshape(-1,featLen)
 
 def sliceIds(Ids,sliceTable):
@@ -331,6 +331,8 @@ def sliceIds(Ids,sliceTable):
 
 def genSubGFeat(SAVEPATH,FEATPATH,partNUM,nodeNUM,sliceNUM,featLen):
     # 获得切片
+    torch.cuda.empty_cache()
+    gc.collect()
     slice = nodeNUM // sliceNUM + 1
     boundList = [0]
     start = slice
@@ -348,12 +350,13 @@ def genSubGFeat(SAVEPATH,FEATPATH,partNUM,nodeNUM,sliceNUM,featLen):
     for sliceIndex in range(sliceNUM):
         beginIdx = boundList[sliceIndex]
         endIdx = boundList[sliceIndex+1]
-        sliceFeat = featSlice(FEATPATH,beginIdx,endIdx,featLen)
+        sliceFeat = featSlice(FEATPATH,beginIdx,endIdx,featLen).cuda()
         for index in range(partNUM):
             fileName = SAVEPATH + f"/part{index}/feat.bin"
             SubIdsList = idsSliceList[index][sliceIndex]
             t_SubIdsList = SubIdsList - beginIdx
-            subFeat = sliceFeat[t_SubIdsList]
+            subFeat = sliceFeat[t_SubIdsList.to(torch.int64).cuda()]
+            subFeat = subFeat.cpu()
             saveBin(subFeat,fileName,addSave=sliceIndex)
 
 
@@ -388,7 +391,7 @@ def randomGen(PATH,partid,nodeNUM):
 if __name__ == '__main__':
     JSONPATH = "/home/bear/workspace/single-gnn/datasetInfo.json"
     partitionNUM = 8
-    sliceNUM = 4
+    sliceNUM = 8
     with open(JSONPATH, 'r') as file:
         data = json.load(file)
     datasetName = ["PA"] 
@@ -420,23 +423,23 @@ if __name__ == '__main__':
         # for index,trainids in enumerate(trainBatch):
         #     t = analysisG(graph,maxID,trainId=trainids,savePath=subGSavePath+f"/part{index}")
         
-        startTime = time.time()
-        t1 = PRgenG(GRAPHPATH,maxID,partitionNUM,savePath=subGSavePath)
-        print(f"run time cost:{RUNTIME:.3f}")
-        print(f"save time cost:{SAVETIME:.3f}")
-        print(f"partition all cost:{time.time()-startTime:.3f}s")
+        # startTime = time.time()
+        # t1 = PRgenG(GRAPHPATH,maxID,partitionNUM,savePath=subGSavePath)
+        # print(f"run time cost:{RUNTIME:.3f}")
+        # print(f"save time cost:{SAVETIME:.3f}")
+        # print(f"partition all cost:{time.time()-startTime:.3f}s")
     
-    # for NAME in datasetName:
-    #     RAWDATAPATH = data[NAME]["processedPath"]
-    #     FEATPATH = data[NAME]["rawFilePath"] + "/feat.bin"
-    #     LABELPATH = data[NAME]["rawFilePath"] + "/labels.bin"
-    #     SAVEPATH = data[NAME]["processedPath"]
-    #     nodeNUM = data[NAME]["nodes"]
-    #     featLen = data[NAME]["featLen"]
+    for NAME in datasetName:
+        RAWDATAPATH = data[NAME]["processedPath"]
+        FEATPATH = data[NAME]["rawFilePath"] + "/feat.bin"
+        LABELPATH = data[NAME]["rawFilePath"] + "/labels.bin"
+        SAVEPATH = data[NAME]["processedPath"]
+        nodeNUM = data[NAME]["nodes"]
+        featLen = data[NAME]["featLen"]
         
-    #     MERGETIME = time.time()
-    #     rawData2GNNData(RAWDATAPATH,partitionNUM,LABELPATH)
-    #     print(f"trans graph cost time{time.time() - MERGETIME:.3f}s ...")
-    #     FEATTIME = time.time()
-    #     genSubGFeat(SAVEPATH,FEATPATH,partitionNUM,nodeNUM,sliceNUM,featLen)
-    #     print(f"graph feat gen cost time{time.time() - FEATTIME:.3f}...")
+        # MERGETIME = time.time()
+        # rawData2GNNData(RAWDATAPATH,partitionNUM,LABELPATH)
+        # print(f"trans graph cost time{time.time() - MERGETIME:.3f}s ...")
+        FEATTIME = time.time()
+        genSubGFeat(SAVEPATH,FEATPATH,partitionNUM,nodeNUM,sliceNUM,featLen)
+        print(f"graph feat gen cost time{time.time() - FEATTIME:.3f}...")
