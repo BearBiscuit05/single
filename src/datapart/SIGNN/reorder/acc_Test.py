@@ -156,7 +156,7 @@ if __name__ == '__main__':
     print('Training...')
     train(args, device, g_list, train_list , model)
 
-    torch.save(model.state_dict(), 'model_parameters.pth')
+    # torch.save(model.state_dict(), 'model_parameters.pth')
 
     model.load_state_dict(torch.load('model_parameters.pth'))
     model.eval()

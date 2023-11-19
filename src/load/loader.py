@@ -81,8 +81,6 @@ class CustomDataset(Dataset):
         #### 节点类型加载 ####
         self.NodeLen = 0        # 用于记录数据集中节点的数目，默认为train节点个数
         self.trainNUM = 0       # 训练集总数目
-        self.valNUM = 0
-        self.testNUM = 0
         self.trainNodeDict,self.valNodeDict,self.testNodeDict = {},{},{}
         self.trainNodeNumbers,self.valNodeNumbers,self.testNodeNumbers = 0,0,0
         self.loadModeData(self.mode)
@@ -137,52 +135,9 @@ class CustomDataset(Dataset):
         self.edgecut = config['edgecut']
         self.nodecut = config['nodecut']
         self.featDevice = config['featDevice']
-        # print(self.featDevice)
-        # exit(-1)
 
-    def custom_sort(self):
-        idMap={}
-        for i in range(self.partNUM):
-            folder_path = self.dataPath+"/part"+str(i)
-            idMap[i] = []
-            for filename in os.listdir(folder_path):
-                if filename.startswith("halo") and filename.endswith(".bin"):
-                    try:
-                        x = int(filename[len("halo"):-len(".bin")])
-                        idMap[i].append(x)
-                    except:
-                        continue
-
-        sorted_numbers = []
-        lastid = 0
-        for loop in range(self.maxEpoch + 1):
-            used_numbers = set()
-            tmp = []
-            for idx in range(0,self.partNUM):
-                if idx == 0:
-                    num = lastid
-                else:
-                    num = tmp[-1]
-                candidates = idMap[num]
-                available_candidates = [int(candidate) for candidate in candidates if int(candidate) not in used_numbers]                
-                if available_candidates:
-                    chosen_num = random.choice(available_candidates)
-                    tmp.append(chosen_num)
-                    used_numbers.add(chosen_num)
-                else:
-                    for i in range(self.partNUM):
-                        if i not in used_numbers:
-                            available_candidates.append(i)
-                    chosen_num = random.choice(available_candidates)
-                    tmp.append(chosen_num)
-                    used_numbers.add(chosen_num)
-            sorted_numbers.append(tmp)
-            lastid = tmp[-1]
-        print(sorted_numbers)
-        return sorted_numbers
 
     def randomTrainList(self): 
-        #epochList = self.custom_sort()
         epochList = []
         for i in range(self.maxEpoch + 1): # 额外多增加一行
             random_array = np.arange(0, self.partNUM, dtype=np.int32)
@@ -320,41 +275,6 @@ class CustomDataset(Dataset):
         self.nodeLabels = torch.as_tensor(np.fromfile(filePath+"/labels.bin", dtype=np.int64))
 
 ########################## 采样图结构 ##########################
-    def sampleNeig(self,sampleIDs,cacheGraph): 
-        layer = len(self.fanout)
-        for l, number in enumerate(self.fanout):
-            number -= 1
-            if l != 0:     
-                last_lens = len(cacheGraph[layer-l][0])      
-                lastids = cacheGraph[layer - l][0]
-            else:
-                last_lens = len(sampleIDs)
-                lastids = sampleIDs
-            cacheGraph[layer-l-1][0][0:last_lens] = lastids
-            cacheGraph[layer-l-1][1][0:last_lens] = lastids
-            for index in range(len(lastids)):
-                ids = cacheGraph[layer-l-1][0][index]
-                if ids == -1:
-                    continue
-                try:
-                    NeigList = self.cacheData[0][self.cacheData[1][ids*2]+1:self.cacheData[1][ids*2+1]]
-                except:
-                    logger.error("error: srcLen:{},rangelen:{},ids:{}".format(len(self.cacheData[0]),len(self.cacheData[1]),ids))
-                    exit(-1)
-
-                if len(NeigList) < number:
-                    sampled_values = NeigList
-                else:
-                    sampled_values = np.random.choice(NeigList,number)
-                
-                offset = last_lens + (index * number)
-                fillsize = len(sampled_values)
-                cacheGraph[layer-l-1][0][offset:offset+fillsize] = sampled_values # src
-                cacheGraph[layer-l-1][1][offset:offset+fillsize] = [ids] * fillsize # dst
-        for info in cacheGraph:
-            info[0] = torch.as_tensor(info[0])
-            info[1] = torch.as_tensor(info[1])
-
     def sampleNeigGPU_NC(self,sampleIDs,cacheGraph,batchlen):     
         logger.info("----------[sampleNeigGPU_NC]----------")
         sampleIDs = sampleIDs.to(torch.int32).to('cuda:0')
@@ -386,7 +306,7 @@ class CustomDataset(Dataset):
         cacheGraph[0] = cacheGraph[0][:mapping_ptr[-1]]
         cacheGraph[1] = cacheGraph[1][:mapping_ptr[-1]]
 
-        unique = copy.deepcopy(self.uniTable)
+        unique = self.uniTable.clone()
 
         logger.info("construct remapping data Time {:.5f}s".format(time.time()-mappingTime))
         t = time.time()  
@@ -395,28 +315,30 @@ class CustomDataset(Dataset):
 
         transTime = time.time()
         if self.framework == "dgl":
-            layer = len(mapping_ptr) - 1
+            layerNUM = len(mapping_ptr) - 1
             blocks = []
-            save_num = 0
-            for index in range(1,layer+1):
-                src = cacheGraph[0][:mapping_ptr[-index]]
-                dst = cacheGraph[1][:mapping_ptr[-index]]
+            dstNUM = 0
+            srcNUM = 0
+            for layer in range(1,layerNUM+1):
+                src = cacheGraph[0][:mapping_ptr[layer]]
+                dst = cacheGraph[1][:mapping_ptr[layer]]
                 data = (src,dst)
-                if index == 1:
-                    save_num,_ = torch.max(dst,dim=0)
-                    save_num += 1
-                    block = self.create_dgl_block(data,len(unique),save_num)
-                elif index == layer:
-                    tmp_num = save_num
-                    save_num,_ = torch.max(dst,dim=0)
-                    save_num += 1
-                    block = self.create_dgl_block(data,tmp_num,save_num)
+                if layer == 1:
+                    dstNUM,_ = torch.max(dst,dim=0)
+                    srcNUM,_ = torch.max(src,dim=0)
+                    dstNUM += 1
+                    srcNUM += 1
+                    block = self.create_dgl_block(data,srcNUM,dstNUM)
+                elif layer == layerNUM:
+                    dstNUM = srcNUM
+                    srcNUM = len(unique)
+                    block = self.create_dgl_block(data,srcNUM,dstNUM)
                 else:
-                    tmp_num = save_num
-                    save_num,_ = torch.max(dst,dim=0)
-                    save_num += 1
-                    block = self.create_dgl_block(data,tmp_num,save_num)
-                blocks.append(block)
+                    dstNUM = srcNUM
+                    srcNUM,_ = torch.max(src,dim=0)
+                    srcNUM += 1
+                    block = self.create_dgl_block(data,srcNUM,dstNUM)
+                blocks.insert(0,block)
         elif self.framework == "pyg":
             src = cacheGraph[0][:mapping_ptr[-1]].to(torch.int64)
             dst = cacheGraph[1][:mapping_ptr[-1]].to(torch.int64)
@@ -495,7 +417,6 @@ class CustomDataset(Dataset):
         else:
             cacheData = [blocks,cacheFeat,cacheLabel,batchlen]
         self.graphPipe.put(cacheData)
-        #self.graphPipe.put([0,0,0,0])
 
         self.trainptr += 1
         logger.info("-"*30)
@@ -546,12 +467,6 @@ if __name__ == "__main__":
         start = time.time()
         loopTime = time.time()
         for graph,feat,label,number in train_loader:
-            # feat.to("cuda:0")
-            # src_cat,dst_cat,
-            # print(graph)
-            # print(src_cat)
-            # print(dst_cat)
-            # exit()
             count = count + 1
             # if count % 20 == 0:
             #     print("loop time:{:.5f}".format(time.time()-loopTime))

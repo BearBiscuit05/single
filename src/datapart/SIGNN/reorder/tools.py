@@ -1,6 +1,8 @@
 import numpy as np
 import os
 import torch
+import dgl
+import gc
 
 def bin2tensor(filePath, datatype=np.int64):
     tensor = np.fromfile(filePath, dtype=datatype)
@@ -29,7 +31,40 @@ def convert_to_tensor(data, dtype=torch.int32):
     else:
         return data.to(dtype)
 
-def coo2csr(row,col):
+def cooTocsr(srcList,dstList,device=torch.device('cpu')):
+    # compact src
+    torch.cuda.empty_cache()
+    gc.collect()
+    srcList = srcList.cuda()
+    inptr = torch.cat([torch.Tensor([0]).to(torch.int32).to(srcList.device),torch.cumsum(torch.bincount(srcList), dim=0)]).to(torch.int32)
+    indice = torch.zeros_like(srcList).to(torch.int32).cuda()
+    addr = inptr.clone()[:-1].cuda()
+    srcList = srcList.cuda()
+    dstList = dstList.cuda()
+    dgl.cooTocsr(inptr,indice,addr,dstList,srcList) # compact dst save src
+    inptr = inptr.cpu() 
+    indice = indice.cpu()
+    addr = None
+    srcList = srcList.cpu()
+    dstList = dstList.cpu()
+    return inptr,indice
+
+def remapEdgeId(uniTable,srcList,dstList,device=torch.device('cpu')):
+    # uniTable必须是unqiue的
+    index = torch.arange(len(uniTable)).to(torch.int32)
+    remap = torch.zeros(torch.max(uniTable)+1).to(torch.int32)
+    # 构建ramap表
+    remap[uniTable.to(torch.int64)] = index
+    remap = remap.to(device)
+    srcList = srcList.to(device)
+    srcList = remap[srcList.to(torch.int64)]
+    srcList = srcList.cpu()
+    dstList = dstList.to(device)
+    dstList = remap[dstList.to(torch.int64)]
+    dstList = dstList.cpu()
+    return srcList,dstList
+
+def coo2csr_sort(row,col):
     """
         row = torch.Tensor([0,0,1,1,2,3,3]).to(torch.int32)
         col = torch.Tensor([0,1,1,2,0,2,3]).to(torch.int32)
