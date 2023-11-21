@@ -4,11 +4,9 @@ from queue import Queue
 import numpy as np
 import json
 import time
-import mmap
 import dgl
 import torch
 from dgl.heterograph import DGLBlock
-import random
 import copy
 import sys
 import logging
@@ -17,7 +15,7 @@ import gc
 import psutil
 from tools import *
 from memory_profiler import profile
-
+#torch.set_printoptions(threshold=10000)
 curFilePath = os.path.abspath(__file__)
 curDir = os.path.dirname(curFilePath)
 
@@ -90,11 +88,12 @@ class CustomDataset(Dataset):
         self.lossMap = []
         #### mmap 特征部分 ####
         self.feats = torch.zeros([self.maxPartNodeNUM, self.featlen], dtype=torch.float32).to(self.featDevice)
-        
+        self.addFeatMap = torch.arange(self.maxPartNodeNUM, dtype=torch.int64)
+
         #### 数据预取 ####
-        self.template_cache_graph= self.initCacheData()
+        self.template_cache_graph , self.ramapNodeTable = self.initCacheData()
         self.initNextGraphData()
-        self.uniTable = torch.zeros(len(self.template_cache_graph[0])*2,dtype=torch.int32).to('cuda:0')
+        self.uniTable = torch.zeros(len(self.ramapNodeTable),dtype=torch.int32).cuda()
 
     def __len__(self):
         return self.NodeLen
@@ -128,7 +127,6 @@ class CustomDataset(Dataset):
         self.nodecut = config['nodecut']
         self.featDevice = config['featDevice']
 
-
     def randomTrainList(self): 
         epochList = []
         for _ in range(self.maxEpoch + 1): # 额外多增加一行
@@ -142,9 +140,9 @@ class CustomDataset(Dataset):
         # 先拿到本次加载的内容，然后发送预取命令
         logger.info("----------initNextGraphData----------")
         start = time.time()
-        print(f"loading G :{self.GID}..")
         self.subGptr += 1
         self.GID = self.trainSubGTrack[self.subGptr // self.partNUM][self.subGptr % self.partNUM]
+        print(f"loading G :{self.GID}..")
         # 先判断是否为第一个，或者是已经存在发送过预取命令
         if self.subGptr == 0 or not self.pre_fetch:
             # 如果两个都没有，则全部从头加载
@@ -189,8 +187,29 @@ class CustomDataset(Dataset):
         filePath = self.dataPath + "/part" + str(rank)
         indices = np.fromfile(filePath + "/indices.bin", dtype=np.int32)
         indptr = np.fromfile(filePath + "/indptr.bin", dtype=np.int32)
-        tmp_feat = np.fromfile(filePath + "/feat.bin", dtype=np.float32)
-        self.preFetchDataCache.put([indices,indptr,tmp_feat])
+        
+        ###
+        map = self.addFeatMap
+        sameNodeInfoPath = filePath + '/sameNodeInfo.bin'
+        diffNodeInfoPath = filePath + '/diffNodeInfo.bin'
+        sameNode = torch.as_tensor(np.fromfile(sameNodeInfoPath, dtype = np.int32))
+        diffNode = torch.as_tensor(np.fromfile(diffNodeInfoPath, dtype = np.int32))
+        res1_one, res2_one = torch.split(sameNode, (sameNode.shape[0] // 2))
+        sameNode = None
+        res1_zero, res2_zero = torch.split(diffNode, (diffNode.shape[0] // 2))
+        diffNode = None
+        # tmp_feat = np.fromfile(filePath + "/feat.bin", dtype=np.float32)
+        addFeat = torch.as_tensor(np.fromfile(filePath + "/addFeat.bin", dtype=np.float32).reshape(-1, self.featlen))
+
+        replace_idx = map[res1_zero[:addFeat.shape[0]].to(torch.int64)].to(torch.int64)
+
+        newMap = torch.clone(map)
+        newMap[res2_zero.to(torch.int64)] = res1_zero.to(torch.int64)
+        newMap[res2_one.to(torch.int64)] = res1_one.to(torch.int64)
+        res1_one, res2_one, res1_zero, res2_zero = None,None,None,None
+        addFeatInfo = {"addFeat": addFeat, "replace_idx": replace_idx, "map": newMap}
+        
+        self.preFetchDataCache.put([indices,indptr,addFeatInfo])
         print(f"pre data time :{time.time() - start:.4f}s...")
         return 0
 
@@ -238,11 +257,29 @@ class CustomDataset(Dataset):
             torch.cuda.empty_cache()
             gc.collect()
             if preFetch == False:
+                # TODO :逻辑需要修改，实际只有第一个需要全加载
                 preFeat = np.fromfile(filePath + "/feat.bin", dtype=np.float32).reshape(-1, self.featlen)
                 self.feats = torch.from_numpy(preFeat).to(self.featDevice)
             else:
-                predata[2] = predata[2].reshape(-1, self.featlen)
-                self.feats = torch.from_numpy(predata[2]).to(self.featDevice)
+                # predata[2] = predata[2].reshape(-1, self.featlen)
+                # self.feats = torch.from_numpy(predata[2]).to(self.featDevice)
+                print("修改map为{}".format(subGID))
+                start_time = time.time()
+                
+                addFeatInfo = predata[2]
+                addFeat = addFeatInfo['addFeat'].to(self.featDevice)
+                replace_idx = addFeatInfo['replace_idx'].to(self.featDevice)
+                self.feats[replace_idx] = addFeat
+                addFeat, replace_idx = None, None
+
+                if (addFeatInfo['map'] != None):
+                    print("需要修改map的值")
+                    # TODO:为什么不合成为1步
+                    map = addFeatInfo['map'].to(self.featDevice)
+                    self.addFeatMap = map
+                    map = None
+                addFeatInfo = None           
+                print("修改map,addFeat完成 {:.4f}".format(time.time() - start_time))
 
     def loadingLabels(self,GID):
         filePath = self.dataPath + "/part" + str(GID)
@@ -254,13 +291,16 @@ class CustomDataset(Dataset):
         sampleIDs = sampleIDs.to(torch.int32).to('cuda:0')
         ptr = 0
         mapping_ptr = [ptr]
-        
         sampleStart = time.time()
+        
+        seedPtr,NUM = 0, 0
         for l, fan_num in enumerate(self.fanout):
             if l == 0:
                 seed_num = batchlen
             else:
                 seed_num = len(sampleIDs)
+            self.ramapNodeTable[seedPtr:seedPtr+seed_num] = sampleIDs
+            seedPtr += seed_num
             out_src = cacheGraph[0][ptr:ptr+seed_num*fan_num]
             out_dst = cacheGraph[1][ptr:ptr+seed_num*fan_num]
             
@@ -274,8 +314,9 @@ class CustomDataset(Dataset):
             sampleIDs = cacheGraph[0][ptr:ptr+NUM.item()]
             ptr=ptr+NUM.item()
             mapping_ptr.append(ptr)
+        self.ramapNodeTable[seedPtr:seedPtr+NUM] = sampleIDs
+        seedPtr += NUM 
         logger.info("Sample Neighbor Time {:.5f}s".format(time.time()-sampleStart))
-        
         mappingTime = time.time()        
         cacheGraph[0] = cacheGraph[0][:mapping_ptr[-1]]
         cacheGraph[1] = cacheGraph[1][:mapping_ptr[-1]]
@@ -283,9 +324,9 @@ class CustomDataset(Dataset):
         logger.info("construct remapping data Time {:.5f}s".format(time.time()-mappingTime))
         
         t = time.time()  
-        cacheGraph[0],cacheGraph[1],unique = dgl.remappingNode(cacheGraph[0],cacheGraph[1],unique)
+        #cacheGraph[0],cacheGraph[1],unique = dgl.remappingNode(cacheGraph[0],cacheGraph[1],unique)
+        cacheGraph[0],cacheGraph[1],unique = dgl.mapByNodeSet(self.ramapNodeTable[:seedPtr],unique,cacheGraph[0],cacheGraph[1])
         logger.info("cuda remapping func Time {:.5f}s".format(time.time()-t))
-
         transTime = time.time()
         if self.framework == "dgl":
             layerNUM = len(mapping_ptr) - 1
@@ -299,25 +340,21 @@ class CustomDataset(Dataset):
                     dstNUM,_ = torch.max(dst,dim=0)
                     srcNUM,_ = torch.max(src,dim=0)
                     dstNUM += 1
-                    srcNUM += 1
-                    block = self.create_dgl_block(data,srcNUM,dstNUM)
+                    srcNUM += 1      
                 elif layer == layerNUM:
                     dstNUM = srcNUM
                     srcNUM = len(unique)
-                    block = self.create_dgl_block(data,srcNUM,dstNUM)
                 else:
                     dstNUM = srcNUM
                     srcNUM,_ = torch.max(src,dim=0)
                     srcNUM += 1
-                    block = self.create_dgl_block(data,srcNUM,dstNUM)
+                block = self.create_dgl_block(data,srcNUM,dstNUM)
                 blocks.insert(0,block)
         elif self.framework == "pyg":
             src = cacheGraph[0][:mapping_ptr[-1]].to(torch.int64)
             dst = cacheGraph[1][:mapping_ptr[-1]].to(torch.int64)
             blocks = torch.stack((src, dst), dim=0)
         logger.info("trans Time {:.5f}s".format(time.time()-transTime))
-        
-        
         logger.info("==>sampleNeigGPU_NC() func time {:.5f}s".format(time.time()-sampleStart))
         logger.info("-"*30)
         return blocks,unique
@@ -329,16 +366,19 @@ class CustomDataset(Dataset):
             number = self.batchsize * 3
         tmp = number
         cacheGraph = [[],[]]
+        remapTable = []
         for _, fan in enumerate(self.fanout):
-            dst = torch.full((tmp * fan,), -1, dtype=torch.int32).to("cuda:0")  # 使用PyTorch张量，指定dtype
-            src = torch.full((tmp * fan,), -1, dtype=torch.int32).to("cuda:0")  # 使用PyTorch张量，指定dtype
+            dst = torch.full((tmp * fan,), -1, dtype=torch.int32).cuda()  # 使用PyTorch张量，指定dtype
+            src = torch.full((tmp * fan,), -1, dtype=torch.int32).cuda()  # 使用PyTorch张量，指定dtype
             cacheGraph[0].append(src)
             cacheGraph[1].append(dst)
             tmp = tmp * (fan + 1)
-
+        remapTable = copy.deepcopy(cacheGraph[0])
+        remapTable.append(cacheGraph[1][-1])
+        remapTable = torch.cat(remapTable,dim=0).to(torch.int32).cuda()
         cacheGraph[0] = torch.cat(cacheGraph[0],dim=0)
         cacheGraph[1] = torch.cat(cacheGraph[1],dim=0)
-        return cacheGraph
+        return cacheGraph ,remapTable
 
     def preGraphBatch(self):
         preBatchTime = time.time()
@@ -401,7 +441,7 @@ class CustomDataset(Dataset):
     def featMerge(self,uniqueList):
         featTime = time.time() 
         if self.lossG == False:
-            test = self.feats[uniqueList.to(torch.int64).to(self.feats.device)]
+            test = self.feats[self.addFeatMap[uniqueList.to(torch.int64).to(self.feats.device)]]
         elif self.lossG == True:
             mapIdx = self.lossMap[uniqueList.to(self.lossMap.device).to(torch.int64)]      
             test = self.feats[mapIdx.to(torch.int64).to(self.feats.device)]        
