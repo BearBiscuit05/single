@@ -130,7 +130,8 @@ class CustomDataset(Dataset):
     def randomTrainList(self): 
         epochList = []
         for _ in range(self.maxEpoch + 1): # 额外多增加一行
-            random_array = np.arange(0, self.partNUM, dtype=np.int32)
+            #random_array = np.arange(0, self.partNUM, dtype=np.int32)
+            random_array = np.array([0, 6, 1, 3, 7, 4, 5, 2])
             epochList.append(random_array)
         return epochList
 
@@ -195,20 +196,15 @@ class CustomDataset(Dataset):
         sameNode = torch.as_tensor(np.fromfile(sameNodeInfoPath, dtype = np.int32))
         diffNode = torch.as_tensor(np.fromfile(diffNodeInfoPath, dtype = np.int32))
         res1_one, res2_one = torch.split(sameNode, (sameNode.shape[0] // 2))
-        sameNode = None
         res1_zero, res2_zero = torch.split(diffNode, (diffNode.shape[0] // 2))
-        diffNode = None
         # tmp_feat = np.fromfile(filePath + "/feat.bin", dtype=np.float32)
-        addFeat = torch.as_tensor(np.fromfile(filePath + "/addFeat.bin", dtype=np.float32).reshape(-1, self.featlen))
-
+        addFeat = torch.as_tensor(np.fromfile(filePath + "/addfeat.bin", dtype=np.float32).reshape(-1, self.featlen))
         replace_idx = map[res1_zero[:addFeat.shape[0]].to(torch.int64)].to(torch.int64)
 
         newMap = torch.clone(map)
-        newMap[res2_zero.to(torch.int64)] = res1_zero.to(torch.int64)
-        newMap[res2_one.to(torch.int64)] = res1_one.to(torch.int64)
-        res1_one, res2_one, res1_zero, res2_zero = None,None,None,None
-        addFeatInfo = {"addFeat": addFeat, "replace_idx": replace_idx, "map": newMap}
-        
+        newMap[res2_zero.to(torch.int64)] = map[res1_zero.to(torch.int64)]
+        newMap[res2_one.to(torch.int64)] = map[res1_one.to(torch.int64)]
+        addFeatInfo = {"addFeat": addFeat, "replace_idx": replace_idx, "map": newMap} 
         self.preFetchDataCache.put([indices,indptr,addFeatInfo])
         print(f"pre data time :{time.time() - start:.4f}s...")
         return 0
@@ -239,9 +235,7 @@ class CustomDataset(Dataset):
             self.indptr,self.indices,self.lossMap = loss_csr(self.indptr,self.indices,cutNode,saveNode)
             print(f"loss_csr time :{time.time() - start:.4f}s...")
             
-            # 判断是否要扩展
-            torch.cuda.empty_cache()
-            gc.collect()
+            emptyCache()
             start = time.time()
             if preFetch == False:
                 preFeat = np.fromfile(filePath + "/feat.bin", dtype=np.float32).reshape(-1, self.featlen)
@@ -253,13 +247,14 @@ class CustomDataset(Dataset):
         else:
             # 如果不需要切割，则之间加载全部feat
             self.lossG = False
-            self.feats = []
-            torch.cuda.empty_cache()
-            gc.collect()
+            #self.feats = []
+            emptyCache()
             if preFetch == False:
-                # TODO :逻辑需要修改，实际只有第一个需要全加载
-                preFeat = np.fromfile(filePath + "/feat.bin", dtype=np.float32).reshape(-1, self.featlen)
-                self.feats = torch.from_numpy(preFeat).to(self.featDevice)
+
+                print("preFetch")
+                preFeat = np.fromfile(filePath + "/test_feat.bin", dtype=np.float32).reshape(-1, self.featlen)
+                self.feats[:len(preFeat)] = torch.from_numpy(preFeat)
+                self.feats = self.feats.to(self.featDevice)
             else:
                 # predata[2] = predata[2].reshape(-1, self.featlen)
                 # self.feats = torch.from_numpy(predata[2]).to(self.featDevice)
@@ -270,17 +265,12 @@ class CustomDataset(Dataset):
                 addFeat = addFeatInfo['addFeat'].to(self.featDevice)
                 replace_idx = addFeatInfo['replace_idx'].to(self.featDevice)
                 self.feats[replace_idx] = addFeat
-                addFeat, replace_idx = None, None
 
                 if (addFeatInfo['map'] != None):
                     print("需要修改map的值")
-                    # TODO:为什么不合成为1步
-                    map = addFeatInfo['map'].to(self.featDevice)
-                    self.addFeatMap = map
-                    map = None
-                addFeatInfo = None           
+                    self.addFeatMap = addFeatInfo['map'].to(self.featDevice)
+                    map = None        
                 print("修改map,addFeat完成 {:.4f}".format(time.time() - start_time))
-
     def loadingLabels(self,GID):
         filePath = self.dataPath + "/part" + str(GID)
         self.nodeLabels = torch.as_tensor(np.fromfile(filePath+"/labels.bin", dtype=np.int64))
@@ -289,11 +279,11 @@ class CustomDataset(Dataset):
     def sampleNeigGPU_NC(self,sampleIDs,cacheGraph,batchlen):     
         logger.info("----------[sampleNeigGPU_NC]----------")
         sampleIDs = sampleIDs.to(torch.int32).to('cuda:0')
-        ptr = 0
-        mapping_ptr = [ptr]
+        
         sampleStart = time.time()
         
-        seedPtr,NUM = 0, 0
+        ptr,seedPtr,NUM = 0, 0, 0
+        mapping_ptr = [ptr]
         for l, fan_num in enumerate(self.fanout):
             if l == 0:
                 seed_num = batchlen
@@ -390,7 +380,6 @@ class CustomDataset(Dataset):
             self.initNextGraphData()
         cacheTime = time.time()
         cacheGraph = copy.deepcopy(self.template_cache_graph)
-        # TODO: 
         sampleIDs = -1 * torch.ones(self.batchsize,dtype=torch.int64)
         logger.info("construct copy graph and label cost {:.5f}s".format(time.time()-cacheTime))
         
@@ -410,13 +399,7 @@ class CustomDataset(Dataset):
 
         ##
         sampleTime = time.time()
-        if self.train_name == "LP":
-            negNUM = 1
-            uniqueSeed,raw_edges,src_cat,dst_cat = self.getNegNode(sampleIDs,batchlen,negNUM=negNUM)
-            batchlen = len(uniqueSeed)
-            blocks,uniqueList = self.sampleNeigGPU_LP(uniqueSeed,raw_edges,cacheGraph,batchlen)
-        else:
-            blocks,uniqueList = self.sampleNeigGPU_NC(sampleIDs,cacheGraph,batchlen)
+        blocks,uniqueList = self.sampleNeigGPU_NC(sampleIDs,cacheGraph,batchlen)
         logger.info("sample subG all cost {:.5f}s".format(time.time()-sampleTime))
         ##
      
@@ -424,10 +407,7 @@ class CustomDataset(Dataset):
         cacheFeat = self.featMerge(uniqueList)
         logger.info("feat merge cost {:.5f}s".format(time.time()-featTime))
         
-        if self.train_name == "LP":
-            cacheData = [blocks,cacheFeat,cacheLabel,src_cat,dst_cat,batchlen]
-        else:
-            cacheData = [blocks,cacheFeat,cacheLabel,batchlen]
+        cacheData = [blocks,cacheFeat,cacheLabel,batchlen]
         self.graphPipe.put(cacheData)
 
         self.trainptr += 1

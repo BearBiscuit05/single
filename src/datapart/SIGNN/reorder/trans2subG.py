@@ -21,10 +21,6 @@ def acc_ana(tensor):
     num_greater_than_1 = torch.sum(tensor > 1).item() 
     percentage_greater_than_1 = (num_greater_than_1 / total_elements) * 100
     print(f"use by multi train nodes : {percentage_greater_than_1:.2f}%")
-    # edgeNUM = edgeTable.cpu().sum() - edgeNUM
-    # print(f"edge add to subG : {edgeNUM} , {edgeNUM * 1.0 / allEdgeNUM * 100 :.2f}% of total edges")
-    # print(f"after {index} BFS has {torch.nonzero(nodeTable).size(0)} nodes, "
-    # f"{torch.nonzero(nodeTable).size(0) * 1.0 / maxID * 100 :.2f}% of total nodes")
 
 RUNTIME = 0
 SAVETIME = 0
@@ -115,7 +111,8 @@ def PRgenG(RAWPATH,nodeNUM,partNUM,savePath=None):
 
     nodeValue = template_array.clone()
     nodeInfo = template_array.clone()
-    nodeValue[trainIds] = 10000
+    # value setting
+    nodeValue[trainIds] = 100000
 
     # random method
     shuffled_indices = torch.randperm(trainIds.size(0))
@@ -181,9 +178,14 @@ def PRgenG(RAWPATH,nodeNUM,partNUM,savePath=None):
             offset += sliceLen
         start = time.time()
         partValue = nodeValue[nodeIndex]  
-        _ , sort_indice = torch.sort(partValue,dim=0,descending=True)
+
+        # _ , sort_indice = torch.sort(partValue,dim=0,descending=True)
+        value , sort_indice = torch.sort(partValue,dim=0,descending=True)
+
         sort_nodeid = nid[sort_indice]
+        saveBin(value,"value.bin")
         saveBin(sort_nodeid,PRvaluePath)
+        exit(-1)
 
 # =============== 2.graphToSub    
 def nodeShuffle(raw_node,raw_graph):
@@ -272,7 +274,6 @@ def sliceIds(Ids,sliceTable):
     beginIndex = 0
     ans = []
     for tar in sliceTable[1:]:
-        print(Ids)
         position = torch.searchsorted(Ids, tar)
         slice = Ids[beginIndex:position]
         ans.append(slice)
@@ -323,8 +324,7 @@ def genAddFeat(beginId,addIdx,SAVEPATH,FEATPATH,partNUM,nodeNUM,sliceNUM,featLen
     file = SAVEPATH + f"/part{beginId}/raw_nodes.bin"
     ids = torch.as_tensor(np.fromfile(file,dtype=np.int32))
     addIdx.append(ids)
-    print(addIdx)
-    exit
+
     for i in range(partNUM+1):
         addIdx[i] = sliceIds(addIdx[i],boundList)
 
@@ -334,15 +334,14 @@ def genAddFeat(beginId,addIdx,SAVEPATH,FEATPATH,partNUM,nodeNUM,sliceNUM,featLen
         sliceFeat = featSlice(FEATPATH,beginIdx,endIdx,featLen).cuda()
         for index in range(partNUM + 1):
             if index == partNUM:
-                fileName = SAVEPATH + f"/part{beginId}/test_feat.bin"
+                fileName = SAVEPATH + f"/part{beginId}/feat.bin"
             else:
-                fileName = SAVEPATH + f"/part{index}/test_addfeat.bin"
+                fileName = SAVEPATH + f"/part{index}/addfeat.bin"
             SubIdsList = addIdx[index][sliceIndex]
             t_SubIdsList = SubIdsList - beginIdx
-            subFeat = sliceFeat[t_SubIdsList.to(torch.int64).cuda()]
-            subFeat = subFeat.cpu()
-            saveBin(subFeat,fileName,addSave=sliceIndex)
-
+            addFeat = sliceFeat[t_SubIdsList.to(torch.int64).cuda()]
+            addFeat = addFeat.cpu()
+            saveBin(addFeat,fileName,addSave=sliceIndex)
 
 # =============== 4.addFeat
 cur ,res = [] ,[]
@@ -406,7 +405,7 @@ def genFeatIdx(part_num, base_path, nodeList, part_seq, featLen, maxNodeNum):
     res2 = torch.zeros(maxNodeNum, dtype=torch.int32).cuda()
     base_path += '/part'
     addIndex = [[] for _ in range(part_num)]
-    for i in range(1, part_num + 1):
+    for i in range(0, part_num):
         cur_part = part_seq[i]
         next_part = part_seq[(i+1) % part_num]
         curNode = nodeList[cur_part].cuda()
@@ -437,8 +436,8 @@ def genFeatIdx(part_num, base_path, nodeList, part_seq, featLen, maxNodeNum):
             
 
         nextPath = base_path + str(next_part)
-        sameNodeInfoPath = nextPath + '/test_sameNodeInfo.bin'
-        diffNodeInfoPath = nextPath + '/test_diffNodeInfo.bin'
+        sameNodeInfoPath = nextPath + '/sameNodeInfo.bin'
+        diffNodeInfoPath = nextPath + '/diffNodeInfo.bin'
         sameNode = torch.cat((res1_one, res2_one), dim = 0)
         diffNode = torch.cat((res1_zero, res2_zero), dim = 0)
         saveBin(sameNode.cpu(), sameNodeInfoPath)
@@ -446,13 +445,13 @@ def genFeatIdx(part_num, base_path, nodeList, part_seq, featLen, maxNodeNum):
         sameNode, diffNode = None, None
 
         # 特征生成部分 TODO
-        addIndex[next_part] = replace_value
-        return addIndex
+        addIndex[next_part] = nodeList[next_part][replace_value.to(torch.int64)]
+    return addIndex
 
 
 if __name__ == '__main__':
-    # JSONPATH = "/home/bear/workspace/single-gnn/datasetInfo.json"
-    JSONPATH = "/home/gr/single-gnn/datasetInfo.json"
+    JSONPATH = "/home/bear/workspace/single-gnn/datasetInfo.json"
+    # JSONPATH = "/home/gr/single-gnn/datasetInfo.json"
     partitionNUM = 8
     sliceNUM = 8
     with open(JSONPATH, 'r') as file:
@@ -473,11 +472,11 @@ if __name__ == '__main__':
         # for index,trainids in enumerate(trainBatch):
         #     t = analysisG(graph,maxID,trainId=trainids,savePath=subGSavePath+f"/part{index}")
         
-    #     startTime = time.time()
-    #     t1 = PRgenG(GRAPHPATH,maxID,partitionNUM,savePath=subGSavePath)
-    #     print(f"run time cost:{RUNTIME:.3f}")
-    #     print(f"save time cost:{SAVETIME:.3f}")
-    #     print(f"partition all cost:{time.time()-startTime:.3f}s")
+        startTime = time.time()
+        t1 = PRgenG(GRAPHPATH,maxID,partitionNUM,savePath=subGSavePath)
+        print(f"run time cost:{RUNTIME:.3f}")
+        print(f"save time cost:{SAVETIME:.3f}")
+        print(f"partition all cost:{time.time()-startTime:.3f}s")
     
         RAWDATAPATH = data[NAME]["processedPath"]
         FEATPATH = data[NAME]["rawFilePath"] + "/feat.bin"
@@ -491,23 +490,22 @@ if __name__ == '__main__':
     #     print(f"trans graph cost time{time.time() - MERGETIME:.3f}s ...")
     
     
-        diffMatrix = [[0 for _ in range(partitionNUM)] for _ in range(partitionNUM)]
-        startTime1 = time.time()
-        nodeList = []
-        maxNodeNum,minPath = cal_min_path(diffMatrix , nodeList, partitionNUM, data[NAME]["processedPath"])
-        print(f"计算最优加载路径用时{time.time() - startTime1:.4f}s")
-        print(f"part最大节点数: {maxNodeNum},最优加载路径为:{res}")
+        # diffMatrix = [[0 for _ in range(partitionNUM)] for _ in range(partitionNUM)]
+        # startTime1 = time.time()
+        # nodeList = []
+        # maxNodeNum,minPath = cal_min_path(diffMatrix , nodeList, partitionNUM, data[NAME]["processedPath"])
+        # print(f"计算最优加载路径用时{time.time() - startTime1:.4f}s")
+        # print(f"part最大节点数: {maxNodeNum},最优加载路径为:{res}")
         
-        res = [2, 4, 3, 5, 6, 1, 0, 7]
-        trainPath = np.array(res)
-        saveBin(trainPath,SAVEPATH+f'/trainPath.bin')
-
+        # # res = [2, 4, 3, 5, 6, 1, 0, 7]
+        # trainPath = np.array(res)
+        # saveBin(trainPath,SAVEPATH+f'/trainPath.bin')
         
-        startTime1 = time.time()
-        addIdx = genFeatIdx(partitionNUM, SAVEPATH, nodeList, res, featLen, maxNodeNum)
-        print(f"生成addFeat用时{time.time() - startTime1:.4f}s")
+        # startTime1 = time.time()
+        # addIdx = genFeatIdx(partitionNUM, SAVEPATH, nodeList, res, featLen, maxNodeNum)
+        # print(f"生成addFeat用时{time.time() - startTime1:.4f}s")
         
-        genAddFeat(res[0],addIdx,SAVEPATH,FEATPATH,partitionNUM,nodeNUM,sliceNUM,featLen)
+        # genAddFeat(res[0],addIdx,SAVEPATH,FEATPATH,partitionNUM,nodeNUM,sliceNUM,featLen)
 
     #     FEATTIME = time.time()
     #     genSubGFeat(SAVEPATH,FEATPATH,partitionNUM,nodeNUM,sliceNUM,featLen)

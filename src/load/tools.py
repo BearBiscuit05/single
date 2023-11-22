@@ -3,6 +3,7 @@ import dgl
 import numpy as np
 import time
 from memory_profiler import profile
+import gc
 
 def featSlice(raw_feat,beginIndex,endIndex,featLen):
     blockByte = 4 # float32 4byte
@@ -110,3 +111,7 @@ def loss_feat(loss_feat,raw_feat, sliceNUM, id2featMap, featLen,device):
     #print(f"Total feat slice time: {time.time() - start_loss_feat : .4f} seconds")
     #print('-'*20)
     # return loss_feat
+
+def emptyCache():
+    torch.cuda.empty_cache()
+    gc.collect()
