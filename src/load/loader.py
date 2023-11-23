@@ -87,11 +87,11 @@ class CustomDataset(Dataset):
         self.trainLoop = 0              # 当前子图可读取次数      
         self.lossMap = []
         #### mmap 特征部分 ####
-        self.feats = torch.zeros([self.maxPartNodeNUM, self.featlen], dtype=torch.float32).to(self.featDevice)
+        self.feats = torch.zeros([self.maxPartNodeNUM, self.featlen], dtype=torch.float32).to(self.featDevice)  ## 这一步会爆显存
         self.addFeatMap = torch.arange(self.maxPartNodeNUM, dtype=torch.int64)
 
         #### 数据预取 ####
-        self.template_cache_graph , self.ramapNodeTable = self.initCacheData()
+        self.template_cache_graph , self.ramapNodeTable = self.initCacheData() # CPU , GPU
         self.initNextGraphData()
         self.uniTable = torch.zeros(len(self.ramapNodeTable),dtype=torch.int32).cuda()
 
@@ -197,7 +197,6 @@ class CustomDataset(Dataset):
         diffNode = torch.as_tensor(np.fromfile(diffNodeInfoPath, dtype = np.int32))
         res1_one, res2_one = torch.split(sameNode, (sameNode.shape[0] // 2))
         res1_zero, res2_zero = torch.split(diffNode, (diffNode.shape[0] // 2))
-        # tmp_feat = np.fromfile(filePath + "/feat.bin", dtype=np.float32)
         addFeat = torch.as_tensor(np.fromfile(filePath + "/addfeat.bin", dtype=np.float32).reshape(-1, self.featlen))
         replace_idx = map[res1_zero[:addFeat.shape[0]].to(torch.int64)].to(torch.int64)
 
@@ -271,6 +270,7 @@ class CustomDataset(Dataset):
                     self.addFeatMap = addFeatInfo['map'].to(self.featDevice)
                     map = None        
                 print("修改map,addFeat完成 {:.4f}".format(time.time() - start_time))
+    
     def loadingLabels(self,GID):
         filePath = self.dataPath + "/part" + str(GID)
         self.nodeLabels = torch.as_tensor(np.fromfile(filePath+"/labels.bin", dtype=np.int64))

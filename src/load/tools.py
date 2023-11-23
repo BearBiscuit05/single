@@ -32,17 +32,21 @@ def genSliceBound(sliceNUM,nodeNUM):
     boundList[-1] = nodeNUM
     return boundList
 
-def countMemToLoss(edgeNUM,nodeNUM,featLen,ratedMem):
-    int32Byte = 4
-    int64Byte = 8
-    float32Byte = 4
-    MemNeed = (edgeNUM + nodeNUM + 1) * int32Byte + nodeNUM * featLen * float32Byte + nodeNUM * int64Byte
-    MemNeed_GB = MemNeed / (1024 ** 3)
-    #print(f"Estimated Memory Needed: {MemNeed_GB:.2f} GB")
-    if ratedMem >= MemNeed:
+def countMemToLoss(edgeNUM,nodeNUM,featLen,ratedMem,printInfo=False):
+    int32Byte, int64Byte, float32Byte = 4, 8, 4
+    MemNeed_B = (edgeNUM + nodeNUM + 1) * int32Byte + nodeNUM * featLen * float32Byte + nodeNUM * int64Byte
+    MemNeed_KB = MemNeed_B / (1024 ** 1)
+    MemNeed_MB = MemNeed_B / (1024 ** 2)
+    MemNeed_GB = MemNeed_B / (1024 ** 3)
+    if printInfo:
+        print(f"Basic Parameters:")
+        print(f"Number of Edges: {edgeNUM},Number of Nodes: {nodeNUM},Feature Length: {featLen}")
+        print(f"Memory Needed: {MemNeed_GB:.2f} GB/{MemNeed_MB:.2f} MB/{MemNeed_KB:.2f} KB/{MemNeed_B:.2f} B")
+    if ratedMem >= MemNeed_B:
         return False
     else:
         return True
+
 #@profile
 def loss_csr(raw_ptr,raw_indice,lossNode,saveNode):
     nodeNUM = raw_ptr.shape[0] - 1
@@ -61,7 +65,6 @@ def loss_csr(raw_ptr,raw_indice,lossNode,saveNode):
     else:
         mask = torch.ones(nodeNUM, dtype=torch.bool).cuda()
         mask[lossNode.to(torch.int64)] = False
-        node_save_idx = saveNode
 
     ptr_diff[lossNode.to(torch.int64)] = 0
     # condition = ptr_diff > 100
@@ -73,27 +76,68 @@ def loss_csr(raw_ptr,raw_indice,lossNode,saveNode):
     id2featMap[lossNode.to(torch.int64)] = -1
     ptr_diff,mask = None,None
 
-    
-    # indice
     new_indice = raw_indice.clone()[:new_ptr[-1].item()]
     dgl.loss_csr(raw_ptr,new_ptr,raw_indice,new_indice)
     raw_ptr,raw_indice = None,None
     return new_ptr,new_indice,id2featMap
 
 
+def streamLossGraph(raw_ptr,raw_indice,lossNode,sliceNUM=1,randomLoss=0.5,degreeCut=None,CutRatio=0.5):
+    # ptr始终位于GPU中，indice同样位于GPU中，raw流式传入
+    raw_ptr = raw_ptr.cuda()
+    raw_indice = raw_indice.cpu()
+    nodeNUM = raw_ptr.shape[0] - 1
+    ptr_diff = torch.diff(raw_ptr)  # 0.01s
+
+    # 裁剪点 0.2s
+    length = lossNode.size(0)
+    selected_indices = torch.randperm(length)[:int(length * randomLoss)]
+    lossNode = lossNode[selected_indices]
+    mask = torch.ones(nodeNUM, dtype=torch.bool).cuda()
+    mask[lossNode.to(torch.int64)] = False
+    ptr_diff[lossNode.to(torch.int64)] = 0
+    
+    # 裁剪边
+    if degreeCut != None:
+        condition = ptr_diff >= degreeCut
+        ptr_diff[condition] = (ptr_diff[condition] * CutRatio).to(torch.int32) 
+
+    # allTime = time.time()
+    new_ptr = torch.cat((torch.zeros(1).to(torch.int32).to(ptr_diff.device),torch.cumsum(ptr_diff,dim = 0).to(torch.int32)))
+    id2featMap = mask.cumsum(dim=0).to(torch.int32)
+    id2featMap -= 1
+    id2featMap[lossNode.to(torch.int64)] = -1
+    ptr_diff,mask = None,None
+    # print(f"ptr_diff using time :{time.time()-allTime:.3f}s")
+    # indice
+
+    blockSize = (nodeNUM - 1) // sliceNUM + 1
+    bound = []
+    lastIdx = 0
+    for i in range(sliceNUM):
+        nextSlice = min((i+1)*blockSize,nodeNUM)
+        bound.append([lastIdx,nextSlice])
+        lastIdx = nextSlice
+
+    new_indice = torch.zeros(new_ptr[-1].item()-1,dtype=torch.int32,device="cuda:0")
+    # allTime = time.time()
+    for left,right in bound:
+        raw_off = raw_ptr[left:right+1]-raw_ptr[left].item()
+        new_off = new_ptr[left:right+1]-new_ptr[left].item()
+        rawIndiceOff = raw_indice[raw_ptr[left].item():raw_ptr[right].item()].cuda()
+        newIndiceOff = new_indice[new_ptr[left].item():new_ptr[right].item()]
+        dgl.loss_csr(raw_off,new_off,rawIndiceOff,newIndiceOff)
+    # print(f"loss_csr func using time :{time.time()-allTime:.3f}s")
+    raw_ptr,raw_indice = None,None
+    return new_ptr,new_indice,id2featMap
+
 #@profile
 def loss_feat(loss_feat,raw_feat, sliceNUM, id2featMap, featLen,device):
     # from cup to gpu with loss
-    #print('-'*20)
-    #start_preprocess = time.time()
     node_save_idx = torch.nonzero(id2featMap.cpu() >= 0).reshape(-1).to(torch.int32)
     boundList = genSliceBound(sliceNUM, node_save_idx.numel())
     idsSliceList = sliceIds(node_save_idx, boundList)
     #print(f"Preprocess time: {time.time() - start_preprocess : .4f} seconds")
-    
-    # start_preprocess = time.time()
-    #start_loss_feat = time.time()
-    # print(f"loss_feat creat time: {time.time() - start_preprocess : .4f} seconds")
     
     offset = 0
     for sliceIndex in range(sliceNUM):
