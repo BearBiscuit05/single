@@ -148,7 +148,6 @@ def trainIdxSubG(subGNode,trainSet):
     Lid = Lid.cpu().to(torch.int64)
     return Lid
 
-
 def rawData2GNNData(RAWDATAPATH,partitionNUM,LABELPATH):
     labels = np.fromfile(LABELPATH,dtype=np.int64)
     for i in range(partitionNUM):
@@ -168,9 +167,10 @@ def rawData2GNNData(RAWDATAPATH,partitionNUM,LABELPATH):
         node = np.fromfile(rawNodePath,dtype=np.int32)
         trainidx = np.fromfile(rawTrainPath,dtype=np.int64)  
         #print(f"loading data time : {time.time()-coostartTime:.4f}s")
+        
+        #coostartTime = time.time()
         remappedSrc,remappedDst,uniNode = nodeShuffle(node,data)
         subLabel = labels[uniNode.to(torch.int64)]
-        #coostartTime = time.time()
         indptr, indices = cooTocsc(remappedSrc,remappedDst,sliceNUM=(len(data) // (MAXEDGE//4))) 
         #print(f"coo data time : {time.time()-coostartTime:.4f}s")
         
@@ -181,6 +181,7 @@ def rawData2GNNData(RAWDATAPATH,partitionNUM,LABELPATH):
         saveBin(indptr,SubIndptrPath)
         saveBin(indices,SubIndicesPath)
         #print(f"save time : {time.time()-coostartTime:.4f}s")
+        
         #remapstartTime = time.time()
         pridx = torch.as_tensor(np.fromfile(PRvaluePath,dtype=np.int32))
         remappedSrc,_ = remapEdgeId(uniNode,pridx,None,device=torch.device('cuda:0'))
@@ -197,6 +198,8 @@ def featSlice(FEATPATH,beginIndex,endIndex,featLen):
     return subFeat.reshape(-1,featLen)
 
 def sliceIds(Ids,sliceTable):
+    # 对Ids切割成sliceTable指定的范围
+    # Ids只能是排序后的结果
     beginIndex = 0
     ans = []
     for tar in sliceTable[1:]:
@@ -208,8 +211,7 @@ def sliceIds(Ids,sliceTable):
 
 def genSubGFeat(SAVEPATH,FEATPATH,partNUM,nodeNUM,sliceNUM,featLen):
     # 获得切片
-    torch.cuda.empty_cache()
-    gc.collect()
+    emptyCache()
     slice = nodeNUM // sliceNUM + 1
     boundList = [0]
     start = slice
@@ -237,6 +239,7 @@ def genSubGFeat(SAVEPATH,FEATPATH,partNUM,nodeNUM,sliceNUM,featLen):
             saveBin(subFeat,fileName,addSave=sliceIndex)
 
 def genAddFeat(beginId,addIdx,SAVEPATH,FEATPATH,partNUM,nodeNUM,sliceNUM,featLen):
+    # addIdx 此时处于cuda中
     emptyCache()
     slice = nodeNUM // sliceNUM + 1
     boundList = [0]
@@ -247,8 +250,8 @@ def genAddFeat(beginId,addIdx,SAVEPATH,FEATPATH,partNUM,nodeNUM,sliceNUM,featLen
     boundList[-1] = nodeNUM
 
     file = SAVEPATH + f"/part{beginId}/raw_nodes.bin"
-    ids = torch.as_tensor(np.fromfile(file,dtype=np.int32))
-    addIdx.append(ids)
+    ids = torch.as_tensor(np.fromfile(file,dtype=np.int32),device="cuda")
+    addIdx.append(ids)  # 增加最初的加载子图的所有索引
 
     for i in range(partNUM+1):
         addIdx[i] = sliceIds(addIdx[i],boundList)
@@ -264,7 +267,7 @@ def genAddFeat(beginId,addIdx,SAVEPATH,FEATPATH,partNUM,nodeNUM,sliceNUM,featLen
                 fileName = SAVEPATH + f"/part{index}/addfeat.bin"
             SubIdsList = addIdx[index][sliceIndex]
             t_SubIdsList = SubIdsList - beginIdx
-            addFeat = sliceFeat[t_SubIdsList.to(torch.int64).cuda()]
+            addFeat = sliceFeat[t_SubIdsList.to(torch.int64)]   # t_SubIdsList存在于GPU中
             addFeat = addFeat.cpu()
             saveBin(addFeat,fileName,addSave=sliceIndex)
 
@@ -304,8 +307,8 @@ def cal_min_path(diffMatrix, nodesList, part_num, base_path):
         maxNodeNum = max(maxNodeNum, nodes.shape[0])
         nodesList.append(nodes)
     
-    res1 = torch.zeros(maxNodeNum, dtype=torch.int32).cuda()
-    res2 = torch.zeros(maxNodeNum, dtype=torch.int32).cuda()
+    res1 = torch.zeros(maxNodeNum, dtype=torch.int32,device="cuda")
+    res2 = torch.zeros(maxNodeNum, dtype=torch.int32,device="cuda")
     print(f"加载所有节点{time.time() - start:.4f}s")
     for i in range(part_num):
         for j in range(i + 1,part_num):
@@ -315,7 +318,7 @@ def cal_min_path(diffMatrix, nodesList, part_num, base_path):
             res2.fill_(0)
             dgl.findSameNode(node1, node2, res1, res2)
             sameNum = torch.sum(res1).item()
-            diffMatrix[i][j] = node2.shape[0] - sameNum
+            diffMatrix[i][j] = node2.shape[0] - sameNum # j 相对 i 需要进行的额外加载
             diffMatrix[j][i] = node1.shape[0] - sameNum
 
             print("part{} shape:{},part{} shape:{}, 相同的节点数:{}".format(i,node1.shape,j,node2.shape,sameNum))
@@ -326,8 +329,8 @@ def cal_min_path(diffMatrix, nodesList, part_num, base_path):
     return maxNodeNum, res
 
 def genFeatIdx(part_num, base_path, nodeList, part_seq, featLen, maxNodeNum):
-    res1 = torch.zeros(maxNodeNum, dtype=torch.int32).cuda()
-    res2 = torch.zeros(maxNodeNum, dtype=torch.int32).cuda()
+    res1 = torch.zeros(maxNodeNum, dtype=torch.int32,device="cuda")
+    res2 = torch.zeros(maxNodeNum, dtype=torch.int32,device="cuda")
     base_path += '/part'
     addIndex = [[] for _ in range(part_num)]
     for i in range(0, part_num):
@@ -353,11 +356,11 @@ def genFeatIdx(part_num, base_path, nodeList, part_seq, featLen, maxNodeNum):
 
         if (nextLen > same_num):
             if(curLen < nextLen or curLen == nextLen):
-                replace_value = res2_zero.cuda()
+                replaceIdx = res2_zero.cuda()
             elif(curLen > nextLen):
-                replace_value = res2_zero[:nextLen - same_num].cuda()
+                replaceIdx = res2_zero[:nextLen - same_num].cuda()  # 不进行裁剪会导致feat索引越界
         else:
-            replace_value = torch.Tensor([]).to(torch.int32)
+            replaceIdx = torch.Tensor([]).to(torch.int32)
             
 
         nextPath = base_path + str(next_part)
@@ -369,7 +372,8 @@ def genFeatIdx(part_num, base_path, nodeList, part_seq, featLen, maxNodeNum):
         saveBin(diffNode.cpu(), diffNodeInfoPath)
         sameNode, diffNode = None, None
 
-        addIndex[next_part] = nodeList[next_part][replace_value.to(torch.int64)]
+        # 缓存需要重加载的索引
+        addIndex[next_part] = nodeList[next_part][replaceIdx.to(torch.int64)]
     return addIndex
 
 
@@ -385,15 +389,6 @@ if __name__ == '__main__':
         GRAPHPATH = data[NAME]["rawFilePath"]
         maxID = data[NAME]["nodes"]
         subGSavePath = data[NAME]["processedPath"]
-        
-        # trainId = torch.tensor(np.fromfile(GRAPHPATH + "/trainIds.bin",dtype=np.int64))
-        # shuffled_indices = torch.randperm(trainId.size(0))
-        # trainId = trainId[shuffled_indices]
-        # trainBatch = torch.chunk(trainId, partitionNUM, dim=0)
-        # graph = np.fromfile(GRAPHPATH+"/graph.bin",dtype=np.int32)
-        # startTime = time.time()
-        # for index,trainids in enumerate(trainBatch):
-        #     t = analysisG(graph,maxID,trainId=trainids,savePath=subGSavePath+f"/part{index}")
         
         startTime = time.time()
         t1 = PRgenG(GRAPHPATH,maxID,partitionNUM,savePath=subGSavePath)
@@ -421,7 +416,3 @@ if __name__ == '__main__':
         addIdx = genFeatIdx(partitionNUM, SAVEPATH, nodeList, res, featLen, maxNodeNum)
         print(f"生成addFeat用时{time.time() - startTime1:.4f}s")
         genAddFeat(res[0],addIdx,SAVEPATH,FEATPATH,partitionNUM,nodeNUM,sliceNUM,featLen)
-
-    #     FEATTIME = time.time()
-    #     genSubGFeat(SAVEPATH,FEATPATH,partitionNUM,nodeNUM,sliceNUM,featLen)
-    #     print(f"graph feat gen cost time{time.time() - FEATTIME:.3f}...")
