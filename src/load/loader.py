@@ -131,9 +131,8 @@ class CustomDataset(Dataset):
     def randomTrainList(self): 
         epochList = []
         for _ in range(self.maxEpoch + 1): # 额外多增加一行
-            #random_array = np.arange(0, self.partNUM, dtype=np.int32)
-            random_array = np.array([0, 6, 1, 3, 7, 4, 5, 2])
-            epochList.append(random_array)
+            tarinArray=np.fromfile(self.dataPath+"/trainPath.bin",dtype=np.int64)
+            epochList.append(tarinArray)
         return epochList
 
 ########################## 加载/释放 图结构数据 ##########################
@@ -254,7 +253,7 @@ class CustomDataset(Dataset):
             self.lossG = False 
             self.indptr,self.indices = self.indptr.cuda(),self.indices.cuda()
             if predata == None: # 表明首次加载,直接迁移
-                self.feats = addFeat.cuda()
+                self.feats = torch.as_tensor(addFeat,device="cuda")
             else:
                 # 流式处理
                 streamAssign(self.feats,replace_idx,addFeat,sliceNUM=4)
@@ -263,9 +262,7 @@ class CustomDataset(Dataset):
 ########################## 采样图结构 ##########################
     def sampleNeigGPU_NC(self,sampleIDs,cacheGraph,batchlen):     
         logger.info("----------[sampleNeigGPU_NC]----------")
-        print_gpu_memory(0)
         sampleIDs = sampleIDs.to(torch.int32).to('cuda:0')
-        
         sampleStart = time.time()
         ptr,seedPtr,NUM = 0, 0, 0
         mapping_ptr = [ptr]
@@ -335,7 +332,6 @@ class CustomDataset(Dataset):
             src = cacheGraph[0][:mapping_ptr[-1]].to(torch.int64)
             dst = cacheGraph[1][:mapping_ptr[-1]].to(torch.int64)
             blocks = torch.stack((src, dst), dim=0)
-        print(blocks)
         logger.info("trans Time {:.5f}s".format(time.time()-transTime))
         logger.info("==>sampleNeigGPU_NC() func time {:.5f}s".format(time.time()-sampleStart))
         logger.info("-"*30)
@@ -441,8 +437,8 @@ def collate_fn(data):
 
 
 if __name__ == "__main__":
-    dataset = CustomDataset(curDir+"/../../config/FR.json")
-    with open(curDir+"/../../config/FR.json", 'r') as f:
+    dataset = CustomDataset(curDir+"/../../config/PD.json")
+    with open(curDir+"/../../config/PD.json", 'r') as f:
         config = json.load(f)
         batchsize = config['batchsize']
         epoch = config['maxEpoch']
@@ -451,7 +447,12 @@ if __name__ == "__main__":
     for index in range(2):
         start = time.time()
         loopTime = time.time()
-        for graph,feat,label,number in train_loader:
+        for graph,feat,number in train_loader:
+            print(graph)
+            print(feat.shape)
+            print(label.dtype)
+            print(number)
+            print('-'*20)
             count = count + 1
             # if count % 20 == 0:
             #     print("loop time:{:.5f}".format(time.time()-loopTime))
