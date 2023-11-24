@@ -35,18 +35,15 @@ def convert_to_tensor(data, dtype=torch.int32):
     else:
         return data.to(dtype)
 
-def cooTocsr(srcList,dstList,sliceNUM=1,device=torch.device('cpu')):
-    # compact src
-    emptyCache()    # empty GPU
+def cooTocsc(srcList,dstList,sliceNUM=1,device=torch.device('cpu')):
     dstList = dstList.cuda()
     inptr = torch.cat([torch.Tensor([0]).to(torch.int32).to(dstList.device),torch.cumsum(torch.bincount(dstList), dim=0)]).to(torch.int32)
-    indice = torch.zeros_like(srcList).to(torch.int32).cuda()
+    indice = torch.zeros_like(srcList,dtype=torch.int32,device="cuda")
     addr = inptr.clone()[:-1].cuda()
-    if sliceNUM == 1:
+    if sliceNUM <= 1:
         srcList = srcList.cuda()
-        dgl.cooTocsr(inptr,indice,addr,dstList,srcList) # TODO 压缩的函数的第四个参数，所以将dst与src顺序倒换
-        inptr = inptr.cpu() 
-        indice = indice.cpu()
+        dgl.cooTocsr(inptr,indice,addr,dstList,srcList) # compact dst , exchange place
+        inptr,indice = inptr.cpu(),indice.cpu()
         addr = None
         srcList = srcList.cpu()
         dstList = dstList.cpu()
@@ -59,19 +56,19 @@ def cooTocsr(srcList,dstList,sliceNUM=1,device=torch.device('cpu')):
         for _,(src_batch,dst_batch) in enumerate(zip(*batch)):
             src_batch = src_batch.cuda()
             dst_batch = dst_batch.cuda()
-            dgl.cooTocsr(inptr,indice,addr,dst_batch,src_batch) # compact dst save src
+            dgl.cooTocsr(inptr,indice,addr,dst_batch,src_batch) # compact dst , exchange place
         addr,dst_batch,src_batch= None,None,None
         inptr = inptr.cpu() 
         indice = indice.cpu()
         return inptr,indice
 
-def remapEdgeId(uniTable,srcList,dstList,device=torch.device('cpu')):
-    index = torch.arange(len(uniTable)).to(torch.int32)
-    remap = torch.zeros(torch.max(uniTable)+1).to(torch.int32)
-    # 构建ramap表
-    remap[uniTable.to(torch.int64)] = index
+def remapEdgeId(uniTable,srcList,dstList,device=torch.device('cpu'),remap=None):
+    if remap == None:
+        # 构建ramap表
+        index = torch.arange(len(uniTable),dtype=torch.int32,device=device)
+        remap = torch.zeros(torch.max(uniTable)+1,dtype=torch.int32,device=device)
+        remap[uniTable.to(torch.int64)] = index
     uniTable = uniTable.cpu()
-    remap = remap.to(device)
     if srcList != None:
         srcList = srcList.to(device)
         srcList = remap[srcList.to(torch.int64)]
@@ -80,17 +77,17 @@ def remapEdgeId(uniTable,srcList,dstList,device=torch.device('cpu')):
         dstList = dstList.to(device)
         dstList = remap[dstList.to(torch.int64)]
         dstList = dstList.cpu()
-    return srcList,dstList
+    return srcList,dstList,remap
 
-def coo2csr_sort(row,col):
-    sort_row,indice = torch.sort(row,dim=0)
-    indice = col[indice]
-    inptr = torch.cat([torch.Tensor([0]).to(torch.int32),torch.cumsum(torch.bincount(sort_row), dim=0)])
+def coo2csc_sort(row,col):  # src,dst
+    sort_col,indice = torch.sort(col,dim=0)
+    indice = row[indice]
+    inptr = torch.cat([torch.Tensor([0]).to(torch.int32),torch.cumsum(torch.bincount(sort_col), dim=0)])
     return inptr,indice
 
-def coo2csr_dgl(srcs,dsts):
-    g = dgl.graph((dsts,srcs)).formats('csr')       # 顺序倒换，等同于转换CSC，压缩dst
-    indptr, indices, _ = g.adj_sparse(fmt='csr')
+def coo2csc_dgl(srcs,dsts):
+    g = dgl.graph((srcs,dsts)).formats('csc')       # 顺序倒换，等同于转换CSC，压缩dst
+    indptr, indices, _ = g.adj_sparse(fmt='csc')
     return indptr,indices
 
 
