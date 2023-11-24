@@ -89,7 +89,7 @@ def coo2csr_sort(row,col):
     return inptr,indice
 
 def coo2csr_dgl(srcs,dsts):
-    g = dgl.graph((dsts,srcs)).formats('csr')
+    g = dgl.graph((dsts,srcs)).formats('csr')       # 顺序倒换，等同于转换CSC，压缩dst
     indptr, indices, _ = g.adj_sparse(fmt='csr')
     return indptr,indices
 

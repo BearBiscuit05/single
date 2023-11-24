@@ -105,12 +105,12 @@ def PRgenG(RAWPATH,nodeNUM,partNUM,savePath=None):
         #TODO 此部分由于修复了bug，需要对图的生成进行确认是否正确
         for i in range(sliceNUM):
             sliceLen = min((i+1)*offsetSize,len(edgeIndex))
-            g_gpu = graph[offset:sliceLen]
-            idx_gpu = edgeIndex[offset:sliceLen]
-            g_gpu,idx_gpu = g_gpu.cuda(),idx_gpu.cuda()
+            g_gpu = graph[offset:sliceLen]                  # 部分graph
+            idx_gpu = edgeIndex[offset:sliceLen]            # 部分graph对应索引的mask
+            g_gpu,idx_gpu = g_gpu.cuda(),idx_gpu.cuda()     # 迁移至GPU进行加速抽取
             subEdge = g_gpu[idx_gpu].cpu()
             saveBin(subEdge,DataPath,addSave=True)
-            offset = sliceLen
+            offset = sliceLen                       
         print(f"time :{time.time()-start:.3f}s")    
         partValue = nodeValue[nodeIndex]  
         _ , sort_indice = torch.sort(partValue,dim=0,descending=True)

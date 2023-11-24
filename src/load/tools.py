@@ -79,11 +79,12 @@ def loss_csr(raw_ptr,raw_indice,lossNode,saveNode):
     new_indice = raw_indice.clone()[:new_ptr[-1].item()]
     dgl.loss_csr(raw_ptr,new_ptr,raw_indice,new_indice)
     raw_ptr,raw_indice = None,None
+    emptyCache()
     return new_ptr,new_indice,id2featMap
 
 
 def streamLossGraph(raw_ptr,raw_indice,lossNode,sliceNUM=1,randomLoss=0.5,degreeCut=None,CutRatio=0.5):
-    # ptr始终位于GPU中，indice同样位于GPU中，raw流式传入
+    # raw_ptr,new_ptr始终位于GPU中，indice同样位于GPU中，raw流式传入
     raw_ptr = raw_ptr.cuda()
     raw_indice = raw_indice.cpu()
     nodeNUM = raw_ptr.shape[0] - 1
@@ -107,6 +108,11 @@ def streamLossGraph(raw_ptr,raw_indice,lossNode,sliceNUM=1,randomLoss=0.5,degree
     id2featMap = mask.cumsum(dim=0).to(torch.int32)
     id2featMap -= 1
     id2featMap[lossNode.to(torch.int64)] = -1
+    # print("id2featMap shape:",id2featMap.shape)
+    # print("mask shape:",mask.shape)
+    # print("loss_csr max map idx",torch.max(id2featMap))
+    # exit(-1)
+    
     ptr_diff,mask = None,None
     # print(f"ptr_diff using time :{time.time()-allTime:.3f}s")
     # indice
@@ -159,3 +165,29 @@ def loss_feat(loss_feat,raw_feat, sliceNUM, id2featMap, featLen,device):
 def emptyCache():
     torch.cuda.empty_cache()
     gc.collect()
+
+
+def print_gpu_memory(index):
+    # 打印显存信息
+    if torch.cuda.is_available():
+        gpu = torch.cuda.get_device_name(index)
+        memory_allocated = torch.cuda.memory_allocated(index) / 1024 ** 3  # 转换为GB
+        memory_cached = torch.cuda.memory_cached(index) / 1024 ** 3  # 转换为GB
+        print(f"GPU {index}: {gpu}")
+        print(f"  Allocated Memory: {memory_allocated:.2f} GB")
+        print(f"  Cached Memory: {memory_cached:.2f} GB")
+    else:
+        print("No GPU available.")
+    
+
+def streamAssign(rawValues,raplaceIdx,replaceValue,sliceNUM=4):
+    # 流式传递显存
+    # rawValues     位于cuda里面
+    # replaceValue  位于内存中
+    idxBatches = torch.chunk(raplaceIdx, sliceNUM, dim=0)
+    valueBatches = torch.chunk(replaceValue, sliceNUM, dim=0)
+    batch = [idxBatches, valueBatches]
+    for idx,value in zip(*batch):
+        idx = idx.cuda()
+        value = value.cuda()
+        rawValues[idx] = value
