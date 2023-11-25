@@ -54,7 +54,7 @@ class CustomDataset(Dataset):
         #### config json 部分 ####
         self.dataPath = ''
         self.batchsize,self.cacheNUM,self.partNUM = 0,0,0
-        self.maxEpoch,self.preRating,self.classes,self.epochInterval = 0,0,0,0
+        self.maxEpoch,self.classes,self.epochInterval = 0,0,0
         self.featlen = 0
         self.fanout = []
         self.maxPartNodeNUM,self.mem = 0,0
@@ -200,13 +200,16 @@ class CustomDataset(Dataset):
         sameNode = torch.as_tensor(np.fromfile(sameNodeInfoPath, dtype = np.int32))
         diffNode = torch.as_tensor(np.fromfile(diffNodeInfoPath, dtype = np.int32))
         res1_one, res2_one = torch.split(sameNode, (sameNode.shape[0] // 2))
-        res1_zero, res2_zero = torch.split(diffNode, (diffNode.shape[0] // 2))
+        
+        newMap = torch.clone(map)
+        newMap[res2_one.to(torch.int64)] = map[res1_one.to(torch.int64)]
+        if diffNode.shape[0] != 0:
+            res1_zero, res2_zero = torch.split(diffNode, (diffNode.shape[0] // 2))
+        else:
+            res1_zero,res2_zero = torch.Tensor([]),torch.Tensor([])
         addFeat = torch.as_tensor(np.fromfile(filePath + "/addfeat.bin", dtype=np.float32).reshape(-1, self.featlen))
         replace_idx = map[res1_zero[:addFeat.shape[0]].to(torch.int64)].to(torch.int64)
-
-        newMap = torch.clone(map)
         newMap[res2_zero.to(torch.int64)] = map[res1_zero.to(torch.int64)]
-        newMap[res2_one.to(torch.int64)] = map[res1_one.to(torch.int64)]
         addFeatInfo = {"addFeat": addFeat, "replace_idx": replace_idx, "map": newMap} 
         self.preFetchDataCache.put([indices,indptr,addFeatInfo,nodeLabels])
         print(f"pre data time :{time.time() - start:.4f}s...")
@@ -219,7 +222,7 @@ class CustomDataset(Dataset):
             # 第一次初始化全加载
             self.indices = torch.as_tensor(np.fromfile(filePath + "/indices.bin", dtype=np.int32))
             self.indptr = torch.as_tensor(np.fromfile(filePath + "/indptr.bin", dtype=np.int32))
-            self.nodeLabels = torch.as_tensor(np.fromfile(filePath + "/labels.bin", dtype=np.int32))
+            self.nodeLabels = torch.as_tensor(np.fromfile(filePath + "/labels.bin", dtype=np.int64))
             addFeat = np.fromfile(filePath + "/feat.bin", dtype=np.float32).reshape(-1, self.featlen)
             self.addFeatMap = torch.arange(self.maxPartNodeNUM, dtype=torch.int64).to(self.featDevice)  
         else:
@@ -260,7 +263,9 @@ class CustomDataset(Dataset):
             self.lossG = False 
             self.indptr,self.indices = self.indptr.cuda(),self.indices.cuda()
             if predata == None: # 表明首次加载,直接迁移
-                self.feats = torch.as_tensor(addFeat,device="cuda")
+                idx = torch.arange(addFeat.shape[0],dtype=torch.int64,device="cuda")
+                addFeat = torch.as_tensor(addFeat)
+                streamAssign(self.feats,idx,addFeat,sliceNUM=4)
             else:
                 # 流式处理
                 streamAssign(self.feats,replace_idx,addFeat,sliceNUM=4)
@@ -289,7 +294,6 @@ class CustomDataset(Dataset):
             elif self.lossG == True:
                 NUM = dgl.sampling.sample_with_edge_and_map(self.indptr,self.indices,
                     sampleIDs,seed_num,fan_num,out_src,out_dst,self.lossMap)
-            
             sampleIDs = cacheGraph[0][ptr:ptr+NUM.item()]
             ptr=ptr+NUM.item()
             mapping_ptr.append(ptr)
@@ -423,7 +427,7 @@ class CustomDataset(Dataset):
             test = self.feats[mapIdx.to(self.feats.device)]        
         logger.info("subG feat merge cost {:.5f}s".format(time.time()-featTime))
         return test
-
+    
 ########################## 数据调整 ##########################    
     def loadModeData(self,mode):
         logger.info("loading mode:'{}' data".format(mode))
@@ -442,8 +446,8 @@ def collate_fn(data):
 
 
 if __name__ == "__main__":
-    dataset = CustomDataset(curDir+"/../../config/PD.json")
-    with open(curDir+"/../../config/PD.json", 'r') as f:
+    dataset = CustomDataset(curDir+"/../../config/PA.json")
+    with open(curDir+"/../../config/PA.json", 'r') as f:
         config = json.load(f)
         batchsize = config['batchsize']
         epoch = config['maxEpoch']
@@ -453,11 +457,11 @@ if __name__ == "__main__":
         start = time.time()
         loopTime = time.time()
         for graph,feat,label,number in train_loader:
-            print(graph)
-            print(feat.shape)
-            print(label.dtype)
-            print(number)
-            print('-'*20)
+            # print(graph)
+            # print(feat.shape)
+            # print(label)
+            # print(number)
+            # print('-'*20)
             count = count + 1
             # if count % 20 == 0:
             #     print("loop time:{:.5f}".format(time.time()-loopTime))

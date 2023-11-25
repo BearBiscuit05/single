@@ -127,7 +127,6 @@ def nodeShuffle(raw_node,raw_graph):
     src_batches = list(torch.chunk(srcs_tensor, batch_size, dim=0))
     dst_batches = list(torch.chunk(dsts_tensor, batch_size, dim=0))
     batch = [src_batches, dst_batches]
-    start = time.time()
     src_emp,dst_emp = raw_node[:1].clone(), raw_node[:1].clone()    # 占位，无意义
     srcShuffled,dstShuffled,uniTable = dgl.mapByNodeSet(raw_node,uniTable,src_emp,dst_emp)
     remap = None
@@ -138,7 +137,6 @@ def nodeShuffle(raw_node,raw_graph):
     srcs_tensor = torch.cat(src_batches)
     dsts_tensor = torch.cat(dst_batches)
     uniTable = uniTable.cpu()
-    print(f"node shuffle time :{time.time()-start:.4f}")
     return srcs_tensor,dsts_tensor,uniTable
 
 def trainIdxSubG(subGNode,trainSet):
@@ -172,7 +170,8 @@ def rawData2GNNData(RAWDATAPATH,partitionNUM,LABELPATH):
         #coostartTime = time.time()
         remappedSrc,remappedDst,uniNode = nodeShuffle(node,data)
         subLabel = labels[uniNode.to(torch.int64)]
-        indptr, indices = cooTocsc(remappedSrc,remappedDst,sliceNUM=(len(data) // (MAXEDGE//4))) 
+        # indptr, indices = cooTocsc(remappedSrc,remappedDst,sliceNUM=(len(data) // (MAXEDGE//4))) 
+        indptr, indices = coo2csc_dgl(remappedSrc,remappedDst) 
         #print(f"coo data time : {time.time()-coostartTime:.4f}s")
         
         #coostartTime = time.time()
@@ -351,10 +350,10 @@ def genFeatIdx(part_num, base_path, nodeList, part_seq, featLen, maxNodeNum):
         
         # 索引位置 
         maxlen = max(curLen,nextLen)
-        res1_zero = torch.squeeze(torch.nonzero(res1[:maxlen] == 0)).to(torch.int32)
-        res2_zero = torch.squeeze(torch.nonzero(res2[:maxlen] == 0)).to(torch.int32)
-        res1_one = torch.squeeze(torch.nonzero(res1[:maxlen] == 1)).to(torch.int32)
-        res2_one = torch.squeeze(torch.nonzero(res2[:maxlen] == 1)).to(torch.int32)
+        res1_zero = torch.nonzero(res1[:maxlen] == 0).reshape(-1).to(torch.int32)
+        res2_zero = torch.nonzero(res2[:maxlen] == 0).reshape(-1).to(torch.int32)
+        res1_one = torch.nonzero(res1[:maxlen] == 1).reshape(-1).to(torch.int32)
+        res2_one = torch.nonzero(res2[:maxlen] == 1).reshape(-1).to(torch.int32)
 
         if (nextLen > same_num):
             if(curLen < nextLen or curLen == nextLen):
@@ -368,8 +367,15 @@ def genFeatIdx(part_num, base_path, nodeList, part_seq, featLen, maxNodeNum):
         nextPath = base_path + str(next_part)
         sameNodeInfoPath = nextPath + '/sameNodeInfo.bin'
         diffNodeInfoPath = nextPath + '/diffNodeInfo.bin'
-        sameNode = torch.cat((res1_one, res2_one), dim = 0)
-        diffNode = torch.cat((res1_zero, res2_zero), dim = 0)
+        if res1_one.shape[0] != 0:
+            sameNode = torch.cat((res1_one, res2_one), dim = 0)
+        else:
+            sameNode = torch.Tensor([]).to(torch.int32)
+        
+        if res1_zero.shape[0] != 0:
+            diffNode = torch.cat((res1_zero, res2_zero), dim = 0)
+        else:
+            diffNode = torch.Tensor([]).to(torch.int32)
         saveBin(sameNode.cpu(), sameNodeInfoPath)
         saveBin(diffNode.cpu(), diffNodeInfoPath)
         sameNode, diffNode = None, None
@@ -384,20 +390,20 @@ def writeJson(path):
 
 if __name__ == '__main__':
     JSONPATH = "/home/bear/workspace/single-gnn/datasetInfo.json"
-    partitionNUM = 4
-    sliceNUM = 8
+    partitionNUM = 8
+    sliceNUM = 12
     with open(JSONPATH, 'r') as file:
         data = json.load(file)
-    datasetName = ["PD"] 
+    datasetName = ["PA"] 
 
     for NAME in datasetName:
         GRAPHPATH = data[NAME]["rawFilePath"]
         maxID = data[NAME]["nodes"]
         subGSavePath = data[NAME]["processedPath"]
         
-        startTime = time.time()
-        t1 = PRgenG(GRAPHPATH,maxID,partitionNUM,savePath=subGSavePath)
-        print(f"partition all cost:{time.time()-startTime:.3f}s")
+        # startTime = time.time()
+        # t1 = PRgenG(GRAPHPATH,maxID,partitionNUM,savePath=subGSavePath)
+        # print(f"partition all cost:{time.time()-startTime:.3f}s")
 
         RAWDATAPATH = data[NAME]["processedPath"]
         FEATPATH = data[NAME]["rawFilePath"] + "/feat.bin"
@@ -410,15 +416,11 @@ if __name__ == '__main__':
         print(f"trans graph cost time{time.time() - MERGETIME:.3f}s ...")
         
         diffMatrix = [[0 for _ in range(partitionNUM)] for _ in range(partitionNUM)]
-        startTime1 = time.time()
         nodeList = []
         maxNodeNum,minPath = cal_min_path(diffMatrix , nodeList, partitionNUM, data[NAME]["processedPath"])
-        print(f"计算最优加载路径用时{time.time() - startTime1:.4f}s")
         
         dataInfo['path'] = res
         writeJson(SAVEPATH+f"/{NAME}.json")
 
-        startTime1 = time.time()
         addIdx = genFeatIdx(partitionNUM, SAVEPATH, nodeList, res, featLen, maxNodeNum)
-        print(f"生成addFeat用时{time.time() - startTime1:.4f}s")
         genAddFeat(res[0],addIdx,SAVEPATH,FEATPATH,partitionNUM,nodeNUM,sliceNUM,featLen)

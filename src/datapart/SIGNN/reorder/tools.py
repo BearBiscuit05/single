@@ -3,6 +3,7 @@ import os
 import torch
 import dgl
 import gc
+import time
 
 def bin2tensor(filePath, datatype=np.int64):
     tensor = np.fromfile(filePath, dtype=datatype)
@@ -37,9 +38,10 @@ def convert_to_tensor(data, dtype=torch.int32):
 
 def cooTocsc(srcList,dstList,sliceNUM=1,device=torch.device('cpu')):
     dstList = dstList.cuda()
-    inptr = torch.cat([torch.Tensor([0]).to(torch.int32).to(dstList.device),torch.cumsum(torch.bincount(dstList), dim=0)]).to(torch.int32)
+    binAns = torch.bincount(dstList)
+    inptr = torch.cat([torch.Tensor([0]).to(torch.int32).to(dstList.device),torch.cumsum(binAns, dim=0)]).to(torch.int32)   # 前缀和开销较大
     indice = torch.zeros_like(srcList,dtype=torch.int32,device="cuda")
-    addr = inptr.clone()[:-1].cuda()
+    addr = inptr.clone()[:-1]
     if sliceNUM <= 1:
         srcList = srcList.cuda()
         dgl.cooTocsr(inptr,indice,addr,dstList,srcList) # compact dst , exchange place

@@ -146,7 +146,7 @@ if __name__ == '__main__':
         trainIds = torch.tensor(trainIds).to(torch.int64)
         labels = np.fromfile(PATH + f"{i}/labels.bin",dtype=np.int64)
         device = torch.device('cpu' if args.mode == 'cpu' else 'cuda')
-        g = dgl.graph(('csr', (indptr, indices, [])))        
+        g = dgl.graph(('csc', (indptr, indices, [])))        
         feat = torch.tensor(feat)
         g.ndata['feat'] = feat
         labels = torch.tensor(labels).to(torch.int64)
