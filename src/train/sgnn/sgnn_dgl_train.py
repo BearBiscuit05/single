@@ -160,6 +160,6 @@ if __name__ == '__main__':
                                 batch_size=4096, shuffle=True,
                                 drop_last=False, num_workers=0,
                                 use_uva=True)
-        acc = evaluate(model, g, test_dataloader)
+        acc = evaluate(model, g, test_dataloader,num_classes=data['classes'])
         print("Test Accuracy {:.4f}".format(acc.item()))
         
