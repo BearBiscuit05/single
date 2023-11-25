@@ -60,8 +60,10 @@ class CustomDataset(Dataset):
         self.maxPartNodeNUM,self.mem = 0,0
         self.edgecut, self.nodecut,self.featDevice = 0,0,""
         self.train_name,self.framework,self.mode,self.dataset = "","","",""
-        self.readConfig(confPath)
+        self.readTrainConfig(confPath)  # 训练参数加载
         # ================
+        self.datasetInfo = self.readDatasetInfo()
+
 
         #### 训练记录 ####
         self.trainSubGTrack = self.randomTrainList()    # 训练轨迹
@@ -106,7 +108,7 @@ class CustomDataset(Dataset):
             return tuple(cacheData[:4])
 
 ########################## 初始化训练数据 ##########################
-    def readConfig(self,confPath):
+    def readTrainConfig(self,confPath):
         with open(confPath, 'r') as f:
             config = json.load(f)
         self.train_name = config['train_name']
@@ -128,10 +130,16 @@ class CustomDataset(Dataset):
         self.nodecut = config['nodecut']
         self.featDevice = config['featDevice']
 
+    def readDatasetInfo(self):
+        confPath = self.dataPath + f"/{self.dataset}.json"
+        with open(confPath, 'r') as f:
+            config = json.load(f)
+        return config
+
     def randomTrainList(self): 
         epochList = []
         for _ in range(self.maxEpoch + 1): # 额外多增加一行
-            tarinArray=np.fromfile(self.dataPath+"/trainPath.bin",dtype=np.int64)
+            tarinArray = np.array(self.datasetInfo["path"])
             epochList.append(tarinArray)
         return epochList
 
@@ -229,20 +237,19 @@ class CustomDataset(Dataset):
         if countMemToLoss(graphEdgeNUM,graphNodeNUM,self.featlen,self.mem):
             self.lossG = True   # 需要裁剪
             sortNode = torch.as_tensor(np.fromfile(filePath + "/sortIds.bin", dtype=np.int32))
-            saveRatio = 0.2
-            cutNode,saveNode = sortNode[int(len(sortNode)*saveRatio):],sortNode[:int(len(sortNode)*saveRatio)]
+            saveRatio = 0.99
+            cutNode,saveNode = sortNode[int(graphNodeNUM*saveRatio):],sortNode[:int(graphNodeNUM*saveRatio)]
             start = time.time()
             self.indptr,self.indices,self.lossMap = \
-                streamLossGraph(self.indptr,self.indices,cutNode,sliceNUM=4,randomLoss=0.6,degreeCut=100,CutRatio=0.5)
-            print(torch.nonzero(self.lossMap == -1).reshape(-1).shape)
-            print(f"loss_csr time :{time.time() - start:.4f}s...")
+                streamLossGraph(self.indptr,self.indices,cutNode,sliceNUM=4,randomLoss=0,degreeCut=None,CutRatio=0.5)
+            # print(f"loss_csr time :{time.time() - start:.4f}s...")
             start = time.time()
             # addFeat -> self.feat device位置 
             sliceFeatNUM = 8
             if predata == None: 
                 # 表明首次加载,直接迁移
                 loss_feat(self.feats, addFeat , sliceFeatNUM, self.lossMap, self.featlen, self.featDevice)
-                self.memfeat = addFeat
+                self.memfeat = torch.as_tensor(addFeat)
             else:
                 self.memfeat[replace_idx] = addFeat     #内存feat进行替换，此时replace_idx已经做过map映射
                 loss_feat(self.feats, self.memfeat , sliceFeatNUM, self.lossMap, self.featlen, self.featDevice)
@@ -412,9 +419,7 @@ class CustomDataset(Dataset):
             featIdx = self.addFeatMap[uniqueList.to(torch.int64).to(self.feats.device)]
             test = self.feats[featIdx]
         elif self.lossG == True:
-            mapIdx = self.lossMap[uniqueList.to(self.lossMap.device).to(torch.int64)].to(torch.int64)   
-            print(torch.max(mapIdx))
-            print(self.feats.shape)   
+            mapIdx = self.lossMap[uniqueList.to(self.lossMap.device).to(torch.int64)].to(torch.int64)     
             test = self.feats[mapIdx.to(self.feats.device)]        
         logger.info("subG feat merge cost {:.5f}s".format(time.time()-featTime))
         return test
@@ -447,7 +452,7 @@ if __name__ == "__main__":
     for index in range(2):
         start = time.time()
         loopTime = time.time()
-        for graph,feat,number in train_loader:
+        for graph,feat,label,number in train_loader:
             print(graph)
             print(feat.shape)
             print(label.dtype)

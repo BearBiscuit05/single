@@ -148,8 +148,9 @@ def trainIdxSubG(subGNode,trainSet):
     Lid = Lid.cpu().to(torch.int64)
     return Lid
 
+dataInfo = {}
 def rawData2GNNData(RAWDATAPATH,partitionNUM,LABELPATH):
-    labels = np.fromfile(LABELPATH,dtype=np.int64)
+    labels = np.fromfile(LABELPATH,dtype=np.int64)  
     for i in range(partitionNUM):
         startTime = time.time()
         PATH = RAWDATAPATH + f"/part{i}" 
@@ -184,9 +185,11 @@ def rawData2GNNData(RAWDATAPATH,partitionNUM,LABELPATH):
         
         #remapstartTime = time.time()
         pridx = torch.as_tensor(np.fromfile(PRvaluePath,dtype=np.int32))
-        remappedSrc,_ = remapEdgeId(uniNode,pridx,None,device=torch.device('cuda:0'))
+        remappedSrc,_,_ = remapEdgeId(uniNode,pridx,None,device=torch.device('cuda:0'))
         saveBin(remappedSrc,PRvaluePath)
         #print(f"remapstart time : {time.time()-remapstartTime:.4f}s")
+        
+        dataInfo[f"part{i}"] = {'nodeNUM': len(node),'edgeNUM':len(data) // 2}
         print(f"map data time : {time.time()-startTime:.4f}s")
         print("-"*20)
 
@@ -284,7 +287,6 @@ def dfs(part_num,diffMatrix):
         elif cur_sum < res_sum:
             res_sum = cur_sum
             res = cur[:]
-            print(res,res_sum)
         return
     for i in range(0, part_num):
         if (i in cur or (res_sum != -1 and len(cur) > 0 and cur_sum + diffMatrix[cur[-1]][i] > res_sum)):
@@ -321,7 +323,7 @@ def cal_min_path(diffMatrix, nodesList, part_num, base_path):
             diffMatrix[i][j] = node2.shape[0] - sameNum # j 相对 i 需要进行的额外加载
             diffMatrix[j][i] = node1.shape[0] - sameNum
 
-            print("part{} shape:{},part{} shape:{}, 相同的节点数:{}".format(i,node1.shape,j,node2.shape,sameNum))
+            # print("part{} shape:{},part{} shape:{}, 相同的节点数:{}".format(i,node1.shape,j,node2.shape,sameNum))
 
     start = time.time()
     dfs(part_num ,diffMatrix)
@@ -340,7 +342,7 @@ def genFeatIdx(part_num, base_path, nodeList, part_seq, featLen, maxNodeNum):
         nextNode = nodeList[next_part].cuda()
         curLen = curNode.shape[0]
         nextLen = nextNode.shape[0]
-        print(f"gen_add_feat,cur:{cur_part} {curLen}, next:{next_part} {nextLen}")
+        # print(f"gen_add_feat,cur:{cur_part} {curLen}, next:{next_part} {nextLen}")
         
         res1.fill_(0)
         res2.fill_(0)
@@ -376,6 +378,9 @@ def genFeatIdx(part_num, base_path, nodeList, part_seq, featLen, maxNodeNum):
         addIndex[next_part] = nodeList[next_part][replaceIdx.to(torch.int64)]
     return addIndex
 
+def writeJson(path):
+    with open(path, "w") as json_file:
+        json.dump(dataInfo, json_file,indent=4)
 
 if __name__ == '__main__':
     JSONPATH = "/home/bear/workspace/single-gnn/datasetInfo.json"
@@ -409,9 +414,10 @@ if __name__ == '__main__':
         nodeList = []
         maxNodeNum,minPath = cal_min_path(diffMatrix , nodeList, partitionNUM, data[NAME]["processedPath"])
         print(f"计算最优加载路径用时{time.time() - startTime1:.4f}s")
+        
+        dataInfo['path'] = res
+        writeJson(SAVEPATH+f"/{NAME}.json")
 
-        trainPath = np.array(res)
-        saveBin(trainPath,SAVEPATH+f'/trainPath.bin')
         startTime1 = time.time()
         addIdx = genFeatIdx(partitionNUM, SAVEPATH, nodeList, res, featLen, maxNodeNum)
         print(f"生成addFeat用时{time.time() - startTime1:.4f}s")
