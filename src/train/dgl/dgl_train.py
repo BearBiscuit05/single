@@ -149,7 +149,7 @@ if __name__ == '__main__':
                              "'puregpu' for pure-GPU training.")
     parser.add_argument('--fanout', type=ast.literal_eval, default=[10, 10, 10], help='Fanout value')
     parser.add_argument('--layers', type=int, default=3, help='Number of layers')
-    parser.add_argument('--dataset', type=str, default='Reddit', help='Dataset name')
+    parser.add_argument('--dataset', type=str, default='ogb-papers100M', help='Dataset name')
     parser.add_argument('--maxloop', type=int, default=20, help='max loop number')
     parser.add_argument('--model', type=str, default="SAGE", help='train model')
     args = parser.parse_args()
@@ -197,9 +197,6 @@ if __name__ == '__main__':
     device = torch.device('cpu' if args.mode == 'cpu' else 'cuda')
     
     # create GraphSAGE model
-
-    # self.sage = SAGE(128, 1024, 172, args.layers, torch.nn.functional.leaky_relu, 0.1).to(device)
-
     in_size = g.ndata['feat'].shape[1]
     out_size = dataset.num_classes if out_size == 0 else out_size
     if args.model == "SAGE":
@@ -222,27 +219,13 @@ if __name__ == '__main__':
         _loop = loopList[index] - loopList[index - 1]
         #train(args, device, g, dataset, model,data=data,basicLoop=loopList[index - 1],loop=_loop)
         #print('Testing with after loop {}:...'.format(loopList[index]))
-        model.load_state_dict(torch.load('model_parameters.pth'))
+        #model.load_state_dict(torch.load('model_parameters.pth'))
         if args.dataset == 'ogb-products':
             acc = layerwise_infer(device, g, dataset.test_idx, model, batch_size=4096)
         elif args.dataset == 'Reddit':
             acc = layerwise_infer(device, g, test_idx, model, batch_size=4096) 
         elif args.dataset == 'ogb-papers100M':
-            model.eval()
-            if args.layers == 2:
-                sampler_test = NeighborSampler([100,100],  # fanout for [layer-0, layer-1, layer-2]
-                                    prefetch_node_feats=['feat'],
-                                    prefetch_labels=['label'])
-            else:
-                sampler_test = NeighborSampler([20,50,50],  # fanout for [layer-0, layer-1, layer-2]
-                                    prefetch_node_feats=['feat'],
-                                    prefetch_labels=['label'])
-            test_dataloader = DataLoader(g, dataset.test_idx, sampler_test, device=device,
-                                    batch_size=4096, shuffle=True,
-                                    drop_last=False, num_workers=0,
-                                    use_uva=True)
-            # acc = layerwise_infer('cpu', g, dataset.test_idx, model, batch_size=4096) 
-            acc = evaluate(model, g, test_dataloader)
+            acc = layerwise_infer(device, g, dataset.test_idx, model, batch_size=4096) 
         if args.dataset in ['ogb-products','Reddit','ogb-papers100M']:
             print("Test Accuracy {:.4f}".format(acc.item()))
             print("-"*20)

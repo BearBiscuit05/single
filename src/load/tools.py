@@ -151,7 +151,7 @@ def loss_feat(loss_feat,raw_feat, sliceNUM, id2featMap, featLen,device):
         endIdx = boundList[sliceIndex + 1]
         
         #start_slice = time.time()      
-        sliceFeat = torch.from_numpy(featSlice(raw_feat, beginIdx, endIdx, featLen))
+        sliceFeat = torch.as_tensor(featSlice(raw_feat, beginIdx, endIdx, featLen))
         choice_ids = idsSliceList[sliceIndex] - boundList[sliceIndex]
         sliceSize = choice_ids.shape[0]
         loss_feat[offset:offset + sliceSize] = sliceFeat.to(device)[choice_ids.to(torch.int64)]

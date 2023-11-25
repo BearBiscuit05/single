@@ -49,13 +49,13 @@ class DGL_SAGE(nn.Module):
         buffer_device = torch.device('cpu')
         pin_memory = (buffer_device != device)
 
+        feat = feat.cpu()   # 防止显存空间不够
         for l, layer in enumerate(self.layers):
             y = torch.empty(
                 g.num_nodes(), self.hid_size if l != len(self.layers) - 1 else self.out_size,
-                device=buffer_device, pin_memory=pin_memory)
-            feat = feat.to(device)
+                device=buffer_device, pin_memory=pin_memory)      
             for input_nodes, output_nodes, blocks in tqdm.tqdm(dataloader, position=0):
-                x = feat[input_nodes]
+                x = feat[input_nodes.to(feat.device)].to(device)
                 h = layer(blocks[0], x) # len(blocks) = 1
                 if l != len(self.layers) - 1:
                     h = F.relu(h)

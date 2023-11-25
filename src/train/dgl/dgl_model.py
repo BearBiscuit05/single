@@ -114,13 +114,10 @@ class SAGE(nn.Module):
                 h = self.dropout(h)
         return h
 
-    def inference(self, g,device, batch_size):
+    def inference(self, g, device, batch_size):
         """Conduct layer-wise inference to get all the node embeddings."""
         feat = g.ndata['feat']
         sampler = MultiLayerFullNeighborSampler(1, prefetch_node_feats=['feat'])
-        # sampler = NeighborSampler([15],  # fanout for [layer-0, layer-1, layer-2]
-        #                     prefetch_node_feats=['feat'],
-        #                     prefetch_labels=['label'])
         dataloader = DataLoader(
                 g, torch.arange(g.num_nodes()).to(g.device), sampler, device=device,
                 batch_size=batch_size, shuffle=False, drop_last=False,
@@ -128,13 +125,14 @@ class SAGE(nn.Module):
         buffer_device = torch.device('cpu')
         pin_memory = (buffer_device != device)
 
+        feat = feat.cpu()
         for l, layer in enumerate(self.layers):
             y = torch.empty(
                 g.num_nodes(), self.hid_size if l != len(self.layers) - 1 else self.out_size,
                 device=buffer_device, pin_memory=pin_memory)
-            feat = feat.to(device)
+            
             for input_nodes, output_nodes, blocks in tqdm.tqdm(dataloader, position=0):
-                x = feat[input_nodes]
+                x = feat[input_nodes.to(feat.device)].to(device)
                 h = layer(blocks[0], x) # len(blocks) = 1
                 if l != len(self.layers) - 1:
                     h = F.relu(h)
