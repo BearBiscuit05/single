@@ -25,27 +25,33 @@ curDir = os.path.abspath(os.path.dirname(__file__))
 sys.path.append(curDir+"/../../"+"load")
 from loader import CustomDataset
 
-    
-def evaluate(model, graph, dataloader):
+def evaluate(model, graph, dataloader, num_classes):
     model.eval()
     ys = []
     y_hats = []
     for it, (input_nodes, output_nodes, blocks) in enumerate(dataloader):
         with torch.no_grad():
-            x = blocks[0].srcdata['feat']
-            ys.append(blocks[-1].dstdata['label'].cpu().numpy())
-            y_hats.append(model(blocks, x).argmax(1).cpu().numpy())
-        predictions = np.concatenate(y_hats)
-        labels = np.concatenate(ys)
-    return sklearn.metrics.accuracy_score(labels, predictions)
+            x = blocks[0].srcdata["feat"]
+            ys.append(blocks[-1].dstdata["label"])
+            y_hats.append(model(blocks, x))
+    return MF.accuracy(
+        torch.cat(y_hats),
+        torch.cat(ys),
+        task="multiclass",
+        num_classes=num_classes,
+    )
 
-def layerwise_infer(device, graph, nid, model, batch_size):
+def layerwise_infer(device, graph, nid, model, num_classes, batch_size):
     model.eval()
     with torch.no_grad():
-        pred = model.inference(graph, device, batch_size) # pred in buffer_device
+        pred = model.inference(
+            graph, device, batch_size
+        )  # pred in buffer_device
         pred = pred[nid]
-        label = graph.ndata['label'][nid].to(pred.device)
-    return sklearn.metrics.accuracy_score(label.cpu().numpy(), pred.argmax(1).cpu().numpy())
+        label = graph.ndata["label"][nid].to(pred.device)
+        return MF.accuracy(
+            pred, label, task="multiclass", num_classes=num_classes
+        )
 
 def train(dataset, model,basicLoop=0,loop=10):
     opt = torch.optim.Adam(model.parameters(), lr=1e-3, weight_decay=5e-4)
@@ -55,9 +61,9 @@ def train(dataset, model,basicLoop=0,loop=10):
         total_loss = 0
         model.train()
         for it,(graph,feat,label,number) in enumerate(train_loader):
-            feat = feat.to('cuda:0')
+            feat = feat.cuda()
             tmp = copy.deepcopy(graph)
-            tmp = [block.to('cuda:0') for block in tmp]
+            tmp = [block.to("cuda") for block in tmp]
             y_hat = model(tmp, feat)
             label = label.to(torch.int64)
             #y_hat = model(graph, feat)
@@ -97,12 +103,12 @@ def load_reddit(self_loop=True):
             test_idx.append(index)
     return g, data,train_idx,val_idx,test_idx
 
-def Testing(model,name,data,device="cuda:0",tid=None):
+def Testing(model,name,data,device="cuda:0",tid=None,num_classes=0):
     if name == "PD":
         g = data[0]
-        acc = layerwise_infer(device, g, data.test_idx, model, batch_size=4096)
+        acc = layerwise_infer(device, g, data.test_idx, model, num_classes, batch_size=4096)
     elif name == "RD":
-        acc = layerwise_infer(device, data, tid, model, batch_size=4096)  
+        acc = layerwise_infer(device, data, tid, model, num_classes, batch_size=4096)  
     print("Test Accuracy {:.4f}".format(acc.item()))
     
 if __name__ == '__main__':
@@ -146,10 +152,10 @@ if __name__ == '__main__':
     #torch.save(model.state_dict(), 'model_parameters.pth')
     if data["dataset"] == "PD":
         TestDataset = AsNodePredDataset(DglNodePropPredDataset('ogbn-products',root="/raid/bear/data/dataset"))
-        Testing(model,data["dataset"],TestDataset)
+        Testing(model,data["dataset"],TestDataset,num_classes=data['classes'])
     elif data["dataset"] == "RD":
         g, Testdata,train_idx,val_idx,test_idx = load_reddit()
-        Testing(model,data["dataset"],g,device="cuda:0",tid=test_idx)
+        Testing(model,data["dataset"],g,device="cuda:0",tid=test_idx,num_classes=data['classes'])
     elif data["dataset"] == "PA":
         if arg_layers == 2:
             sampler_test = NeighborSampler([100,100])
