@@ -37,8 +37,9 @@ def convert_to_tensor(data, dtype=torch.int32):
         return data.to(dtype)
 
 def cooTocsc(srcList,dstList,sliceNUM=1,device=torch.device('cpu')):
-    dstList = dstList.cuda()
-    binAns = torch.bincount(dstList)
+    dstList = dstList.cuda()   
+    max_value = max(torch.max(dstList).item(), torch.max(srcList).item()) + 1   # 保证对齐
+    binAns = torch.bincount(dstList, minlength=max_value)
     inptr = torch.cat([torch.Tensor([0]).to(torch.int32).to(dstList.device),torch.cumsum(binAns, dim=0)]).to(torch.int32)   # 前缀和开销较大
     indice = torch.zeros_like(srcList,dtype=torch.int32,device="cuda")
     addr = inptr.clone()[:-1]

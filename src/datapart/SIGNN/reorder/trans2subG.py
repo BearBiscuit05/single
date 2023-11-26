@@ -170,8 +170,7 @@ def rawData2GNNData(RAWDATAPATH,partitionNUM,LABELPATH):
         #coostartTime = time.time()
         remappedSrc,remappedDst,uniNode = nodeShuffle(node,data)
         subLabel = labels[uniNode.to(torch.int64)]
-        # indptr, indices = cooTocsc(remappedSrc,remappedDst,sliceNUM=(len(data) // (MAXEDGE//4))) 
-        indptr, indices = coo2csc_dgl(remappedSrc,remappedDst) 
+        indptr, indices = cooTocsc(remappedSrc,remappedDst,sliceNUM=(len(data) // (MAXEDGE//4))) 
         #print(f"coo data time : {time.time()-coostartTime:.4f}s")
         
         #coostartTime = time.time()
@@ -401,9 +400,9 @@ if __name__ == '__main__':
         maxID = data[NAME]["nodes"]
         subGSavePath = data[NAME]["processedPath"]
         
-        # startTime = time.time()
-        # t1 = PRgenG(GRAPHPATH,maxID,partitionNUM,savePath=subGSavePath)
-        # print(f"partition all cost:{time.time()-startTime:.3f}s")
+        startTime = time.time()
+        t1 = PRgenG(GRAPHPATH,maxID,partitionNUM,savePath=subGSavePath)
+        print(f"partition all cost:{time.time()-startTime:.3f}s")
 
         RAWDATAPATH = data[NAME]["processedPath"]
         FEATPATH = data[NAME]["rawFilePath"] + "/feat.bin"
