@@ -128,7 +128,7 @@ def nodeShuffle(raw_node,raw_graph):
     dst_batches = list(torch.chunk(dsts_tensor, batch_size, dim=0))
     batch = [src_batches, dst_batches]
     src_emp,dst_emp = raw_node[:1].clone(), raw_node[:1].clone()    # 占位，无意义
-    srcShuffled,dstShuffled,uniTable = dgl.mapByNodeSet(raw_node,uniTable,src_emp,dst_emp)
+    srcShuffled,dstShuffled,uniTable = dgl.mapByNodeSet(raw_node,uniTable,src_emp,dst_emp,rhsNeed=False,include_rhs_in_lhs=False)
     remap = None
     for index,(src_batch,dst_batch) in enumerate(zip(*batch)):
         srcShuffled,dstShuffled,remap = remapEdgeId(uniTable,src_batch,dst_batch,remap=remap,device=torch.device('cuda:0'))
