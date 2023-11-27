@@ -57,11 +57,12 @@ class CustomDataset(Dataset):
         self.maxEpoch,self.classes,self.epochInterval = 0,0,0
         self.featlen = 0
         self.fanout = []
-        self.maxPartNodeNUM,self.mem = 0,0
+        self.mem = 0
         self.edgecut, self.nodecut,self.featDevice = 0,0,""
         self.train_name,self.framework,self.mode,self.dataset = "","","",""
         self.readTrainConfig(confPath)  # 训练参数加载
         # ================
+        self.maxPartNodeNUM = 0
         self.datasetInfo = self.readDatasetInfo()
 
 
@@ -124,7 +125,6 @@ class CustomDataset(Dataset):
         self.classes = config['classes']
         self.epochInterval = config['epochInterval']
         self.mem = config['memUse']
-        self.maxPartNodeNUM = config['maxPartNodeNUM']
         self.edgecut = config['edgecut']
         self.nodecut = config['nodecut']
         self.featDevice = config['featDevice']
@@ -133,6 +133,8 @@ class CustomDataset(Dataset):
         confPath = self.dataPath + f"/{self.dataset}.json"
         with open(confPath, 'r') as f:
             config = json.load(f)
+        for partid in range(self.partNUM):
+            self.maxPartNodeNUM = max(self.maxPartNodeNUM,config[f'part{partid}']["nodeNUM"])
         return config
 
     def randomTrainList(self): 
@@ -236,16 +238,16 @@ class CustomDataset(Dataset):
              
         # 判断是否裁剪，之后放入GPU
         graphNodeNUM,graphEdgeNUM = int(len(self.indptr) - 1 ),len(self.indices)
-        if True:
-        #if countMemToLoss(graphEdgeNUM,graphNodeNUM,self.featlen,self.mem):
+        # if True:
+        if countMemToLoss(graphEdgeNUM,graphNodeNUM,self.featlen,self.mem):
             self.lossG = True   # 需要裁剪
             sortNode = torch.as_tensor(np.fromfile(filePath + "/sortIds.bin", dtype=np.int32))
-            saveRatio = 0.9
-            randomLoss = 0.5
+            saveRatio = 0.2
+            randomLoss = 0.6
             cutNode,saveNode = sortNode[int(graphNodeNUM*saveRatio):],sortNode[:int(graphNodeNUM*saveRatio)]
             start = time.time()
             self.indptr,self.indices,self.lossMap = \
-                streamLossGraph(self.indptr,self.indices,cutNode,sliceNUM=4,randomLoss=randomLoss,degreeCut=None,CutRatio=0.5)
+                streamLossGraph(self.indptr,self.indices,cutNode,sliceNUM=4,randomLoss=randomLoss,degreeCut=100,CutRatio=0.5)
             # print(f"loss_csr time :{time.time() - start:.4f}s...")
             start = time.time()
             # addFeat -> self.feat device位置 
@@ -438,8 +440,8 @@ class CustomDataset(Dataset):
     def featMerge(self,uniqueList):
         featTime = time.time() 
         if self.lossG == False:
-            featIdx = self.map[uniqueList.to(torch.int64).to(self.feats.device)]
-            test = self.feats[featIdx]
+            featIdx = self.map[uniqueList.to(torch.int64).to(self.cudafeat.device)]
+            test = self.cudafeat[featIdx]
         elif self.lossG == True:
             mapIdx = self.map[uniqueList.to(self.map.device).to(torch.int64)].to(torch.int64)     
             test = self.cudafeat[mapIdx.to(self.cudafeat.device)]        

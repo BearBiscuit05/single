@@ -37,13 +37,18 @@ def convert_to_tensor(data, dtype=torch.int32):
         return data.to(dtype)
 
 def cooTocsc(srcList,dstList,sliceNUM=1,device=torch.device('cpu')):
-    dstList = dstList.cuda()   
+    # dstList = dstList.cuda()
     max_value = max(torch.max(dstList).item(), torch.max(srcList).item()) + 1   # 保证对齐
+    startTime = time.time()
     binAns = torch.bincount(dstList, minlength=max_value)
-    inptr = torch.cat([torch.Tensor([0]).to(torch.int32).to(dstList.device),torch.cumsum(binAns, dim=0)]).to(torch.int32)   # 前缀和开销较大
+    ptrcum = torch.cumsum(binAns.cuda(), dim=0)
+    zeroblock=torch.zeros(1,device=ptrcum.device)
+    inptr = torch.cat([zeroblock,ptrcum]).to(torch.int32).cuda()
+    
     indice = torch.zeros_like(srcList,dtype=torch.int32,device="cuda")
     addr = inptr.clone()[:-1]
     if sliceNUM <= 1:
+        dstList = dstList.cuda()
         srcList = srcList.cuda()
         dgl.cooTocsr(inptr,indice,addr,dstList,srcList) # compact dst , exchange place
         inptr,indice = inptr.cpu(),indice.cpu()
@@ -52,7 +57,6 @@ def cooTocsc(srcList,dstList,sliceNUM=1,device=torch.device('cpu')):
         dstList = dstList.cpu()
         return inptr,indice
     else:
-        dstList = dstList.cpu()
         src_batches = torch.chunk(srcList, sliceNUM, dim=0)
         dst_batches = torch.chunk(dstList, sliceNUM, dim=0)
         batch = [src_batches, dst_batches]

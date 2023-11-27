@@ -214,6 +214,7 @@ def loss_feat_cac(lossMap, memfeat, cudafeat, map):
     #作用: 将所有当前图节点中，未被loss的节点的feat全部上cudafeat，并且更新map
     #即：交换cudafeat中的非saveNode节点 和 memfeat中的saveNode节点 的位置并且维护map
     #需要保证：cudafeat中非saveNode节点数 > memfeat中saveNode节点数
+    emptyCache()
     start = time.time()
     saveNode = torch.nonzero(lossMap != -1).reshape(-1)
 

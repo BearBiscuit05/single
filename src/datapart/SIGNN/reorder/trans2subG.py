@@ -14,7 +14,7 @@ import sys
 # =============== 1.partition
 # WARNING : EDGENUM < 32G 否则无法实现
 # G_MEM: 16G
-MAXEDGE = 1000000000    # 
+MAXEDGE = 800000000    # 
 MAXSHUFFLE = 30000000   # 
 #################
 
@@ -390,10 +390,10 @@ def writeJson(path):
 if __name__ == '__main__':
     JSONPATH = "/home/bear/workspace/single-gnn/datasetInfo.json"
     partitionNUM = 8
-    sliceNUM = 12
+    sliceNUM = 10
     with open(JSONPATH, 'r') as file:
         data = json.load(file)
-    datasetName = ["PA"] 
+    datasetName = ["UK"] 
 
     for NAME in datasetName:
         GRAPHPATH = data[NAME]["rawFilePath"]
