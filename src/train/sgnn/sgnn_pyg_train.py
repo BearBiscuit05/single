@@ -84,10 +84,10 @@ if __name__ == '__main__':
         data = json.load(json_file)
     
     print('Loading data')
-    if data["dataset"] == "products_4":
-        arg_dataset = 'ogb-products'
-    elif data["dataset"] == "reddit_8":
-        arg_dataset = 'Reddit'
+    # if data["dataset"] == "PD":
+    #     arg_dataset = 'ogb-products'
+    # elif data["dataset"] == "RD":
+    #     arg_dataset = 'Reddit'
     arg_fanout = data["fanout"]
     arg_layers = len(arg_fanout)
 
@@ -102,17 +102,17 @@ if __name__ == '__main__':
         print("Invalid model option. Please choose from 'SAGE', 'GCN', or 'GAT'.")
         sys.exit(1)
     
-    dataset = CustomDataset(args.json_path,pre_fetch=True)
+    dataset = CustomDataset(args.json_path)
     epochInterval = data["epochInterval"]
     maxEpoch = dataset.maxEpoch
     epoch = 0
 
     for BLoop in range(0,maxEpoch,epochInterval):
         train(dataset, model,basicLoop=BLoop,loop=epochInterval)
-
-    
-    if arg_dataset == 'ogb-products':
-        root = osp.join(osp.dirname(osp.realpath(__file__)), curDir+'/../../../data/', 'dataset')
+    # torch.save(model.state_dict(), 'model_parameters.pth')
+    #model.load_state_dict(torch.load("model_parameters.pth"))
+    if data["dataset"] == 'PD':
+        root = "/raid/bear/data/dataset"
         dataset = PygNodePropPredDataset('ogbn-products', root)
         split_idx = dataset.get_idx_split()
         evaluator = Evaluator(name='ogbn-products')
@@ -123,11 +123,10 @@ if __name__ == '__main__':
         train_acc, val_acc, test_acc = test(model,evaluator,data,subgraph_loader,split_idx)
         print(f'Train: {train_acc:.4f}, Val: {val_acc:.4f}, '
                     f'Test: {test_acc:.4f}')
-    elif arg_dataset == 'Reddit':
+    elif data["dataset"] == 'RD':
         model.eval()
         dataset = Reddit(curDir+'/../../../data/reddit/pyg_reddit')
-        # data = dataset[0]
-        data = dataset[0].to('cuda:0', 'x', 'y')
+        data = dataset[0]#.to('cuda:0', 'x', 'y')
         subgraph_loader = NeighborLoader(
             data,input_nodes=None,num_neighbors=[-1],
             batch_size=4096,num_workers=12,persistent_workers=True,)

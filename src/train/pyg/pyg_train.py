@@ -20,6 +20,9 @@ from pyg_model import SAGE, GCN, GAT
 import numpy as np
 from torch_geometric.data import Data
 
+curDir = os.path.abspath(os.path.dirname(__file__))
+sys.path.append(curDir+"/../../"+"load")
+
 @torch.no_grad()
 def test(model,evaluator,data,subgraph_loader,split_idx):
     model.eval()
@@ -230,7 +233,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='pyg gcn program')
     parser.add_argument('--fanout', type=ast.literal_eval, default=[10, 10, 10], help='Fanout value')
     parser.add_argument('--layers', type=int, default=3, help='Number of layers')
-    parser.add_argument('--dataset', type=str, default='ogb-products', help='Dataset name')
+    parser.add_argument('--dataset', type=str, default='Reddit', help='Dataset name')
     parser.add_argument('--maxloop', type=int, default=10, help='max loop number')
     parser.add_argument('--model', type=str, default="SAGE", help='train model')
 
@@ -244,7 +247,7 @@ if __name__ == '__main__':
     datasetpath = "/raid/bear/dataset"
 
     if args.dataset == 'Reddit':
-        dataset = Reddit('/home/bear/workspace/singleGNN/data/reddit/pyg_reddit')
+        dataset = Reddit(curDir+'/../../../data/reddit/pyg_reddit')
         run(args, dataset,split_idx=None)
     elif args.dataset == 'ogb-products':
         root = '/raid/bear/data/dataset'

@@ -97,6 +97,8 @@ def coo2csc_dgl(srcs,dsts):
     indptr, indices, _ = g.adj_sparse(fmt='csc')
     return indptr,indices
 
+def greedyPartition():
+    pass
 
 def countMemToLoss(edgeNUM,nodeNUM,featLen,ratedMem,printInfo=False):
     int32Byte, int64Byte, float32Byte = 4, 8, 4
