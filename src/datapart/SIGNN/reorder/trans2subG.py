@@ -31,7 +31,7 @@ def PRgenG(RAWPATH,nodeNUM,partNUM,savePath=None):
     graph = torch.from_numpy(np.fromfile(GRAPHPATH,dtype=np.int32))
     src,dst = graph[::2],graph[1::2]
     trainIds = torch.from_numpy(np.fromfile(TRAINPATH,dtype=np.int64))
-    edgeTable = torch.zeros_like(src).to(torch.int32)
+    edgeTable = torch.zeros_like(src,dtype=torch.int8)  # TODO 需要根据分区数目进行调节
     template_array = torch.zeros(nodeNUM,dtype=torch.int32)
 
     # 流式处理边数据
@@ -75,7 +75,7 @@ def PRgenG(RAWPATH,nodeNUM,partNUM,savePath=None):
             src_batch,dst_batch = src_batch.cuda(), dst_batch.cuda()  
             tmp_etable.fill_(0)
             dgl.per_pagerank(dst_batch,src_batch,tmp_etable,inNodeTable,tmp_nodeValue,tmp_nodeInfo)
-            edgeTable[offset:offset+batchLen] = tmp_etable[:batchLen].cpu()
+            edgeTable[offset:offset+batchLen] = tmp_etable[:batchLen].to(edgeTable.dtype).cpu()
             tmp_nodeValue, tmp_nodeInfo = tmp_nodeValue.cpu(),tmp_nodeInfo.cpu()
             acc_nodeValue += tmp_nodeValue - nodeValue
             acc_nodeInfo = acc_nodeInfo | tmp_nodeInfo     
@@ -129,13 +129,15 @@ def nodeShuffle(raw_node,raw_graph):
     batch = [src_batches, dst_batches]
     src_emp,dst_emp = raw_node[:1].clone(), raw_node[:1].clone()    # 占位，无意义
     srcShuffled,dstShuffled,uniTable = dgl.mapByNodeSet(raw_node,uniTable,src_emp,dst_emp,rhsNeed=False,include_rhs_in_lhs=False)
+    raw_node = raw_node.cpu()
     remap = None
     for index,(src_batch,dst_batch) in enumerate(zip(*batch)):
         srcShuffled,dstShuffled,remap = remapEdgeId(uniTable,src_batch,dst_batch,remap=remap,device=torch.device('cuda:0'))
         src_batches[index] = srcShuffled
         dst_batches[index] = dstShuffled 
-    srcs_tensor = torch.cat(src_batches)
-    dsts_tensor = torch.cat(dst_batches)
+    srcShuffled,dstShuffled=None,None
+    srcs_tensor = torch.cat(src_batches).cpu()
+    dsts_tensor = torch.cat(dst_batches).cpu()
     uniTable = uniTable.cpu()
     return srcs_tensor,dsts_tensor,uniTable
 
@@ -149,47 +151,57 @@ def trainIdxSubG(subGNode,trainSet):
 dataInfo = {}
 def rawData2GNNData(RAWDATAPATH,partitionNUM,LABELPATH):
     labels = np.fromfile(LABELPATH,dtype=np.int64)  
-    for i in range(partitionNUM):
-        startTime = time.time()
-        PATH = RAWDATAPATH + f"/part{i}" 
-        rawDataPath = PATH + f"/raw_G.bin"
-        rawTrainPath = PATH + f"/raw_trainIds.bin"
-        rawNodePath = PATH + f"/raw_nodes.bin"
-        PRvaluePath = PATH + f"/sortIds.bin"
-        SubTrainIdPath = PATH + "/trainIds.bin"
-        SubIndptrPath = PATH + "/indptr.bin"
-        SubIndicesPath = PATH + "/indices.bin"
-        SubLabelPath = PATH + "/labels.bin"
-        checkFilePath(PATH)
-        #coostartTime = time.time()
-        data = np.fromfile(rawDataPath,dtype=np.int32)
-        node = np.fromfile(rawNodePath,dtype=np.int32)
-        trainidx = np.fromfile(rawTrainPath,dtype=np.int64)  
-        #print(f"loading data time : {time.time()-coostartTime:.4f}s")
-        
-        #coostartTime = time.time()
-        remappedSrc,remappedDst,uniNode = nodeShuffle(node,data)
-        subLabel = labels[uniNode.to(torch.int64)]
-        indptr, indices = cooTocsc(remappedSrc,remappedDst,sliceNUM=(len(data) // (MAXEDGE//4))) 
-        #print(f"coo data time : {time.time()-coostartTime:.4f}s")
-        
-        #coostartTime = time.time()
-        trainidx = trainIdxSubG(uniNode,trainidx)
-        saveBin(subLabel,SubLabelPath)
-        saveBin(trainidx,SubTrainIdPath)
-        saveBin(indptr,SubIndptrPath)
-        saveBin(indices,SubIndicesPath)
-        #print(f"save time : {time.time()-coostartTime:.4f}s")
-        
-        #remapstartTime = time.time()
-        pridx = torch.as_tensor(np.fromfile(PRvaluePath,dtype=np.int32))
-        remappedSrc,_,_ = remapEdgeId(uniNode,pridx,None,device=torch.device('cuda:0'))
-        saveBin(remappedSrc,PRvaluePath)
-        #print(f"remapstart time : {time.time()-remapstartTime:.4f}s")
-        
-        dataInfo[f"part{i}"] = {'nodeNUM': len(node),'edgeNUM':len(data) // 2}
-        print(f"map data time : {time.time()-startTime:.4f}s")
-        print("-"*20)
+    for rank in range(partitionNUM):
+        partProcess(rank,RAWDATAPATH,labels)
+        emptyCache()
+
+def partProcess(rank,RAWDATAPATH,labels):
+    startTime = time.time()
+    PATH = RAWDATAPATH + f"/part{rank}" 
+    rawDataPath = PATH + f"/raw_G.bin"
+    rawTrainPath = PATH + f"/raw_trainIds.bin"
+    rawNodePath = PATH + f"/raw_nodes.bin"
+    PRvaluePath = PATH + f"/sortIds.bin"
+    SubTrainIdPath = PATH + "/trainIds.bin"
+    SubIndptrPath = PATH + "/indptr.bin"
+    SubIndicesPath = PATH + "/indices.bin"
+    SubLabelPath = PATH + "/labels.bin"
+    checkFilePath(PATH)
+    coostartTime = time.time()
+    data = np.fromfile(rawDataPath,dtype=np.int32)
+    node = np.fromfile(rawNodePath,dtype=np.int32)
+    trainidx = np.fromfile(rawTrainPath,dtype=np.int64)  
+    print(f"loading data time : {time.time()-coostartTime:.4f}s")
+    
+    coostartTime = time.time()
+    remappedSrc,remappedDst,uniNode = nodeShuffle(node,data)
+    subLabel = labels[uniNode.to(torch.int64)]
+    indptr, indices = cooTocsc(remappedSrc,remappedDst,sliceNUM=(len(data) // (MAXEDGE//4))) 
+    print(f"coo data time : {time.time()-coostartTime:.4f}s")
+
+    coostartTime = time.time()
+    trainidx = trainIdxSubG(uniNode,trainidx)
+    saveBin(subLabel,SubLabelPath)
+    saveBin(trainidx,SubTrainIdPath)
+    saveBin(indptr,SubIndptrPath)
+    saveBin(indices,SubIndicesPath)
+    print(f"save time : {time.time()-coostartTime:.4f}s")
+    
+    remapstartTime = time.time()
+    pridx = torch.as_tensor(np.fromfile(PRvaluePath,dtype=np.int32))
+    remappedSrc,_,_ = remapEdgeId(uniNode,pridx,None,device=torch.device('cuda:0'))
+    saveBin(remappedSrc,PRvaluePath)
+    print(f"remapstart time : {time.time()-remapstartTime:.4f}s")
+    
+    # os.remove(rawDataPath)
+    # os.remove(rawNodePath)
+    # os.remove(rawTrainPath)
+
+    dataInfo[f"part{rank}"] = {'nodeNUM': len(node),'edgeNUM':len(data) // 2}
+    print(f"map data time : {time.time()-startTime:.4f}s")
+    print("-"*20)
+
+
 
 # =============== 3.featTrans
 def featSlice(FEATPATH,beginIndex,endIndex,featLen):
@@ -393,7 +405,7 @@ if __name__ == '__main__':
     sliceNUM = 10
     with open(JSONPATH, 'r') as file:
         data = json.load(file)
-    datasetName = ["UK"] 
+    datasetName = ["PA"] 
 
     for NAME in datasetName:
         GRAPHPATH = data[NAME]["rawFilePath"]

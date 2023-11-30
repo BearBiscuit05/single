@@ -37,14 +37,20 @@ def convert_to_tensor(data, dtype=torch.int32):
         return data.to(dtype)
 
 def cooTocsc(srcList,dstList,sliceNUM=1,device=torch.device('cpu')):
-    # dstList = dstList.cuda()
-    max_value = max(torch.max(dstList).item(), torch.max(srcList).item()) + 1   # 保证对齐
     startTime = time.time()
-    binAns = torch.bincount(dstList, minlength=max_value)
-    ptrcum = torch.cumsum(binAns.cuda(), dim=0)
-    zeroblock=torch.zeros(1,device=ptrcum.device)
+    dstList = dstList.cuda()
+    max_value = max(torch.max(dstList).item(), torch.max(srcList).item()) + 1   # 保证对齐
+    binAns = torch.zeros(max_value,dtype=torch.int32,device="cuda")
+    dgl.bincount(dstList,binAns)
+    dstList = dstList.cpu()
+    # print(f"cum Time {time.time()-startTime:.3f}s...")
+    ptrcum = torch.cumsum(binAns, dim=0)
+    # print(f"cum Time {time.time()-startTime:.3f}s...")
+    zeroblock=torch.zeros(1,device=ptrcum.device,dtype=torch.int32)
+    # print(f"cum Time {time.time()-startTime:.3f}s...")
     inptr = torch.cat([zeroblock,ptrcum]).to(torch.int32).cuda()
-    
+    binAns,ptrcum = None,None
+    emptyCache()
     indice = torch.zeros_like(srcList,dtype=torch.int32,device="cuda")
     addr = inptr.clone()[:-1]
     if sliceNUM <= 1:
@@ -119,7 +125,7 @@ def print_gpu_memory(index):
     if torch.cuda.is_available():
         gpu = torch.cuda.get_device_name(index)
         memory_allocated = torch.cuda.memory_allocated(index) / 1024 ** 3  # 转换为GB
-        memory_cached = torch.cuda.memory_cached(index) / 1024 ** 3  # 转换为GB
+        memory_cached = torch.cuda.memory_reserved(index) / 1024 ** 3  # 转换为GB
         print(f"GPU {index}: {gpu}")
         print(f"  Allocated Memory: {memory_allocated:.2f} GB")
         print(f"  Cached Memory: {memory_cached:.2f} GB")
