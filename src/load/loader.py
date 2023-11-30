@@ -260,24 +260,17 @@ class CustomDataset(Dataset):
                 self.cudafeat = torch.zeros((self.maxCudaNum, self.featlen), dtype=torch.float32, device='cuda')
 
                 init_cac(self.lossMap, addFeat, self.memfeat, self.cudafeat, self.map)
-
-                # 表明首次加载,直接迁移
-                # loss_feat(self.feats, addFeat , sliceFeatNUM, self.lossMap, self.featlen, self.featDevice)
-                # self.memfeat = torch.as_tensor(addFeat)
             else:
                 featAdd(replace_idx, addFeat, self.memfeat, self.cudafeat)
                 loss_feat_cac(self.lossMap, self.memfeat, self.cudafeat, self.map)
-                # self.memfeat[replace_idx] = addFeat     #内存feat进行替换，此时replace_idx已经做过map映射
-                # loss_feat(self.feats, self.memfeat , sliceFeatNUM, self.lossMap, self.featlen, self.featDevice)
                 print(f"loading feat time :{time.time() - start:.4f}s...")
         else:
             # 不需要进行裁剪,csr,feat,label直接存入cuda
             print("not need cut ...")
             self.lossG = False 
             self.indptr,self.indices = self.indptr.cuda(),self.indices.cuda()
-            if predata == None: # 表明首次加载,直接迁移
-
-                #TODO 初始化feats你来吧，我把上面的删了，我不知道你的无loss是咋流式的
+            if predata == None: 
+                # 表明首次加载,直接迁移
                 self.cudafeat = torch.zeros((self.maxPartNodeNUM, self.featlen), dtype=torch.float32, device='cuda')
                 idx = torch.arange(addFeat.shape[0],dtype=torch.int64,device="cuda")
                 addFeat = torch.as_tensor(addFeat)
@@ -286,9 +279,6 @@ class CustomDataset(Dataset):
                 # 流式处理
                 streamAssign(self.cudafeat,replace_idx,addFeat,sliceNUM=4)
 
-        # TODO 这里可以验证整个逻辑是否正确
-        # curFeat = torch.as_tensor(np.fromfile(filePath + "/feat.bin", dtype=np.float32).reshape(-1, self.featlen))
-        # self.realFeats = curFeat.cuda()
 
 
 ########################## 采样图结构 ##########################
@@ -466,8 +456,8 @@ def collate_fn(data):
 
 
 if __name__ == "__main__":
-    dataset = CustomDataset(curDir+"/../../config/PA.json")
-    with open(curDir+"/../../config/PA.json", 'r') as f:
+    dataset = CustomDataset(curDir+"/../../config/FR_dgl.json")
+    with open(curDir+"/../../config/FR_dgl.json", 'r') as f:
         config = json.load(f)
         batchsize = config['batchsize']
         epoch = config['maxEpoch']

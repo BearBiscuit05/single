@@ -31,7 +31,16 @@ def PRgenG(RAWPATH,nodeNUM,partNUM,savePath=None):
     graph = torch.from_numpy(np.fromfile(GRAPHPATH,dtype=np.int32))
     src,dst = graph[::2],graph[1::2]
     trainIds = torch.from_numpy(np.fromfile(TRAINPATH,dtype=np.int64))
-    edgeTable = torch.zeros_like(src,dtype=torch.int8)  # TODO 需要根据分区数目进行调节
+    
+    if partNUM <= 8:
+        edgeTable = torch.zeros_like(src,dtype=torch.int8)
+    elif partNUM > 8 and partNUM <= 16:
+        edgeTable = torch.zeros_like(src,dtype=torch.int16)
+    elif partNUM > 16 and partNUM <= 32:
+        edgeTable = torch.zeros_like(src,dtype=torch.int32)
+    else:
+        ValueError("Not currently supporting partitions greater than 32.")
+        
     template_array = torch.zeros(nodeNUM,dtype=torch.int32)
 
     # 流式处理边数据
@@ -405,7 +414,7 @@ if __name__ == '__main__':
     sliceNUM = 10
     with open(JSONPATH, 'r') as file:
         data = json.load(file)
-    datasetName = ["PA"] 
+    datasetName = ["WB"] 
 
     for NAME in datasetName:
         GRAPHPATH = data[NAME]["rawFilePath"]
