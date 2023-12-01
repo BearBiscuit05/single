@@ -86,7 +86,6 @@ class CustomDataset(Dataset):
         self.nodeLabels = []            # 子图标签
         self.trainptr = 0               # 当前训练集读取位置
         self.trainLoop = 0              # 当前子图可读取次数      
-        self.lossMap = []
         #### mmap 特征部分 ####
         #self.feats = torch.zeros([self.maxPartNodeNUM, self.featlen], dtype=torch.float32).to(self.featDevice)  ## 这一步会爆显存
         self.map = []
@@ -225,7 +224,7 @@ class CustomDataset(Dataset):
             self.indptr = torch.as_tensor(np.fromfile(filePath + "/indptr.bin", dtype=np.int32))
             self.nodeLabels = torch.as_tensor(np.fromfile(filePath + "/labels.bin", dtype=np.int64))
             addFeat = torch.as_tensor(np.fromfile(filePath + "/feat.bin", dtype=np.float32).reshape(-1, self.featlen))
-            self.map = torch.arange(self.maxPartNodeNUM, dtype=torch.int64,device=self.featDevice)
+            self.map = torch.arange(self.maxPartNodeNUM, dtype=torch.int32,device=self.featDevice)
         else:
             # 预加载完成，进行数据处理，此时的预取数据都保持在CPU中
             self.indices = torch.as_tensor(predata[0])
@@ -235,34 +234,35 @@ class CustomDataset(Dataset):
             addFeat = addFeatInfo['addFeat']#.to(self.featDevice)
             self.map = addFeatInfo['map'].to(self.featDevice)  
             replace_idx = addFeatInfo['replace_idx']#.to(self.featDevice)
-             
+        
         # 判断是否裁剪，之后放入GPU
         graphNodeNUM,graphEdgeNUM = int(len(self.indptr) - 1 ),len(self.indices)
         # if True:
         if countMemToLoss(graphEdgeNUM,graphNodeNUM,self.featlen,self.mem):
             self.lossG = True   # 需要裁剪
             sortNode = torch.as_tensor(np.fromfile(filePath + "/sortIds.bin", dtype=np.int32))
-            saveRatio = 0.2
-            randomLoss = 0.6
+            saveRatio = 0.6
+            randomLoss = 0.8
             cutNode,saveNode = sortNode[int(graphNodeNUM*saveRatio):],sortNode[:int(graphNodeNUM*saveRatio)]
             start = time.time()
-            self.indptr,self.indices,self.lossMap = \
-                streamLossGraph(self.indptr,self.indices,cutNode,sliceNUM=4,randomLoss=randomLoss,degreeCut=100,CutRatio=0.5)
+            self.indptr,self.indices,nodeMask = \
+                streamLossGraph(self.indptr,self.indices,cutNode,sliceNUM=10,randomLoss=randomLoss,degreeCut=60,CutRatio=0.5)
             # print(f"loss_csr time :{time.time() - start:.4f}s...")
             start = time.time()
             # addFeat -> self.feat device位置 
             sliceFeatNUM = 8
             if predata == None:
-                self.maxMemNum = int(self.maxPartNodeNUM * (1 - saveRatio) * randomLoss) + 1
+                self.maxMemNum = int(self.maxPartNodeNUM * (1 - saveRatio) * randomLoss) + 10
                 self.maxCudaNum = self.maxPartNodeNUM - self.maxMemNum + 100
 
                 self.memfeat = torch.zeros((self.maxMemNum, self.featlen), dtype=torch.float32)
                 self.cudafeat = torch.zeros((self.maxCudaNum, self.featlen), dtype=torch.float32, device='cuda')
 
-                init_cac(self.lossMap, addFeat, self.memfeat, self.cudafeat, self.map)
+                init_cac(nodeMask, addFeat, self.memfeat, self.cudafeat, self.map)
+
             else:
                 featAdd(replace_idx, addFeat, self.memfeat, self.cudafeat)
-                loss_feat_cac(self.lossMap, self.memfeat, self.cudafeat, self.map)
+                loss_feat_cac(nodeMask, self.memfeat, self.cudafeat, self.map)
                 print(f"loading feat time :{time.time() - start:.4f}s...")
         else:
             # 不需要进行裁剪,csr,feat,label直接存入cuda
@@ -303,7 +303,7 @@ class CustomDataset(Dataset):
                     sampleIDs,seed_num,fan_num,out_src,out_dst)
             elif self.lossG == True:
                 NUM = dgl.sampling.sample_with_edge_and_map(self.indptr,self.indices,
-                    sampleIDs,seed_num,fan_num,out_src,out_dst,self.lossMap)
+                    sampleIDs,seed_num,fan_num,out_src,out_dst,self.map)
             sampleIDs = cacheGraph[0][ptr:ptr+NUM.item()]
             ptr=ptr+NUM.item()
             mapping_ptr.append(ptr)
@@ -434,7 +434,7 @@ class CustomDataset(Dataset):
             test = self.cudafeat[featIdx]
         elif self.lossG == True:
             mapIdx = self.map[uniqueList.to(self.map.device).to(torch.int64)].to(torch.int64)     
-            test = self.cudafeat[mapIdx.to(self.cudafeat.device)]        
+            test = self.cudafeat[mapIdx.to(self.cudafeat.device)]    
         logger.info("subG feat merge cost {:.5f}s".format(time.time()-featTime))
         return test
     

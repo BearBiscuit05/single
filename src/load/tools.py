@@ -82,7 +82,6 @@ def loss_csr(raw_ptr,raw_indice,lossNode,saveNode):
     emptyCache()
     return new_ptr,new_indice,id2featMap
 
-
 def streamLossGraph(raw_ptr,raw_indice,lossNode,sliceNUM=1,randomLoss=0.5,degreeCut=None,CutRatio=0.5):
     # raw_ptr,new_ptr始终位于GPU中，indice同样位于GPU中，raw流式传入
     raw_ptr = raw_ptr.cuda()
@@ -98,7 +97,7 @@ def streamLossGraph(raw_ptr,raw_indice,lossNode,sliceNUM=1,randomLoss=0.5,degree
     mask[lossNode.to(torch.int64)] = False
     ptr_diff[lossNode.to(torch.int64)] = 0
 
-    print(f"loss... 节点数{nodeNUM},裁剪数{lossNode.shape[0]}")
+    print(f"loss... 节点数{nodeNUM}, mask为False的个数: {torch.nonzero(~mask).reshape(-1).shape} 裁剪数{lossNode.shape[0]}")
 
     # 裁剪边
     if degreeCut != None:
@@ -107,18 +106,18 @@ def streamLossGraph(raw_ptr,raw_indice,lossNode,sliceNUM=1,randomLoss=0.5,degree
 
     # allTime = time.time()
     new_ptr = torch.cat((torch.zeros(1).to(torch.int32).to(ptr_diff.device),torch.cumsum(ptr_diff,dim = 0).to(torch.int32)))
-    id2featMap = mask.cumsum(dim=0).to(torch.int32)
-    id2featMap -= 1
-    id2featMap[lossNode.to(torch.int64)] = -1
+    # id2featMap = mask.cumsum(dim=0).to(torch.int32)
+    # id2featMap -= 1
+    # id2featMap[lossNode.to(torch.int64)] = -1
     # print("id2featMap shape:",id2featMap.shape)
     # print("mask shape:",mask.shape)
     # print("loss_csr max map idx",torch.max(id2featMap))
     # exit(-1)
     
-    ptr_diff,mask = None,None
+    ptr_diff = None
     # print(f"ptr_diff using time :{time.time()-allTime:.3f}s")
     # indice
-
+    emptyCache()
     blockSize = (nodeNUM - 1) // sliceNUM + 1
     bound = []
     lastIdx = 0
@@ -137,7 +136,7 @@ def streamLossGraph(raw_ptr,raw_indice,lossNode,sliceNUM=1,randomLoss=0.5,degree
         dgl.loss_csr(raw_off,new_off,rawIndiceOff,newIndiceOff)
     # print(f"loss_csr func using time :{time.time()-allTime:.3f}s")
     raw_ptr,raw_indice = None,None
-    return new_ptr,new_indice,id2featMap
+    return new_ptr,new_indice,mask
 
 #@profile
 def loss_feat(loss_feat,raw_feat, sliceNUM, id2featMap, featLen,device):
@@ -191,23 +190,23 @@ def featAdd(addIdx, addfeat, memfeat, cudafeat):
 # addfeat = torch.tensor([20,21,22,23,24,25,26])
 # featAdd(addIdx, addfeat, memfeat,cudafeat)
 
-def init_cac(lossMap, feat, memfeat, cudafeat, map):
+def init_cac(nodeMask, feat, memfeat, cudafeat, map):
     #将feat初始化迁移到memfeat和cudafeat
-    mask = torch.ones(lossMap.shape[0], dtype = torch.bool, device='cuda')
-    mask[lossMap == -1] = False
+    # mask = torch.ones(lossMap.shape[0], dtype = torch.bool, device='cuda')
+    # mask[lossMap == -1] = False
 
-    cutfeat = feat[~mask]
+    cutfeat = feat[~nodeMask]
     memfeat[1 : cutfeat.shape[0] + 1] = cutfeat
-    map[torch.nonzero(~mask).reshape(-1)] = (-1) * torch.arange(1, cutfeat.shape[0] + 1, device = 'cuda', dtype=torch.int64)
+    map[torch.nonzero(~nodeMask).reshape(-1)] = (-1) * torch.arange(1, cutfeat.shape[0] + 1, device = 'cuda', dtype=torch.int32)
     cutfeat = None
 
-    savefeat = feat[mask]
+    savefeat = feat[nodeMask]
     cudafeat[1 :savefeat.shape[0] + 1] = savefeat
-    map[torch.nonzero(mask).reshape(-1)] = torch.arange(1, savefeat.shape[0] + 1, device = 'cuda', dtype=torch.int64)
+    map[torch.nonzero(nodeMask).reshape(-1)] = torch.arange(1, savefeat.shape[0] + 1, device = 'cuda', dtype=torch.int32)
     savefeat = None
     
 #cuda and cpu 转换
-def loss_feat_cac(lossMap, memfeat, cudafeat, map):
+def loss_feat_cac(nodeMask, memfeat, cudafeat, map):
     #调用该函数需要保证
     #1.memfeat和cudafeat中含有所有当前子图的feat(可以有冗余feat但是必需全有)
     #2.lossNode存的是节点索引，map作用是 节点索引 -> memfeat/cudafeat索引
@@ -216,22 +215,22 @@ def loss_feat_cac(lossMap, memfeat, cudafeat, map):
     #需要保证：cudafeat中非saveNode节点数 > memfeat中saveNode节点数
     emptyCache()
     start = time.time()
-    saveNode = torch.nonzero(lossMap != -1).reshape(-1)
+    saveNode = torch.nonzero(nodeMask).reshape(-1)
 
     #获取mem中的saveNode
     saveIdxMap_mem = saveNode[torch.nonzero(map[saveNode] < 0).reshape(-1)]
-    saveIdx_mem = map[saveIdxMap_mem] * (-1)
+    saveIdx_mem = (map[saveIdxMap_mem] * (-1)).to(torch.int64)
 
     #获取cuda中的非save的索引
     mask = torch.ones(map.shape[0], dtype=torch.bool, device='cuda')
     mask[saveNode] = False
     mask[torch.nonzero(map < 0).reshape(-1)] = False
     nsaveMap_cuda = (torch.nonzero(mask).reshape(-1))[:saveIdx_mem.shape[0]]
-    nsaveIdx_cuda = map[nsaveMap_cuda]
+    nsaveIdx_cuda = map[nsaveMap_cuda].to(torch.int64)
 
     #将nsave_cuda[:len(save_mem)]和save_mem交换并维护map
     cuda_tmp = cudafeat[nsaveIdx_cuda]
-    cudafeat[nsaveIdx_cuda] = memfeat[saveIdx_mem].cuda()
+    cudafeat[nsaveIdx_cuda] = memfeat[saveIdx_mem].cuda()   # TODO 流式替换
     memfeat[saveIdx_mem] = cuda_tmp.cpu()
 
     #维护map
