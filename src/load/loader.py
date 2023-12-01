@@ -89,7 +89,7 @@ class CustomDataset(Dataset):
         #### mmap 特征部分 ####
         #self.feats = torch.zeros([self.maxPartNodeNUM, self.featlen], dtype=torch.float32).to(self.featDevice)  ## 这一步会爆显存
         self.map = []
-        self.cudafeat = []
+        self.trainfeat = []
         self.memfeat = []
         #### 数据预取 ####
         self.template_cache_graph , self.ramapNodeTable = self.initCacheData() # CPU , GPU
@@ -127,6 +127,7 @@ class CustomDataset(Dataset):
         self.edgecut = config['edgecut']
         self.nodecut = config['nodecut']
         self.featDevice = config['featDevice']
+        self.inCpu = self.featDevice == 'cpu'
 
     def readDatasetInfo(self):
         confPath = self.dataPath + f"/{self.dataset}.json"
@@ -201,7 +202,7 @@ class CustomDataset(Dataset):
         diffNode = torch.as_tensor(np.fromfile(diffNodeInfoPath, dtype = np.int32))
         res1_one, res2_one = torch.split(sameNode, (sameNode.shape[0] // 2))
         
-        newMap = torch.clone(map)
+        newMap = torch.clone(map)   # newMap 始终与 map在同一个设备中
         newMap[res2_one.to(torch.int64)] = map[res1_one.to(torch.int64)]
         if diffNode.shape[0] != 0:
             res1_zero, res2_zero = torch.split(diffNode, (diffNode.shape[0] // 2))
@@ -224,7 +225,7 @@ class CustomDataset(Dataset):
             self.indptr = torch.as_tensor(np.fromfile(filePath + "/indptr.bin", dtype=np.int32))
             self.nodeLabels = torch.as_tensor(np.fromfile(filePath + "/labels.bin", dtype=np.int64))
             addFeat = torch.as_tensor(np.fromfile(filePath + "/feat.bin", dtype=np.float32).reshape(-1, self.featlen))
-            self.map = torch.arange(self.maxPartNodeNUM, dtype=torch.int32,device=self.featDevice)
+            self.map = torch.arange(self.maxPartNodeNUM, dtype=torch.int32,device="cuda")
         else:
             # 预加载完成，进行数据处理，此时的预取数据都保持在CPU中
             self.indices = torch.as_tensor(predata[0])
@@ -232,13 +233,13 @@ class CustomDataset(Dataset):
             self.nodeLabels = torch.as_tensor(predata[3])
             addFeatInfo = predata[2]
             addFeat = addFeatInfo['addFeat']#.to(self.featDevice)
-            self.map = addFeatInfo['map'].to(self.featDevice)  
+            self.map = addFeatInfo['map']  
             replace_idx = addFeatInfo['replace_idx']#.to(self.featDevice)
         
         # 判断是否裁剪，之后放入GPU
         graphNodeNUM,graphEdgeNUM = int(len(self.indptr) - 1 ),len(self.indices)
         # if True:
-        if countMemToLoss(graphEdgeNUM,graphNodeNUM,self.featlen,self.mem):
+        if not self.inCpu and countMemToLoss(graphEdgeNUM,graphNodeNUM,self.featlen,self.mem):
             self.lossG = True   # 需要裁剪
             sortNode = torch.as_tensor(np.fromfile(filePath + "/sortIds.bin", dtype=np.int32))
             saveRatio = 0.6
@@ -256,13 +257,13 @@ class CustomDataset(Dataset):
                 self.maxCudaNum = self.maxPartNodeNUM - self.maxMemNum + 100
 
                 self.memfeat = torch.zeros((self.maxMemNum, self.featlen), dtype=torch.float32)
-                self.cudafeat = torch.zeros((self.maxCudaNum, self.featlen), dtype=torch.float32, device='cuda')
+                self.trainfeat = torch.zeros((self.maxCudaNum, self.featlen), dtype=torch.float32, device='cuda')
 
-                init_cac(nodeMask, addFeat, self.memfeat, self.cudafeat, self.map)
+                init_cac(nodeMask, addFeat, self.memfeat, self.trainfeat, self.map)
 
             else:
-                featAdd(replace_idx, addFeat, self.memfeat, self.cudafeat)
-                loss_feat_cac(nodeMask, self.memfeat, self.cudafeat, self.map)
+                featAdd(replace_idx, addFeat, self.memfeat, self.trainfeat)
+                loss_feat_cac(nodeMask, self.memfeat, self.trainfeat, self.map)
                 print(f"loading feat time :{time.time() - start:.4f}s...")
         else:
             # 不需要进行裁剪,csr,feat,label直接存入cuda
@@ -271,13 +272,13 @@ class CustomDataset(Dataset):
             self.indptr,self.indices = self.indptr.cuda(),self.indices.cuda()
             if predata == None: 
                 # 表明首次加载,直接迁移
-                self.cudafeat = torch.zeros((self.maxPartNodeNUM, self.featlen), dtype=torch.float32, device='cuda')
-                idx = torch.arange(addFeat.shape[0],dtype=torch.int64,device="cuda")
+                self.trainfeat = torch.zeros((self.maxPartNodeNUM, self.featlen), dtype=torch.float32, device=self.featDevice)
+                idx = torch.arange(addFeat.shape[0],dtype=torch.int64,device=self.featDevice)
                 addFeat = torch.as_tensor(addFeat)
-                streamAssign(self.cudafeat,idx,addFeat,sliceNUM=4)
+                streamAssign(self.trainfeat,idx,addFeat,sliceNUM=4)
             else:
                 # 流式处理
-                streamAssign(self.cudafeat,replace_idx,addFeat,sliceNUM=4)
+                streamAssign(self.trainfeat,replace_idx,addFeat,sliceNUM=4)
 
 
 
@@ -430,11 +431,11 @@ class CustomDataset(Dataset):
     def featMerge(self,uniqueList):
         featTime = time.time() 
         if self.lossG == False:
-            featIdx = self.map[uniqueList.to(torch.int64).to(self.cudafeat.device)]
-            test = self.cudafeat[featIdx]
+            featIdx = self.map[uniqueList.to(torch.int64).to(self.trainfeat.device)]
+            test = self.trainfeat[featIdx.to(torch.int64)]
         elif self.lossG == True:
             mapIdx = self.map[uniqueList.to(self.map.device).to(torch.int64)].to(torch.int64)     
-            test = self.cudafeat[mapIdx.to(self.cudafeat.device)]    
+            test = self.trainfeat[mapIdx.to(self.trainfeat.device)]    
         logger.info("subG feat merge cost {:.5f}s".format(time.time()-featTime))
         return test
     

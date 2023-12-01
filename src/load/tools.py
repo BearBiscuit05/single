@@ -273,6 +273,6 @@ def streamAssign(rawValues,raplaceIdx,replaceValue,sliceNUM=4):
     valueBatches = torch.chunk(replaceValue, sliceNUM, dim=0)
     batch = [idxBatches, valueBatches]
     for idx,value in zip(*batch):
-        idx = idx.cuda().to(torch.int64)
-        value = value.cuda()
+        idx = idx.to(rawValues.device).to(torch.int64)
+        value = value.to(rawValues.device)
         rawValues[idx] = value
