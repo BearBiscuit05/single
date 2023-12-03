@@ -22,6 +22,7 @@ from dgl.dataloading import NeighborSampler, MultiLayerFullNeighborSampler
 from sgnn_model import DGL_SAGE, DGL_GCN, DGL_GAT
 
 import os
+# 减少GPU缓存导致的OOM，不确定系统性能影响
 os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "max_split_size_mb:512"
 
 curDir = os.path.abspath(os.path.dirname(__file__))
@@ -75,7 +76,7 @@ def train(dataset, model,basicLoop=0,loop=10):
             opt.step()
             total_loss += loss.item()
         print("| Epoch {:03d} | Loss {:.4f} | Time {:.3f}s |".format(basicLoop+epoch, total_loss / (it+1), time.time()-startTime))
-    torch.save(model.state_dict(), f'model_parameters.pth')
+    torch.save(model.state_dict(), f'model_parameters_{basicLoop+loop}.pth')
 
 def collate_fn(data):
     return data[0]
@@ -144,10 +145,10 @@ if __name__ == '__main__':
     maxEpoch = dataset.maxEpoch
     epoch = 0
     
-    # for BLoop in range(0,maxEpoch,epochInterval):
-    #     train(dataset, model,basicLoop=BLoop,loop=epochInterval)
+    for BLoop in range(0,maxEpoch,epochInterval):
+        train(dataset, model,basicLoop=BLoop,loop=epochInterval)
     # torch.save(model.state_dict(), 'model_parameters.pth')
-    model.load_state_dict(torch.load('model_parameters.pth'))
+    # model.load_state_dict(torch.load('model_parameters.pth'))
     if data["dataset"] == "PD":
         TestDataset = AsNodePredDataset(DglNodePropPredDataset('ogbn-products',root="/raid/bear/data/dataset"))
         Testing(model,data["dataset"],TestDataset,num_classes=data['classes'])
