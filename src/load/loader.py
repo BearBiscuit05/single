@@ -160,6 +160,7 @@ class CustomDataset(Dataset):
             taskFlag.result()
             preCacheData = self.preFetchDataCache.get()
             self.loadingGraphData(self.GID,predata=preCacheData)
+        emptyCache()
         self.trainNodes = self.trainNodeDict[self.GID]
         self.subGtrainNodesNUM = self.trainNodeNumbers[self.GID]   
         self.trainLoop = ((self.subGtrainNodesNUM - 1) // self.batchsize) + 1
@@ -209,7 +210,7 @@ class CustomDataset(Dataset):
         else:
             res1_zero,res2_zero = torch.Tensor([]),torch.Tensor([])
         addFeat = torch.as_tensor(np.fromfile(filePath + "/addfeat.bin", dtype=np.float32).reshape(-1, self.featlen))
-        replace_idx = map[res1_zero[:addFeat.shape[0]].to(torch.int64)].to(torch.int64)
+        replace_idx = map[res1_zero[:addFeat.shape[0]].to(torch.int64)].to(torch.int64).to(self.featDevice)
         newMap[res2_zero.to(torch.int64)] = map[res1_zero.to(torch.int64)]
         addFeatInfo = {"addFeat": addFeat, "replace_idx": replace_idx, "map": newMap} 
         self.preFetchDataCache.put([indices,indptr,addFeatInfo,nodeLabels])
@@ -228,14 +229,16 @@ class CustomDataset(Dataset):
             self.map = torch.arange(self.maxPartNodeNUM, dtype=torch.int32,device="cuda")
         else:
             # 预加载完成，进行数据处理，此时的预取数据都保持在CPU中
+            self.indices,self.indptr,self.map = None,None,None
+            emptyCache()
             self.indices = torch.as_tensor(predata[0])
             self.indptr = torch.as_tensor(predata[1])
             self.nodeLabels = torch.as_tensor(predata[3])
             addFeatInfo = predata[2]
-            addFeat = addFeatInfo['addFeat']#.to(self.featDevice)
+            addFeat = addFeatInfo['addFeat']
             self.map = addFeatInfo['map']  
-            replace_idx = addFeatInfo['replace_idx']#.to(self.featDevice)
-            emptyCache()
+            replace_idx = addFeatInfo['replace_idx']
+        
         # 判断是否裁剪，之后放入GPU
         graphNodeNUM,graphEdgeNUM = int(len(self.indptr) - 1 ),len(self.indices)
         # if True:
@@ -458,8 +461,8 @@ def collate_fn(data):
 
 
 if __name__ == "__main__":
-    dataset = CustomDataset(curDir+"/../../config/FR_dgl.json")
-    with open(curDir+"/../../config/FR_dgl.json", 'r') as f:
+    dataset = CustomDataset(curDir+"/../../config/PA_dgl.json")
+    with open(curDir+"/../../config/PA_dgl.json", 'r') as f:
         config = json.load(f)
         batchsize = config['batchsize']
         epoch = config['maxEpoch']
