@@ -235,7 +235,7 @@ class CustomDataset(Dataset):
             addFeat = addFeatInfo['addFeat']#.to(self.featDevice)
             self.map = addFeatInfo['map']  
             replace_idx = addFeatInfo['replace_idx']#.to(self.featDevice)
-        
+            emptyCache()
         # 判断是否裁剪，之后放入GPU
         graphNodeNUM,graphEdgeNUM = int(len(self.indptr) - 1 ),len(self.indices)
         # if True:
@@ -269,6 +269,7 @@ class CustomDataset(Dataset):
             # 不需要进行裁剪,csr,feat,label直接存入cuda
             print("not need cut ...")
             self.lossG = False 
+            emptyCache()
             self.indptr,self.indices = self.indptr.cuda(),self.indices.cuda()
             if predata == None: 
                 # 表明首次加载,直接迁移

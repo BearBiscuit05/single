@@ -10,6 +10,7 @@ import json
 from tools import *
 from memory_profiler import profile
 import sys
+import argparse
 
 # =============== 1.partition
 # WARNING : EDGENUM < 32G 否则无法实现
@@ -409,12 +410,16 @@ def writeJson(path):
         json.dump(dataInfo, json_file,indent=4)
 
 if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--dataset', type=str, default='PD', help='Number of layers')
+    args = parser.parse_args()
+
     JSONPATH = "/home/bear/workspace/single-gnn/datasetInfo.json"
     partitionNUM = 8
     sliceNUM = 10
     with open(JSONPATH, 'r') as file:
         data = json.load(file)
-    datasetName = ["WB"] 
+    datasetName = [args.dataset] 
 
     for NAME in datasetName:
         GRAPHPATH = data[NAME]["rawFilePath"]
