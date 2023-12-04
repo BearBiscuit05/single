@@ -162,6 +162,7 @@ class CustomDataset(Dataset):
             self.loadingGraphData(self.GID,predata=preCacheData)
         emptyCache()
         self.trainNodes = self.trainNodeDict[self.GID]
+        self.trainNodes = self.trainNodes[torch.randperm(self.trainNodes.size(0))]  # reshuffle
         self.subGtrainNodesNUM = self.trainNodeNumbers[self.GID]   
         self.trainLoop = ((self.subGtrainNodesNUM - 1) // self.batchsize) + 1
         self.preFetchFlagQueue.put(self.preFetchExecutor.submit(self.preloadingGraphData))  # 发送下一个预取命令
@@ -174,13 +175,8 @@ class CustomDataset(Dataset):
         for index in range(self.partNUM):
             filePath = self.dataPath + "/part" + str(index)   
             trainIDs = torch.as_tensor(np.fromfile(filePath+"/trainIds.bin",dtype=np.int64))
-            idDict[index],_ = torch.sort(trainIDs)
-            current_length = len(idDict[index])
-            numberList[index] = current_length
-            fill_length = self.batchsize - current_length % self.batchsize
-            padding = torch.full((fill_length,), -1, dtype=idDict[index].dtype)
-            idDict[index] = torch.cat((idDict[index], padding))
-            logger.debug("subG:{} ,real train len:{}, padding number:{}".format(index,current_length,padding))
+            numberList[index] = len(trainIDs)
+            idDict[index] = trainIDs
             self.trainNUM += idDict[index].shape[0]
         return idDict,numberList
 
@@ -214,7 +210,7 @@ class CustomDataset(Dataset):
         newMap[res2_zero.to(torch.int64)] = map[res1_zero.to(torch.int64)]
         addFeatInfo = {"addFeat": addFeat, "replace_idx": replace_idx, "map": newMap} 
         self.preFetchDataCache.put([indices,indptr,addFeatInfo,nodeLabels])
-        print(f"pre data time :{time.time() - start:.4f}s...")
+        logger.info(f"pre data time :{time.time() - start:.4f}s...")
         return 0
 
     #@profile
@@ -270,7 +266,6 @@ class CustomDataset(Dataset):
                 print(f"loading feat time :{time.time() - start:.4f}s...")
         else:
             # 不需要进行裁剪,csr,feat,label直接存入cuda
-            print("not need cut ...")
             self.lossG = False 
             emptyCache()
             self.indptr,self.indices = self.indptr.cuda(),self.indices.cuda()

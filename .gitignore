@@ -37,3 +37,4 @@ build.txt
 Makefile
 **/build/
 **/**_memory_**
+**/**.pth
