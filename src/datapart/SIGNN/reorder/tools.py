@@ -32,22 +32,19 @@ def checkFilePath(path):
 
 def convert_to_tensor(data, dtype=torch.int32):
     if isinstance(data, np.ndarray):
-        return torch.from_numpy(data).to(dtype)
+        return torch.as_tensor(data).to(dtype)
     else:
         return data.to(dtype)
 
 def cooTocsc(srcList,dstList,sliceNUM=1,device=torch.device('cpu')):
-    startTime = time.time()
+    
     dstList = dstList.cuda()
     max_value = max(torch.max(dstList).item(), torch.max(srcList).item()) + 1   # 保证对齐
     binAns = torch.zeros(max_value,dtype=torch.int32,device="cuda")
     dgl.bincount(dstList,binAns)
     dstList = dstList.cpu()
-    # print(f"cum Time {time.time()-startTime:.3f}s...")
     ptrcum = torch.cumsum(binAns, dim=0)
-    # print(f"cum Time {time.time()-startTime:.3f}s...")
     zeroblock=torch.zeros(1,device=ptrcum.device,dtype=torch.int32)
-    # print(f"cum Time {time.time()-startTime:.3f}s...")
     inptr = torch.cat([zeroblock,ptrcum]).to(torch.int32).cuda()
     binAns,ptrcum = None,None
     emptyCache()
@@ -58,9 +55,7 @@ def cooTocsc(srcList,dstList,sliceNUM=1,device=torch.device('cpu')):
         srcList = srcList.cuda()
         dgl.cooTocsr(inptr,indice,addr,dstList,srcList) # compact dst , exchange place
         inptr,indice = inptr.cpu(),indice.cpu()
-        addr = None
-        srcList = srcList.cpu()
-        dstList = dstList.cpu()
+        srcList,dstList,addr=None,None,None
         return inptr,indice
     else:
         src_batches = torch.chunk(srcList, sliceNUM, dim=0)
@@ -71,6 +66,7 @@ def cooTocsc(srcList,dstList,sliceNUM=1,device=torch.device('cpu')):
             dst_batch = dst_batch.cuda()
             dgl.cooTocsr(inptr,indice,addr,dst_batch,src_batch) # compact dst , exchange place
         addr,dst_batch,src_batch= None,None,None
+        srcList,dstList=None,None
         inptr = inptr.cpu() 
         indice = indice.cpu()
         return inptr,indice

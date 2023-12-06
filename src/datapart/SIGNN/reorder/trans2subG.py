@@ -34,15 +34,6 @@ def PRgenG(RAWPATH,nodeNUM,partNUM,savePath=None):
     edgeNUM = len(src)
     trainIds = torch.from_numpy(np.fromfile(TRAINPATH,dtype=np.int64))
     
-    # if partNUM <= 8:
-    #     edgeTable = torch.zeros_like(src,dtype=torch.int8)
-    # elif partNUM > 8 and partNUM <= 16:
-    #     edgeTable = torch.zeros_like(src,dtype=torch.int16)
-    # elif partNUM > 16 and partNUM <= 32:
-    #     edgeTable = torch.zeros_like(src,dtype=torch.int32)
-    # else:
-    #     ValueError("Not currently supporting partitions greater than 32.")
-        
     template_array = torch.zeros(nodeNUM,dtype=torch.int32)
 
     # 流式处理边数据
@@ -76,18 +67,14 @@ def PRgenG(RAWPATH,nodeNUM,partNUM,savePath=None):
     # ====
 
     nodeLayerInfo = []
-    tmp_etable = torch.zeros_like(dst_batches[0],dtype=torch.int32).cuda()
     for _ in range(3):
         offset = 0
         acc_nodeValue = torch.zeros_like(nodeValue,dtype=torch.int32)
         acc_nodeInfo = torch.zeros_like(nodeInfo,dtype=torch.int32)
         for src_batch,dst_batch in zip(*batch):  
-            batchLen = len(src_batch)
             tmp_nodeValue,tmp_nodeInfo = nodeValue.clone().cuda(),nodeInfo.clone().cuda() 
             src_batch,dst_batch = src_batch.cuda(), dst_batch.cuda()  
-            tmp_etable.fill_(0)
-            dgl.per_pagerank(dst_batch,src_batch,tmp_etable,inNodeTable,tmp_nodeValue,tmp_nodeInfo)
-            #edgeTable[offset:offset+batchLen] = tmp_etable[:batchLen].to(edgeTable.dtype).cpu()
+            dgl.per_pagerank(dst_batch,src_batch,inNodeTable,tmp_nodeValue,tmp_nodeInfo)
             tmp_nodeValue, tmp_nodeInfo = tmp_nodeValue.cpu(),tmp_nodeInfo.cpu()
             acc_nodeValue += tmp_nodeValue - nodeValue
             acc_nodeInfo = acc_nodeInfo | tmp_nodeInfo     
@@ -96,7 +83,7 @@ def PRgenG(RAWPATH,nodeNUM,partNUM,savePath=None):
         nodeInfo = acc_nodeInfo
         tmp_nodeValue,tmp_nodeInfo=None,None
         nodeLayerInfo.append(nodeInfo.clone())
-    src_batch,dst_batch,inNodeTable,tmp_etable = None,None,None,None
+    src_batch,dst_batch,inNodeTable = None,None,None
     outlayer = torch.bitwise_xor(nodeLayerInfo[-1], nodeLayerInfo[-2]) # 最外层的点是不会有连接边的
     nodeLayerInfo = None
     emptyCache()
@@ -210,15 +197,9 @@ def partProcess(rank,RAWDATAPATH,labels):
     saveBin(indices,SubIndicesPath)
     print(f"save time : {time.time()-coostartTime:.4f}s")
     
-    remapstartTime = time.time()
     pridx = torch.as_tensor(np.fromfile(PRvaluePath,dtype=np.int32))
     remappedSrc,_,_ = remapEdgeId(uniNode,pridx,None,device=torch.device('cuda:0'))
     saveBin(remappedSrc,PRvaluePath)
-    print(f"remapstart time : {time.time()-remapstartTime:.4f}s")
-    
-    # os.remove(rawDataPath)
-    # os.remove(rawNodePath)
-    # os.remove(rawTrainPath)
 
     dataInfo[f"part{rank}"] = {'nodeNUM': len(node),'edgeNUM':len(data) // 2}
     print(f"map data time : {time.time()-startTime:.4f}s")
@@ -375,7 +356,6 @@ def genFeatIdx(part_num, base_path, nodeList, part_seq, featLen, maxNodeNum):
         nextNode = nodeList[next_part].cuda()
         curLen = curNode.shape[0]
         nextLen = nextNode.shape[0]
-        # print(f"gen_add_feat,cur:{cur_part} {curLen}, next:{next_part} {nextLen}")
         
         res1.fill_(0)
         res2.fill_(0)
