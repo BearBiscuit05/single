@@ -456,8 +456,8 @@ def collate_fn(data):
 
 
 if __name__ == "__main__":
-    dataset = CustomDataset(curDir+"/../../config/PA_dgl.json")
-    with open(curDir+"/../../config/PA_dgl.json", 'r') as f:
+    dataset = CustomDataset(curDir+"/../../config/RD_pyg.json")
+    with open(curDir+"/../../config/RD_pyg.json", 'r') as f:
         config = json.load(f)
         batchsize = config['batchsize']
         epoch = config['maxEpoch']
@@ -473,8 +473,8 @@ if __name__ == "__main__":
             # print(number)
             # print('-'*20)
             count = count + 1
-            # if count % 20 == 0:
-            #     print("loop time:{:.5f}".format(time.time()-loopTime))
+            if count % 20 == 0:
+                print("loop time:{:.5f}".format(time.time()-loopTime))
         print("="*20)
         print("all loop time:{:.5f}".format(time.time()-loopTime))
         print("="*20)

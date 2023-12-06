@@ -15,7 +15,7 @@ import argparse
 # =============== 1.partition
 # WARNING : EDGENUM < 32G 否则无法实现
 # G_MEM: 16G
-MAXEDGE = 800000000    # 
+MAXEDGE = 900000000    # 
 MAXSHUFFLE = 30000000   # 
 #################
 
@@ -186,7 +186,7 @@ def partProcess(rank,RAWDATAPATH,labels):
     coostartTime = time.time()
     remappedSrc,remappedDst,uniNode = nodeShuffle(node,data)
     subLabel = labels[uniNode.to(torch.int64)]
-    indptr, indices = cooTocsc(remappedSrc,remappedDst,sliceNUM=(len(data) // (MAXEDGE//4))) 
+    indptr, indices = cooTocsc(remappedSrc,remappedDst,sliceNUM=(len(data) // (MAXEDGE//2))) 
     print(f"coo data time : {time.time()-coostartTime:.4f}s")
 
     coostartTime = time.time()
@@ -411,12 +411,13 @@ def writeJson(path):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--dataset', type=str, default='PD', help='Number of layers')
+    parser.add_argument('--dataset', type=str, default='PD', help='dataset name')
+    parser.add_argument('--partNUM', type=int, default=8, help='Number of layers')
     args = parser.parse_args()
 
     JSONPATH = "/home/bear/workspace/single-gnn/datasetInfo.json"
-    partitionNUM = 8
-    sliceNUM = 10
+    partitionNUM = args.partNUM
+    sliceNUM = 8
     with open(JSONPATH, 'r') as file:
         data = json.load(file)
     datasetName = [args.dataset] 

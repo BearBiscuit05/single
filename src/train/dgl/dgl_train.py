@@ -109,37 +109,23 @@ def load_reddit(self_loop=True):
 def load_dataset(dataset,path,featlen,mode=None):
     graphbin = "%s/%s/graph.bin" % (path,dataset)
     labelbin = "%s/%s/labels.bin" % (path,dataset) # 每个节点label 8字节
-    featsbin = "%s/%s/feats_%d.bin" % (path,dataset,featlen)
+    featsbin = "%s/%s/feat.bin" % (path,dataset)
+    trainbin = "%s/%s/trainIds.bin" % (path,dataset)
     edges = np.fromfile(graphbin,dtype=np.int32)
-    # srcs = torch.tensor(edges[::2]).to(torch.int64)
-    # dsts = torch.tensor(edges[1::2]).to(torch.int64)
     
     srcs = edges[::2]
     dsts = edges[1::2]
-    # srcs = torch.from_numpy(srcs)
-    # dsts = torch.from_numpy(dsts)
     feats = np.fromfile(featsbin,dtype=np.float32).reshape(-1,100)
     
-    if dataset == 'com_fr':
-        label = np.fromfile(labelbin,dtype=np.int32)
-    elif dataset == 'twitter' or dataset == 'uk-2007-05' or dataset == 'uk-2006-05':
-        label = np.fromfile(labelbin,dtype=np.int64)
+
+    label = np.fromfile(labelbin,dtype=np.int64)
 
     g = dgl.graph((srcs,dsts))
     feats_tmp = feats[:g.num_nodes()]
     g.ndata['feat'] = torch.tensor(feats_tmp)
     g.ndata['label'] = torch.tensor(label[:g.num_nodes()])
 
-    if mode == 'id_ordered' or mode == 'id_random':           # 以加载id二进制文件方法拿到训练节点
-        trainbin = "%s/%s/train_%s.bin" % (path,dataset,mode)
-        train_idx = np.fromfile(trainbin,dtype=np.int32)
-    elif mode == 'mask':                                      # 以加载mask方法拿到训练节点
-        trainbin = "%s/%s/train_mask.bin" % (path,dataset)
-        trainmask = np.fromfile(trainbin,dtype=np.int32)
-        train_idx = np.argwhere(trainmask > 0).squeeze()
-    else:                                                     # 直接取1%作为训练节点
-        trainnum = int(g.num_nodes() * 0.01)
-        train_idx = np.arange(trainnum,dtype=np.int32)
+    train_idx = np.fromfile(trainbin,dtype=np.int64)
     return g,train_idx
 
 if __name__ == '__main__':
@@ -157,7 +143,7 @@ if __name__ == '__main__':
         args.mode = 'cpu'
     print(f'Training in {args.mode} mode.')
     
-    default_datasetpath = "/home/bear/workspace/single-gnn/data/raid"
+    default_datasetpath = "/raid/bear/data/raw"
     print('Loading data')
     out_size = 0
     if args.dataset == 'ogb-products':
@@ -176,7 +162,7 @@ if __name__ == '__main__':
         out_size = 150
         data = (train_idx,[],[])
         dataset = None
-    elif args.dataset == 'twitter':
+    elif args.dataset == 'wb2001':
         g,train_idx = load_dataset(args.dataset,default_datasetpath,100,'id_ordered')
         out_size = 150
         data = (train_idx,[],[])
@@ -217,7 +203,7 @@ if __name__ == '__main__':
         if loopList[index] > args.maxloop:
             break
         _loop = loopList[index] - loopList[index - 1]
-        #train(args, device, g, dataset, model,data=data,basicLoop=loopList[index - 1],loop=_loop)
+        train(args, device, g, dataset, model,data=data,basicLoop=loopList[index - 1],loop=_loop)
         #print('Testing with after loop {}:...'.format(loopList[index]))
         #model.load_state_dict(torch.load('model_parameters.pth'))
         if args.dataset == 'ogb-products':
