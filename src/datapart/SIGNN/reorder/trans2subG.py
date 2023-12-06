@@ -31,16 +31,17 @@ def PRgenG(RAWPATH,nodeNUM,partNUM,savePath=None):
     
     graph = torch.from_numpy(np.fromfile(GRAPHPATH,dtype=np.int32))
     src,dst = graph[::2],graph[1::2]
+    edgeNUM = len(src)
     trainIds = torch.from_numpy(np.fromfile(TRAINPATH,dtype=np.int64))
     
-    if partNUM <= 8:
-        edgeTable = torch.zeros_like(src,dtype=torch.int8)
-    elif partNUM > 8 and partNUM <= 16:
-        edgeTable = torch.zeros_like(src,dtype=torch.int16)
-    elif partNUM > 16 and partNUM <= 32:
-        edgeTable = torch.zeros_like(src,dtype=torch.int32)
-    else:
-        ValueError("Not currently supporting partitions greater than 32.")
+    # if partNUM <= 8:
+    #     edgeTable = torch.zeros_like(src,dtype=torch.int8)
+    # elif partNUM > 8 and partNUM <= 16:
+    #     edgeTable = torch.zeros_like(src,dtype=torch.int16)
+    # elif partNUM > 16 and partNUM <= 32:
+    #     edgeTable = torch.zeros_like(src,dtype=torch.int32)
+    # else:
+    #     ValueError("Not currently supporting partitions greater than 32.")
         
     template_array = torch.zeros(nodeNUM,dtype=torch.int32)
 
@@ -74,6 +75,7 @@ def PRgenG(RAWPATH,nodeNUM,partNUM,savePath=None):
         saveBin(ids,TrainPath)
     # ====
 
+    nodeLayerInfo = []
     tmp_etable = torch.zeros_like(dst_batches[0],dtype=torch.int32).cuda()
     for _ in range(3):
         offset = 0
@@ -85,7 +87,7 @@ def PRgenG(RAWPATH,nodeNUM,partNUM,savePath=None):
             src_batch,dst_batch = src_batch.cuda(), dst_batch.cuda()  
             tmp_etable.fill_(0)
             dgl.per_pagerank(dst_batch,src_batch,tmp_etable,inNodeTable,tmp_nodeValue,tmp_nodeInfo)
-            edgeTable[offset:offset+batchLen] = tmp_etable[:batchLen].to(edgeTable.dtype).cpu()
+            #edgeTable[offset:offset+batchLen] = tmp_etable[:batchLen].to(edgeTable.dtype).cpu()
             tmp_nodeValue, tmp_nodeInfo = tmp_nodeValue.cpu(),tmp_nodeInfo.cpu()
             acc_nodeValue += tmp_nodeValue - nodeValue
             acc_nodeInfo = acc_nodeInfo | tmp_nodeInfo     
@@ -93,13 +95,19 @@ def PRgenG(RAWPATH,nodeNUM,partNUM,savePath=None):
         nodeValue = nodeValue + acc_nodeValue
         nodeInfo = acc_nodeInfo
         tmp_nodeValue,tmp_nodeInfo=None,None
+        nodeLayerInfo.append(nodeInfo.clone())
     src_batch,dst_batch,inNodeTable,tmp_etable = None,None,None,None
-
+    outlayer = torch.bitwise_xor(nodeLayerInfo[-1], nodeLayerInfo[-2]) # 最外层的点是不会有连接边的
+    nodeLayerInfo = None
     emptyCache()
+    
+    nodeInfo = nodeInfo.cuda()
+    outlayer = outlayer.cuda()
     for bit_position in range(partNUM):
+        # GPU : nodeIndex,outIndex
         nodeIndex = (nodeInfo & (1 << bit_position)) != 0
-        edgeIndex = (edgeTable & (1 << bit_position)) != 0
-        nid = torch.nonzero(nodeIndex).reshape(-1).to(torch.int32)
+        outIndex  =  (outlayer & (1 << bit_position)) != 0  # 表示是否为三跳点
+        nid = torch.nonzero(nodeIndex).reshape(-1).to(torch.int32).cpu()
         PATH = savePath + f"/part{bit_position}" 
         DataPath = PATH + f"/raw_G.bin"
         NodePath = PATH + f"/raw_nodes.bin"
@@ -108,15 +116,20 @@ def PRgenG(RAWPATH,nodeNUM,partNUM,savePath=None):
         saveBin(nid,NodePath)
         saveBin(selfLoop,DataPath)
         graph = graph.reshape(-1,2)
-        sliceNUM = (len(edgeTable)-1) // (MAXEDGE//2) + 1
-        offsetSize = (len(edgeIndex)-1) // sliceNUM + 1
+        sliceNUM = (edgeNUM-1) // (MAXEDGE//2) + 1
+        offsetSize = (edgeNUM-1) // sliceNUM + 1
         offset = 0
         start = time.time()
         for i in range(sliceNUM):
-            sliceLen = min((i+1)*offsetSize,len(edgeIndex))
+            sliceLen = min((i+1)*offsetSize,edgeNUM)
             g_gpu = graph[offset:sliceLen]                  # 部分graph
-            idx_gpu = edgeIndex[offset:sliceLen]            # 部分graph对应索引的mask
-            g_gpu,idx_gpu = g_gpu.cuda(),idx_gpu.cuda()     # 迁移至GPU进行加速抽取
+            g_gpu = g_gpu.cuda()
+            gsrc,gdst = g_gpu[:,0],g_gpu[:,1]
+            gsrcMask = nodeIndex[gsrc.to(torch.int64)]
+            gdstMask = nodeIndex[gdst.to(torch.int64)]
+            idx_gpu = torch.bitwise_and(gsrcMask, gdstMask) # 此时还包括三跳连边
+            IsoutNode = outIndex[gdst.to(torch.int64)]
+            idx_gpu = torch.bitwise_and(idx_gpu, ~IsoutNode) # 此时还包括三跳连边
             subEdge = g_gpu[idx_gpu].cpu()
             saveBin(subEdge,DataPath,addSave=True)
             offset = sliceLen                       
