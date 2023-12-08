@@ -69,7 +69,7 @@ def run(args, dataset,split_idx=None):
         data,
         input_nodes=train_idx,
         num_neighbors=args.fanout,
-        batch_size=1024,
+        batch_size=args.bs,
         shuffle=True,
         num_workers=24,
         persistent_workers=True,
@@ -159,7 +159,7 @@ def testRun(args,Gdata,trainIDs):
         Gdata,
         input_nodes=trainIDs,
         num_neighbors=args.fanout,
-        batch_size=1024,
+        batch_size=args.bs,
         shuffle=True,
         num_workers=12,
         persistent_workers=True,
@@ -210,7 +210,7 @@ if __name__ == '__main__':
     parser.add_argument('--dataset', type=str, default='Reddit', help='Dataset name')
     parser.add_argument('--maxloop', type=int, default=10, help='max loop number')
     parser.add_argument('--model', type=str, default="SAGE", help='train model')
-
+    parser.add_argument('--bs', type=int, default=1024, help='batchsize')
     args = parser.parse_args()
     world_size = 1
     print('Let\'s use', world_size, 'GPUs!')

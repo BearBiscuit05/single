@@ -59,15 +59,13 @@ def layerwise_infer(device, graph, nid, model, num_classes, batch_size):
 
 def train(dataset, model,basicLoop=0,loop=10):
     opt = torch.optim.Adam(model.parameters(), lr=1e-3, weight_decay=5e-4)
-    train_loader = torch.utils.data.DataLoader(dataset=dataset, batch_size=1024, collate_fn=collate_fn)#,pin_memory=True)
+    train_loader = torch.utils.data.DataLoader(dataset=dataset, batch_size=dataset.batchsize, collate_fn=collate_fn)#,pin_memory=True)
     for epoch in range(loop):
         startTime = time.time()
         total_loss = 0
         model.train()
         for it,(graph,feat,label,number) in enumerate(train_loader):
             feat = feat.cuda()
-            #tmp = copy.deepcopy(graph)
-            #tmp = [block.to("cuda") for block in tmp]
             y_hat = model(graph, feat)
             label = label.to(torch.int64)
             loss = F.cross_entropy(y_hat[:number], label[:number].to('cuda:0'))

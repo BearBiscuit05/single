@@ -52,12 +52,12 @@ def train(args, device, g, dataset, model,data=None ,basicLoop=0,loop=10):
     sampler = NeighborSampler(args.fanout)
     use_uva = (args.mode == 'mixed')
     train_dataloader = DataLoader(g, train_idx, sampler, device=device,
-                                  batch_size=1024, shuffle=False,
+                                  batch_size=args.bs, shuffle=False,
                                   drop_last=False, num_workers=0,
                                   use_uva=use_uva)
     if val_idx != []:
         val_dataloader = DataLoader(g, val_idx, sampler, device=device,
-                                    batch_size=1024, shuffle=True,
+                                    batch_size=args.bs, shuffle=True,
                                     drop_last=False, num_workers=0,
                                     use_uva=use_uva)
 
@@ -138,6 +138,7 @@ if __name__ == '__main__':
     parser.add_argument('--dataset', type=str, default='ogb-papers100M', help='Dataset name')
     parser.add_argument('--maxloop', type=int, default=20, help='max loop number')
     parser.add_argument('--model', type=str, default="SAGE", help='train model')
+    parser.add_argument('--bs', type=int, default=1024, help='batchsize')
     args = parser.parse_args()
     if not torch.cuda.is_available():
         args.mode = 'cpu'
