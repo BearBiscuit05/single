@@ -10,18 +10,10 @@ import math
 # 以上过程均在CUDA中完成
 
 subGNUM = []    # 
-
-#subGCost[i]表示子图i的总开销
-subGCost = []
-
-#subGMap[i]表示当前子图i的实际子图位置(用于合并操作)
-subGMap = []
-
-#weight表示这个分区是由多少个初始子分区合并而来的
-subGWeight = []
-
-#subGTrack[i] = [] 表示分区i由哪些初始分区构成的
-subGTrack = []
+subGCost = []   #subGCost[i]表示子图i的总开销
+subGMap = []    #subGMap[i]表示当前子图i的实际子图位置(用于合并操作)
+subGWeight = [] #weight表示这个分区是由多少个初始子分区合并而来的
+subGTrack = []  #subGTrack[i] = [] 表示分区i由哪些初始分区构成的
 
 mergeBound = 0
 averDegree = 0
@@ -51,7 +43,6 @@ def genSmallCluster(trainids,nodeTable,partNUM):
     labelCluster = torch.zeros(torch.max(trainLabel).item()+1,dtype=torch.int32,device="cuda")
     dgl.bincount(trainLabel,labelCluster)
     
-    print(f"bin time :{time.time()-startTime:.2f}s")
     startTime = time.time()
     sortLabelsNUM,labelIdx = torch.sort(labelCluster,descending=True)
 
@@ -121,6 +112,8 @@ def strategy_single(nodeTable, maxBound):
             costs = subGCost[validIdx]
             costs,idx = torch.sort(costs)
             idx = torch.tensor([idx[0],idx[-1]])
+            if (idx[0] == idx[-1]):
+                continue
             validIdx = validIdx[idx]#取最大和最小的两个
             validIdx,_ = torch.sort(validIdx) #按索引排序，因为后面merge的时候固定是合并成小标签
             curCost = mergeLabelCost(nodeTable,validIdx[0],validIdx[1])
@@ -225,3 +218,17 @@ def startCluster(nodeTable,cluserNUM,maxBound,globalData):
 # featLen = 100
 # globalData = (mergeBound, averDegree, featLen)
 # startCluster(nodeTable, cluserNUM, maxBound, globalData)
+
+def transPartId2Bit(trainIdsInPart,trainIds,nodeNUM,TableNUM,labelTableLen):
+    MultNodeLabels = []
+    for i in range(labelTableLen):
+        MultNodeLabels.append(torch.zeros(nodeNUM,dtype=torch.int32,device="cuda"))
+
+    #labelTableLen视为不同维度
+    #0 - 29, 30 - 59, 60 - 99...
+    for i in range(labelTableLen):
+        curMask = (trainIdsInPart > (i * TableNUM - 1)) & (trainIdsInPart < ((i + 1) * TableNUM))
+        curTrainIdsInPartIdx = torch.nonzero(curMask).reshape(-1).to(torch.int64)
+        MultNodeLabels[i][trainIds[curTrainIdsInPartIdx]] = (1 << (trainIdsInPart[curTrainIdsInPartIdx] % TableNUM)).to(torch.int32).cuda()
+    nodeInfo = torch.stack(tuple(MultNodeLabels),dim = 1).reshape(-1).cpu()
+    return nodeInfo

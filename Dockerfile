@@ -30,7 +30,7 @@ RUN conda create --name sgnn --file /app/docker/spec-list.txt \
     && echo "conda activate sgnn" >> ~/.bashrc
 
 # Make RUN commands use the new environment:
-SHELL ["conda", "run", "--no-capture-output", "-n", "fgnn_env", "/bin/bash", "-c"]
+SHELL ["conda", "run", "--no-capture-output", "-n", "sgnn", "/bin/bash", "-c"]
 
 # WORKDIR /app/source
 # COPY . ./fgnn

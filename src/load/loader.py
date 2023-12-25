@@ -199,7 +199,7 @@ class CustomDataset(Dataset):
         diffNode = torch.as_tensor(np.fromfile(diffNodeInfoPath, dtype = np.int32))
         res1_one, res2_one = torch.split(sameNode, (sameNode.shape[0] // 2))
         
-        newMap = torch.clone(map)   # newMap 始终与 map在同一个设备中
+        newMap = torch.clone(map)   # newMap.device == map.device
         newMap[res2_one.to(torch.int64)] = map[res1_one.to(torch.int64)]
         if diffNode.shape[0] != 0:
             res1_zero, res2_zero = torch.split(diffNode, (diffNode.shape[0] // 2))
@@ -267,7 +267,6 @@ class CustomDataset(Dataset):
         else:
             # 不需要进行裁剪,csr,feat,label直接存入cuda
             self.lossG = False 
-            emptyCache()
             self.indptr,self.indices = self.indptr.cuda(),self.indices.cuda()
             if predata == None: 
                 # 表明首次加载,直接迁移

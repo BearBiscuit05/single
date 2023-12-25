@@ -22,15 +22,9 @@ MAXSHUFFLE = 30000000   #
 ## pagerank+label 遍历获取基础子图
 #@profile
 # TODO:此处给出的partNUM应该是originPartNUM
-def PRgenG(RAWPATH,nodeNUM,partNUM,savePath=None):
+def PRgenG(RAWPATH,nodeNUM,originPartNUM,savePath=None):
     GRAPHPATH = RAWPATH + "/graph.bin"
     TRAINPATH = RAWPATH + "/trainIds.bin"
-
-    # TODO：位置需要调整
-    for i in range(partNUM):
-        PATH = savePath + f"/part{i}" 
-        checkFilePath(PATH)
-    
     graph = torch.from_numpy(np.fromfile(GRAPHPATH,dtype=np.int32))
     src,dst = graph[::2],graph[1::2]
     edgeNUM = len(src)
@@ -48,6 +42,7 @@ def PRgenG(RAWPATH,nodeNUM,partNUM,savePath=None):
     outNodeTable = torch.zeros(nodeNUM,dtype=torch.int32,device="cuda")
     nodeInfo = torch.zeros(nodeNUM,dtype=torch.int32,device="cuda")
     nodeInfo = nodeInfo - 1
+    trainIds = trainIds.cuda()
     nodeInfo[trainIds] = trainIds.to(torch.int32)
 
     for src_batch,dst_batch in zip(*batch):
@@ -57,22 +52,17 @@ def PRgenG(RAWPATH,nodeNUM,partNUM,savePath=None):
     outNodeTable = outNodeTable.cpu() # innodeTable still in GPU for next use
 
     nodeValue = template_array.clone()
-    
     # value setting
     nodeValue[trainIds] = 100000
 
     # random method
     print("start greedy cluster ...")
-    originPartNUM = 16
     # trainIdsInPart 表示每个训练点应该在哪个标签中
     trainIdsInPart = genSmallCluster(trainIds,nodeInfo,originPartNUM)   
-    nodeInfo = nodeInfo.cpu()
-    
-    # TODO:有待修改
-    nodeInfo[trainIds] = 1 << trainIdsInPart.cpu().to(torch.int32)
     TableNUM = 30   # 表示一个int32的table最多存30个标签
     labelTableLen = int((originPartNUM-1)/TableNUM + 1)
-    # ====
+    
+    nodeInfo = transPartId2Bit(trainIdsInPart,trainIds,nodeNUM,TableNUM,labelTableLen)
 
     emptyCache()
     nodeLayerInfo = []
@@ -86,7 +76,7 @@ def PRgenG(RAWPATH,nodeNUM,partNUM,savePath=None):
             dgl.per_pagerank(dst_batch,src_batch,inNodeTable,tmp_nodeValue,tmp_nodeInfo,labelTableNUM=labelTableLen)
             tmp_nodeValue, tmp_nodeInfo = tmp_nodeValue.cpu(),tmp_nodeInfo.cpu()
             acc_nodeValue += tmp_nodeValue - nodeValue
-            acc_nodeInfo = acc_nodeInfo | tmp_nodeInfo     
+            acc_nodeInfo = acc_nodeInfo | tmp_nodeInfo
             offset += len(src_batch)
         nodeValue = nodeValue + acc_nodeValue
         nodeInfo = acc_nodeInfo
@@ -97,50 +87,60 @@ def PRgenG(RAWPATH,nodeNUM,partNUM,savePath=None):
     nodeLayerInfo = None
     emptyCache()
 
+    #再把nodeInfo合成64的版本就行
+    #TODO 这里只认为最多的原始分区是60，即labelTableLen最大为2
+    if (labelTableLen > 1):
+        nodeInfo1 = nodeInfo[::2].to(torch.int64)
+        nodeInfo2 = nodeInfo[1::2].to(torch.int64) << TableNUM
+        nodeInfo = nodeInfo1 | nodeInfo2
+
+        outlayer1 = outlayer[::2].to(torch.int64)
+        outlayer2 = outlayer[1::2].to(torch.int64) << TableNUM
+        outlayer = outlayer1 | outlayer2
+
     nodeInfo = nodeInfo.cuda()
     outlayer = outlayer.cuda()
     averDegree = edgeNUM / nodeNUM
     
     print("cluster start....")
     # mergeBound表示最后的分区最多能由多少个初始分区合并而来。如：32 -> 8就是4个初始分区合并成一个新分区，就是4
-    #TODO startCluster应当返回：1.nodeInfo，2.新的子图的分区map，3.初始子图合并路线(用来生成trainBatch)
+    #startCluster应当返回：1.nodeInfo，2.新的子图的分区map，3.初始子图合并路线(用来生成trainBatch)
     originNodeInfo = nodeInfo.clone().cuda()
-    nodeInfo,subMap,subTrack = startCluster(nodeInfo, originPartNUM, 9999999999, (int(originPartNUM / partNUM),averDegree,100))
+    nodeInfo,subMap,subTrack = startCluster(nodeInfo, originPartNUM, 12000, (originPartNUM,averDegree,100))
 
     #修改三跳节点到合并的分区
     #假定分区B 合并到 分区A。即B + A -> A
     #需要注意节点满足以下任一情况时，作为新的分区A的三跳节点
-    #1.A中三跳节点 and B中三跳节点
-    #2.A中三跳节点 and 不在B分区
-    #3.不在A分区   and B中三跳节点
-    #当四分区合并时，视为 D + C + B + A -> A。可以先合并B + A -> A并递推进行 C + A -> A（正确性待验证）
     for index,bit_position in enumerate(subMap):
         track = torch.tensor(subTrack[bit_position],dtype = torch.int32, device = 'cuda')
         originPart = track[0]
         track = track[1:]
-
+        curPart = 1 << originPart
         for mergePart in track:
             # A bound and B bound
-            mergeNode1 = (((outlayer >> originPart) & 1) != 0) & (((outlayer >> mergePart) & 1) != 0)   
+            mergeNode1 = (((outlayer >> originPart) & 1) != 0) & (((outlayer >> mergePart) & 1) != 0)
             # A bound and not in B
             mergeNode2 = (((outlayer >> originPart) & 1) != 0) & ((originNodeInfo & (1 << mergePart)) == 0)
             # B bound and not in A
-            mergeNode3 = ((originNodeInfo & (1 << originPart)) == 0) & (((outlayer >> mergePart) & 1) != 0)
+            mergeNode3 = ((originNodeInfo & (curPart)) == 0) & (((outlayer >> mergePart) & 1) != 0)
             # All bound node after merge
             mergeNodes = mergeNode1 | mergeNode2 | mergeNode3
+            #这些节点作为分区A的最终三跳节点
+            #此外，A分区中所有其他节点都不是三跳节点了
             outlayer = outlayer & ~(1 << originPart)
             outlayer[mergeNodes] = outlayer[mergeNodes] | (1 << originPart)
-            
-        
+            curPart = curPart | (1 << mergePart)
+    originNodeInfo = None
 
-
+    trainIds = trainIds.cpu()
     trainIdsInPart = trainIdsInPart.to(torch.int32).cuda()
     for index,bit_position in enumerate(subMap):
         # GPU : nodeIndex,outIndex
         nodeIndex = (nodeInfo & (1 << bit_position)) != 0
         outIndex  =  (outlayer & (1 << bit_position)) != 0  # 表示是否为三跳点
         nid = torch.nonzero(nodeIndex).reshape(-1).to(torch.int32).cpu()
-        PATH = savePath + f"/part{index}" 
+        PATH = savePath + f"/part{index}"
+        checkFilePath(PATH)
         DataPath = PATH + f"/raw_G.bin"
         NodePath = PATH + f"/raw_nodes.bin"
         PRvaluePath = PATH + f"/sortIds.bin"
@@ -178,6 +178,7 @@ def PRgenG(RAWPATH,nodeNUM,partNUM,savePath=None):
         _ , sort_indice = torch.sort(partValue,dim=0,descending=True)
         sort_nodeid = nid[sort_indice]
         saveBin(sort_nodeid,PRvaluePath)
+    return subMap.shape[0]
 
 # =============== 2.graphToSub    
 def nodeShuffle(raw_node,raw_graph):
@@ -474,7 +475,7 @@ if __name__ == '__main__':
         subGSavePath = data[NAME]["processedPath"]
         
         startTime = time.time()
-        t1 = PRgenG(GRAPHPATH,maxID,partitionNUM,savePath=subGSavePath)
+        partitionNUM = PRgenG(GRAPHPATH,maxID,partitionNUM,savePath=subGSavePath)
         print(f"partition all cost:{time.time()-startTime:.3f}s")
 
         RAWDATAPATH = data[NAME]["processedPath"]
