@@ -48,7 +48,7 @@ def save_coo_bin(nodeDict, filepath, nodeNUM, edgeNUM, basicSpace):
             range_list.extend([place,place+1])
             place += 1
 
-    # 存储
+    # save
     srcList = np.array(srcList,dtype=np.int32)
     range_list = np.array(range_list,dtype=np.int32)
     if not os.path.exists(filepath):
@@ -95,11 +95,11 @@ def gen_graph_file(data,rank,Wsize,dataPath,datasetName,savePath):
     partdict = []
     for i in range(Wsize):
         partdict.append({})
-    # 读取JSON文件
+    # read json file
     part_config = dataPath + "/"+datasetName +'.json'
     with open(part_config, 'r') as file:
         SUBGconf = json.load(file)
-    # 使用读取的数据
+    # use json data
     boundRange = SUBGconf['node_map']['_N']
     basiclen = SUBGconf['node_map']['_N'][rank][1] - SUBGconf['node_map']['_N'][rank][0]
     incount = 0

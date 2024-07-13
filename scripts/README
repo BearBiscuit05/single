@@ -1,13 +1,13 @@
-# 测试脚本说明
+# Test script description
 
-## 1.现状
+## 1. Current situation
 
-dgl/pyg/sgnn+dgl/sgnn+pyg四种框架下的graphsage/gcn/gat
+dgl/pyg/sgnn+dgl/sgnn+pyg four frameworks of graphsage/gcn/gat
 
-ogb-products和reddit数据集
+ogb-products and reddit dataset
 
-暂时没写papers
+I haven't written the papers yet
 
-dgl/pyg暂时不测分区
+dgl/pyg Temporary emergency partition
 
-gat暂时不考虑3层采样
+gat does not consider 3-layer sampling for the time being

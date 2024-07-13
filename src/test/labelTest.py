@@ -3,23 +3,25 @@ import torch
 import dgl
 import time
 
-# 首先每个训练点有一个自己的标签(idx)
-# 随后对标签进行传递 dst <-> src
-# 在经过n轮之后,每个点都有了一个自己的最终标签
-# 之后对聚类结果进行合并
+# First each training node has its own label (idx)
+# The tag is then passed dst <-> src
+# After n rounds, each node has its own final label
+# The clustering results are then merged
 
-# 目标  : 1.验证标签传递函数的正确性
-#       : 2.将聚类结果最后聚合为指定数目
-#       : 3.对标签传递函数可以流式调用(不急)    
+# Goal: 1. Verify the correctness of the label transfer function
+# : 2. Aggregate the clustering results to the specified number
+# : 3. The label transfer function can be called streaming (not urgent)
 
-# 读取图文件
+# read graph file
 graph = torch.as_tensor(np.fromfile("/raid/bear/data/raw/papers100M/graph1.bin",dtype=np.int32))
 trainids = torch.as_tensor(np.fromfile("/raid/bear/data/raw/papers100M/trainIds.bin",dtype=np.int64))
 src = graph[::2]
 dst = graph[1::2]
 
-# 图中由于是只针对训练点进行聚类，因此只对训练点附初始标签(就是本身的索引)
-# 而对于其他非训练节点，标签默认是-1，在标签传递时，只会接受非负数标签，而不会主动传递
+# Since only training points are clustered in the figure, 
+# only initial labels (which are their own indexes) are attached to training points.
+# For other non-trained nodes, the label defaults to -1,
+# and only non-negative labels are accepted when the label is passed, rather than actively passed
 nodeNUM = 111059956
 nodeLabel = torch.zeros(nodeNUM).to(torch.int32) -1
 nodeLabel[trainids] = trainids.to(torch.int32)
@@ -30,11 +32,11 @@ src = src.cuda()
 dst = dst.cuda()
 print("nodeLabel :",nodeLabel)
 for _ in range(2):
-    # 表示对2跳邻居进行标签传递
+    # Indicates that the label is passed to the 2-hop neighbor
     dgl.lpGraph(src,dst,nodeLabel)
 print("nodeLabel :",nodeLabel)
 
-# 内存处理
+# Memory processing
 src = src.cpu()
 dst = dst.cpu()
 nodeLabel = nodeLabel.cpu()
@@ -43,17 +45,18 @@ torch.cuda.empty_cache()
 gc.collect()
 
 
-# 由于只对训练点进行聚类，所以抽取训练点的标签即可
+# Since only the training points are clustered, 
+# the labels of the training points can be extracted
 value = nodeLabel[trainids.to(torch.int64)]
 
-# 查看聚类后的信息
+# View the information after clustering
 binAns = torch.bincount(value)
 torch.max(binAns)
 
-# 对聚类的大小进行排序(binAns表明每个聚类有多大)
+# Order the size of the clusters (binAns indicates how big each cluster is)
 s_binAns,_ = torch.sort(binAns,descending=True)
 
-# 测试文件
+# test files
 # src = torch.Tensor([0,2,4,5,3,4,2,5]).to(torch.int32).cuda()
 # dst = torch.Tensor([1,3,7,6,4,2,1,3]).to(torch.int32).cuda()
 # nodeLabel = torch.Tensor([-1,-1,2,3,4,-1,-1,-1]).to(torch.int32).cuda()

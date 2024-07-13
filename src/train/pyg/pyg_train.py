@@ -183,17 +183,17 @@ def testRun(args,Gdata,trainIDs):
 
 def load_dataset(dataset,path,featlen,mode=None):
     graphbin = "%s/%s/graph.bin" % (path,dataset)
-    labelbin = "%s/%s/labels.bin" % (path,dataset) # 每个节点label 8字节
+    labelbin = "%s/%s/labels.bin" % (path,dataset) # each node's feat has 8 bytes
     featsbin = "%s/%s/feat.bin" % (path,dataset)
     trainbin = "%s/%s/trainIds.bin" % (path,dataset)
-    # 读取边集
+    # read edges
     edges = np.fromfile(graphbin,dtype=np.int32)
     srcs = torch.tensor(edges[::2]).to(torch.int64)
     dsts = torch.tensor(edges[1::2]).to(torch.int64)
-    # 读取特征
+    # read feat
     feats = np.fromfile(featsbin,dtype=np.float32).reshape(-1,featlen)
     feats = torch.Tensor(feats)
-    # label长度，comfr是8字节，其余4字节
+    # label length，comfr is 8 bytes，others 4 bytes
     label = np.fromfile(labelbin,dtype=np.int64)
     label = torch.Tensor(label).to(torch.int64)
     edgeList = torch.stack((srcs,dsts),dim=0)
@@ -233,7 +233,7 @@ if __name__ == '__main__':
         root = "/raid/bear/data/dataset"
         dataset = PygNodePropPredDataset('ogbn-papers100M', root)
         split_idx = dataset.get_idx_split()
-        print("加载完毕")
+        print("loading complete")
         # evaluator = Evaluator(name='ogbn-papers100M')
         run(args, dataset,split_idx)
     elif args.dataset == 'com_fr':

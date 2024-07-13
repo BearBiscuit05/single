@@ -31,7 +31,7 @@ monitor_memory_usage() {
         local memory_usage_kb=$(ps -o rss= -p $python_pid)
         local memory_usage_mb=$(echo "scale=2; $memory_usage_kb / 1024" | bc)
         local current_time=$(date +'%Y-%m-%d %H:%M:%S')
-        # echo "$current_time, PID $python_pid , 内存占用: $memory_usage_mb MB" >> $memory_usage_file
+        # echo "$current_time, PID $python_pid , memory usage: $memory_usage_mb MB" >> $memory_usage_file
 
         total_memory_usage_kb=$((total_memory_usage_kb + memory_usage_kb))
         if [ $memory_usage_kb -gt $peak_memory_usage_kb ]; then
@@ -49,8 +49,8 @@ monitor_memory_usage() {
     fi
 
     
-    echo "平均内存占用: $average_memory_usage_mb MB" >> $memory_usage_file
-    echo "峰值内存占用: $((peak_memory_usage_kb / 1024)) MB" >> $memory_usage_file
+    echo "avg memory usage: $average_memory_usage_mb MB" >> $memory_usage_file
+    echo "max memory usage: $((peak_memory_usage_kb / 1024)) MB" >> $memory_usage_file
 }
 
 layerList=(3 3 2)

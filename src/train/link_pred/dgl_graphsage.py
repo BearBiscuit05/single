@@ -129,11 +129,13 @@ def compute_mrr(
 
 def evaluate(device, graph, edge_split, model, batch_size):
 	model.eval()
-	# 注意：此处用ogbl这一堆链路预测数据集的ogb库的evaluator没问题，这个name参数可选范围是7个ogbl数据集
-	# 看了ogb这部分的源码实现，这个name决定的是eval成员函数采用什么metric：hits/rocauc/mrr，具体如下表
-	# 链路预测任务的这个Evaluator计算的结果，实际上还是取决于传入eval成员函数的y_pred_pos和y_pred_neg
+	# Note: There is no problem with the ogb library evaluator for the ogbl link prediction dataset here, 
+	# the name parameter is optional for 7 ogbl datasets
+	# Read the ogb part of the source code implementation,
+	# this name determines the eval member function to use what metric: hits/rocauc/mrr, the following table
+	# The Evaluator calculation for the link prediction task actually depends on y_pred_pos and y_pred_neg passed into the eval member function
 	# dataset            ogbl-ppa    ogbl-collab    ogbl-citation2  ogbl-wikikg2   ogbl-ddi   ogbl-biokg     ogbl-vessel
-	# eval使用的metric   hits@100    hits@50         mrr            mrr	            hits@20     mrr            rocauc
+	# eval metric   hits@100    hits@50         mrr            mrr	            hits@20     mrr            rocauc
 	evaluator = Evaluator(name="ogbl-citation2")
 	with torch.no_grad():
 		node_emb = model.inference(graph, device, batch_size)
@@ -197,15 +199,16 @@ def train(args, device, g, reverse_eids, seed_edges, model):
 
 def load_ogb_products(rootdir,split_dict):
 	dataset = AsNodePredDataset(DglNodePropPredDataset('ogbn-products',root=rootdir))
-	# 注意：拿ogbn-products节点分类数据集做链路预测，还是可以以节点分类数据集形式加载图
-	# 区别是：1.删掉自循环边；2.split不使用dataset.get_edge_split()方法，而是处理负采样节点对，调整构造新的split_dict
+	# Note: With the ogbn-products node classification data set for link prediction, you can still load the graph in the form of the node classification data set
+	# The difference is: 1. Delete the self-loop edge; 2.split does not use the dataset.get_edge_split() method. 
+	# Instead, it handles the negative sampling node pairs and constructs a new split_dict
 	g = dataset[0]
-	# 注意：链路预测必须删掉自循环边，否则to_bidirected_with_reverse_mapping时报错
+	# Note: Link prediction must delete the self-loop edge, otherwise to_bidirected_with_reverse_mapping times error
 	g = dgl.remove_self_loop(g)
 
 	# edge_split = dataset.get_edge_split()
-	# 注意：此处不使用get_edge_split()方法，否则拿到的是ogb下节点分类任务的train/val/test
-	# 加载pickle文件保存的split字典文件，该文件的生成方式在 src/predata/LP/gendata_products.py中
+	# Note: the get_edge_split() method is not used here, otherwise you will get the train/val/test of the node classification task under ogb
+	# Load the split dictionary file saved in the pickle file, which is generated in src/predata/LP/gendata_products.py
 	pickfile = open(split_dict,'rb')
 	edge_split = pickle.load(pickfile)
 	pickfile.close()
@@ -213,15 +216,17 @@ def load_ogb_products(rootdir,split_dict):
 
 def load_ogb_papers(rootdir,split_dict):
 	dataset = AsNodePredDataset(DglNodePropPredDataset('ogbn-papers100M',root=rootdir))
-	# 注意：拿ogbn-products节点分类数据集做链路预测，还是可以以节点分类数据集形式加载图
-	# 区别是：1.删掉自循环边；2.split不使用dataset.get_edge_split()方法，而是处理负采样节点对，调整构造新的split_dict
+	# Note: With the ogbn-products node classification data set for link prediction,
+	# you can still load the graph in the form of the node classification data set
+	# The difference is: 1. Delete the self-loop edge; 2.split does not use the dataset.get_edge_split() method. 
+	# Instead, it handles the negative sampling node pairs and constructs a new split_dict
 	g = dataset[0]
-	# 注意：链路预测必须删掉自循环边，否则to_bidirected_with_reverse_mapping时报错
+	# Note: Link prediction must delete the self-loop edge, otherwise to_bidirected_with_reverse_mapping times error
 	g = dgl.remove_self_loop(g)
 
 	# edge_split = dataset.get_edge_split()
-	# 注意：此处不使用get_edge_split()方法，否则拿到的是ogb下节点分类任务的train/val/test
-	# 加载pickle文件保存的split字典文件，该文件的生成方式在 src/predata/LP/gendata_papers100M.py中
+	# Note: the get_edge_split() method is not used here, otherwise you will get the train/val/test of the node classification task under ogb
+	# Load the split dictionary file saved in the pickle file, which is generated in src/predata/LP/gendata_papers100M
 	pickfile = open(split_dict,'rb')
 	edge_split = pickle.load(pickfile)
 	pickfile.close()
@@ -235,8 +240,8 @@ def load_reddit(rootdir,split_dict):
 	g.ndata['label'] = g.ndata.pop('label')
 
 	# edge_split = dataset.get_edge_split()
-	# 注意：此处不使用get_edge_split()方法，否则拿到的是ogb下节点分类任务的train/val/test
-	# 加载pickle文件保存的split字典文件，该文件的生成方式在 src/predata/LP/gendata_reddit.py中
+	# Note: the get_edge_split() method is not used here, otherwise you will get the train/val/test of the node classification task under ogb
+	# Load the split dictionary file saved in the pickle file, which is generated in src/predata/LP/gendata_reddit.py
 	pickfile = open(split_dict,'rb')
 	edge_split = pickle.load(pickfile)
 	pickfile.close()
@@ -276,7 +281,7 @@ if __name__ == "__main__":
 		raise ValueError('unknown database:',args.dataset)
 	
 	device = torch.device("cpu" if args.mode == "cpu" else "cuda")
-	g, reverse_eids = to_bidirected_with_reverse_mapping(g) #此步骤必须cpu，因此完成此步骤后再进GPU
+	g, reverse_eids = to_bidirected_with_reverse_mapping(g) # This step requires the cpu, so complete this step before entering the GPU
 	g = g.to("cuda" if args.mode == "puregpu" else "cpu")
 	reverse_eids = reverse_eids.to(device)
 	seed_edges = torch.arange(g.num_edges()).to(device)

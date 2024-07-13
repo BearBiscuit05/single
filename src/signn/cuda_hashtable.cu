@@ -60,7 +60,7 @@ public:
 };
 
 
-// 计算哈希表大小
+// get hashTable size
 size_t TableSize(const size_t num, const int scale) {
   const size_t next_pow2 = 1 << static_cast<size_t>(1 + std::log2(num >> 1));
   return next_pow2 << scale;

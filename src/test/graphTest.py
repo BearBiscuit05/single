@@ -1,5 +1,5 @@
 """
-测试数据转换过程中的数据不出现错误
+No errors occur in the data during test data conversion
 """
 import os
 import scipy
@@ -18,15 +18,13 @@ import sys
 import math
 from dgl.dataloading import DataLoader, NeighborSampler, MultiLayerFullNeighborSampler
 def NeighborTest(nodeID):
-    # 测试节点
-    # 比较两个List
     pass
 
 def trans2GID():
     pass
 
 def loadingDGLdata(datapath,rank,seeds):
-    # DGL切割后的测试
+    # DGL test after cutting
     graph_dir = datapath
     part_config = graph_dir + '/ogb-product.json'
     print('loading partitions')
@@ -39,7 +37,7 @@ def loadingDGLdata(datapath,rank,seeds):
         print(input_nodes)
 
 def loadingProcessedData(datapath,rank,wsize,number):
-    # 处理后数据
+    # Processed data
     datapath += "/part"+str(rank)
     srcdata = np.fromfile(datapath+"/srcList.bin", dtype=np.int32)
     rangedata = np.fromfile(datapath+"/range.bin", dtype=np.int32)

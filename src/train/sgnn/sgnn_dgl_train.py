@@ -22,7 +22,7 @@ from dgl.dataloading import NeighborSampler, MultiLayerFullNeighborSampler
 from sgnn_model import DGL_SAGE, DGL_GCN, DGL_GAT
 
 import os
-# 减少GPU缓存导致的OOM，不确定系统性能影响
+# Reduced OOM OOM caused by GPU cache, uncertain impact on system performance
 os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "max_split_size_mb:512"
 
 curDir = os.path.abspath(os.path.dirname(__file__))
@@ -138,7 +138,7 @@ if __name__ == '__main__':
         sys.exit(1)
     
     print('Training...')
-    dataset = CustomDataset(args.json_path)  # 使用 args.json_path 作为 JSON 文件路径
+    dataset = CustomDataset(args.json_path)  # Use args.json_path as the JSON file path
     epochInterval = data["epochInterval"]
     maxEpoch = dataset.maxEpoch
     epoch = 0

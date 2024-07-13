@@ -14,6 +14,6 @@ def transmapping(nodeList):
 if __name__ == "__main__":
     num_elements = 256000
     min_value = 0
-    max_value = 2000000  # 最大的 int32 值
+    max_value = 2000000  # MAX INT32
     random_int_tensor = torch.randint(min_value, max_value + 1, (num_elements,), dtype=torch.int32).to('cuda:0')
     transmapping(random_int_tensor)

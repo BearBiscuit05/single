@@ -1,14 +1,14 @@
-# 多维转换
+# Multidimensional transformation
 import torch as th
 from pympler import asizeof
 import dgl
 import sys
 import copy
 """
-测试常规采样结果转换为dgl.block训练集
-采样结果数据结构
+Test the conversion of conventional sampling results to a dgl.block training set
+Sample result data structure
 [[src2,dst2],[[src1,dst1]]]
-其中src2 = src1 + sampled
+src2 = src1 + sampled
 """
 
 fanout = [4,4]
@@ -40,14 +40,14 @@ for src, dst in graph:
     masks.append(layer_mask)
 # print(masks)
 """ 
-index 为1的节点:
+node whose index is 1:
 1 
 fan1*1-2*fan1
-fan1*fan2*1-2*fan2*fan1 :ID序列
+fan1*fan2*1-2*fan2*fan1 : ID sequence
 
 """
 # print(data)
-# 给出fanout，batchsize的情况下，填图block
+# when fanout，batchsize are given，get graph block
 # graphNodes = batchsize
 
 def genBlockTemplate():

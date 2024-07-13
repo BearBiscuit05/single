@@ -2,7 +2,7 @@
 RAW_DATA_DIR='/raid/bear/raw_dataset'
 TW_RAW_DATA_DIR="${RAW_DATA_DIR}/twitter"
 OUTPUT_DATA_DIR='/raid/bear/dataset/twitter'
-# 下载源数据
+# download raw dataset
 
 download(){
   mkdir -p ${TW_RAW_DATA_DIR}

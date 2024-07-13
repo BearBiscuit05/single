@@ -35,9 +35,9 @@ public class WebgraphDecoder {
             LazyIntIterator successors = graph.successors(v);
             for (long i = 0; i < graph.outdegree(v); ++i) {
                 int w = successors.nextInt();
-                String line = v + "\t" + w; // 将 v 和 w 以制表符分隔的字符串形式连接
-                writer.write(line); // 写入到文件
-                writer.newLine(); // 写入换行符
+                String line = v + "\t" + w; // Concatenate v and w as tab-separated strings
+                writer.write(line); // write to file
+                writer.newLine(); // write \n
                 // writeIntLittleEndian(dos, v);
                 // writeIntLittleEndian(dos, w);
                 if (max_node_id < v) max_node_id = v;

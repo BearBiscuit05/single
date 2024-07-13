@@ -156,9 +156,9 @@ __global__ void graph_halo_merge_kernel(
             int off = halo_bound[rid] + gap;
             int len = halo_bound[rid+1] - off;
             if (len > 0) {
-                // 存在可以补充的位置
+                // There are places that can be supplemented
                 if (space < len) {
-                    // 可补充边大于预留位置
+                    // The supplementary edge is greater than the reserved position
                     for (int j = 0; j < space; j++) {
                         int selected_j = curand(&local_state) % (len - j);
                         int selected_id = halos[off + selected_j];
@@ -168,7 +168,7 @@ __global__ void graph_halo_merge_kernel(
                     }
                     bound[index*2+1] = startptr;
                 } else {
-                    // 可补充边小于预留位置
+                    // The supplementary edge is smaller than the reserved position
                     for (int j = 0; j < len; j++) {
                         edge[startptr++] = halos[off + j];
                     }

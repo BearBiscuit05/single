@@ -108,7 +108,7 @@ def load_reddit(self_loop=True):
 
 def load_dataset(dataset,path,featlen,mode=None):
     graphbin = "%s/%s/graph.bin" % (path,dataset)
-    labelbin = "%s/%s/labels.bin" % (path,dataset) # 每个节点label 8字节
+    labelbin = "%s/%s/labels.bin" % (path,dataset)
     featsbin = "%s/%s/feat.bin" % (path,dataset)
     trainbin = "%s/%s/trainIds.bin" % (path,dataset)
     edges = np.fromfile(graphbin,dtype=np.int32)
@@ -194,7 +194,7 @@ if __name__ == '__main__':
         model = GAT(in_size, 256, out_size,heads=[4,1]).to(device)
     else:
         print("Invalid model option. Please choose from 'SAGE', 'GCN', or 'GAT'.")
-        sys.exit(1)  # 使用 sys.exit(1) 退出程序并返回错误状态码
+        sys.exit(1)  # Use sys.exit(1) to exit the program and return an error status code
     # model.load_state_dict(torch.load("model.pth"))
 
     # model training

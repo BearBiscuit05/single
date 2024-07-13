@@ -24,12 +24,12 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-    // 获取命令行参数
+    // get args
     const char* binfilePath = argv[1];
     int numNodes = std::stoi(argv[2]);
     int featLen = std::stoi(argv[3]);
 
-    // 在这里使用获取到的参数
+    // use args
     std::cout << "Binfile Path: " << binfilePath << std::endl;
     std::cout << "Number of Nodes: " << numNodes << std::endl;
     std::cout << "Feature Length: " << featLen << std::endl;

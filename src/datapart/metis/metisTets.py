@@ -12,8 +12,8 @@ ITPATH = "/raid/bear/bigdata/it2004.bin"
 
 for PATH in [ITPATH]:
     edges = np.fromfile(PATH,dtype=np.int32)
-    odd_indices = edges[1::2]  # 奇数索引（从索引1开始，步长为2）
-    even_indices = edges[::2]   # 偶数索引（从索引0开始，步长为2）
+    odd_indices = edges[1::2]  # Odd index (starting with index 1, step size 2)
+    even_indices = edges[::2]   # Even index (starting with index 0, step size 2)
     g=dgl.graph((odd_indices,even_indices))
     partList = [4,8,16,32]
     for part in partList:

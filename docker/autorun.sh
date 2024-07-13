@@ -1,14 +1,14 @@
 #!/bin/bash
 set -e
-# 参数设置
+# Parameter setting
 cluster_size=32
 base_hostname="PGcluster_"
 network_name="pg-network"
-start_ip="43.0.0."  # 起始IP地址i
+start_ip="43.0.0."  # start IP addr
 image_name="pgimage:v3"
 beg_ip=8
 
-# 创建 Docker 网络
+# Create a Docker network
 
 for i in $(seq 1 "$cluster_size"); do
     hostname="$base_hostname$i"
@@ -17,7 +17,7 @@ for i in $(seq 1 "$cluster_size"); do
     custom_hosts_params+=" --add-host $hostname:$ip"
 done
 
-# 循环创建集群容器
+# Iterate to create the cluster container
 
 for i in $(seq 1 "$cluster_size"); do
     hostname="$base_hostname$i"
@@ -30,7 +30,7 @@ for i in $(seq 1 "$cluster_size"); do
         docker rm $hostname
     fi
 
-   # 创建容器，并指定主机名和自定义主机映射
+   # Create a container and specify a host name and a custom host mapping
     docker run -d -it --name "$hostname" --ulimit nofile=65535 --hostname "$hostname" -v /raid/bear/dockerfile:/data -v /home/bear/workspace/PowerGraph:/PowerGraph --net $network_name --ip $ip $image_name /bin/bash -c "service ssh restart && /bin/bash"
     # echo "create cmd: docker run -dt --name "$hostname" --hostname "$hostname" -v $data_path:/home  $custom_hosts_params  --net $network_name --ip $ip $image_name /bin/bash"
     echo "Container pg_$i created with hostname $hostname with IP:$ip"

@@ -1,19 +1,19 @@
-# 添加函数守则
+# Add function rules
 
 ## setup.py
 
-正常情况下不需要修改，如果有额外文件添加，则进行修改
+In normal cases, you do not need to modify the file. If additional files are added, modify the file
 
 ## signn.h
 
-cuda内部构建需要的函数声明
+Function declarations required for cuda internal builds
 
 ## sample_node.cpp
 
-用于与torch进行交互，并且绑定pybind11
+Used to interact with torch and bound to pybind11
 
-sample_node.cpp与signn.h需要同时修改
+Both sample_node.cpp and signn.h must be changed at the same time
 
 ## xx.cu
 
-构建cuda内部函数的具体实现
+The implementation of cuda internal function is constructed

@@ -39,7 +39,7 @@ def convert_to_tensor(data, dtype=torch.int32):
 def cooTocsc(srcList,dstList,sliceNUM=1,device=torch.device('cpu')):
     
     dstList = dstList.cuda()
-    max_value = max(torch.max(dstList).item(), torch.max(srcList).item()) + 1   # 保证对齐
+    max_value = max(torch.max(dstList).item(), torch.max(srcList).item()) + 1   # Ensure alignment
     binAns = torch.zeros(max_value,dtype=torch.int32,device="cuda")
     dgl.bincount(dstList,binAns)
     dstList = dstList.cpu()
@@ -73,7 +73,7 @@ def cooTocsc(srcList,dstList,sliceNUM=1,device=torch.device('cpu')):
 
 def remapEdgeId(uniTable,srcList,dstList,device=torch.device('cpu'),remap=None):
     if remap == None:
-        # 构建ramap表
+        # setup ramap table
         index = torch.arange(len(uniTable),dtype=torch.int32,device=device)
         remap = torch.zeros(torch.max(uniTable)+1,dtype=torch.int32,device=device)
         remap[uniTable.to(torch.int64)] = index
@@ -95,7 +95,7 @@ def coo2csc_sort(row,col):  # src,dst
     return inptr,indice
 
 def coo2csc_dgl(srcs,dsts):
-    g = dgl.graph((srcs,dsts)).formats('csc')       # 顺序倒换，等同于转换CSC，压缩dst
+    g = dgl.graph((srcs,dsts)).formats('csc')       # Sequential switching is equivalent to converting CSC and compressing dst
     indptr, indices, _ = g.adj_sparse(fmt='csc')
     return indptr,indices
 
@@ -120,8 +120,8 @@ def countMemToLoss(edgeNUM,nodeNUM,featLen,ratedMem,printInfo=False):
 def print_gpu_memory(index):
     if torch.cuda.is_available():
         gpu = torch.cuda.get_device_name(index)
-        memory_allocated = torch.cuda.memory_allocated(index) / 1024 ** 3  # 转换为GB
-        memory_cached = torch.cuda.memory_reserved(index) / 1024 ** 3  # 转换为GB
+        memory_allocated = torch.cuda.memory_allocated(index) / 1024 ** 3  # convert ro GB
+        memory_cached = torch.cuda.memory_reserved(index) / 1024 ** 3  # convert ro GB
         print(f"GPU {index}: {gpu}")
         print(f"  Allocated Memory: {memory_allocated:.2f} GB")
         print(f"  Cached Memory: {memory_cached:.2f} GB")

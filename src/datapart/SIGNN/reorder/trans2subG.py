@@ -13,15 +13,15 @@ import sys
 import argparse
 from subCluster import *
 # =============== 1.partition
-# WARNING : EDGENUM < 32G 否则无法实现
+# WARNING : EDGENUM < 32G Otherwise, it cannot be achieved.
 # G_MEM: 16G
 MAXEDGE = 900000000    # 
 MAXSHUFFLE = 30000000   # 
 #################
 
-## pagerank+label 遍历获取基础子图
+## pagerank+label Traversal gets the base subgraph
 #@profile
-# TODO:此处给出的partNUM应该是originPartNUM
+# TODO:The partNUM given here should be originPartNUM
 def PRgenG(RAWPATH,nodeNUM,originPartNUM,savePath=None):
     GRAPHPATH = RAWPATH + "/graph.bin"
     TRAINPATH = RAWPATH + "/trainIds.bin"
@@ -32,7 +32,7 @@ def PRgenG(RAWPATH,nodeNUM,originPartNUM,savePath=None):
     
     template_array = torch.zeros(nodeNUM,dtype=torch.int32)
 
-    # 流式处理边数据
+    # Streaming edge data
     batch_size = len(src) // MAXEDGE + 1
     src_batches = torch.chunk(src, batch_size, dim=0)
     dst_batches = torch.chunk(dst, batch_size, dim=0)
@@ -47,7 +47,7 @@ def PRgenG(RAWPATH,nodeNUM,originPartNUM,savePath=None):
 
     for src_batch,dst_batch in zip(*batch):
         src_batch,dst_batch = src_batch.cuda(),dst_batch.cuda()
-        dgl.lpGraph(src_batch,dst_batch,nodeInfo,inNodeTable,outNodeTable)  # 计算出入度与1跳邻居
+        dgl.lpGraph(src_batch,dst_batch,nodeInfo,inNodeTable,outNodeTable)  # Calculate the access with the 1-hop neighbor
     src_batch,dst_batch = None,None
     outNodeTable = outNodeTable.cpu() # innodeTable still in GPU for next use
 
@@ -57,9 +57,9 @@ def PRgenG(RAWPATH,nodeNUM,originPartNUM,savePath=None):
 
     # random method
     print("start greedy cluster ...")
-    # trainIdsInPart 表示每个训练点应该在哪个标签中
+    # trainIdsInPart Indicates which label each training point should be in
     trainIdsInPart = genSmallCluster(trainIds,nodeInfo,originPartNUM)   
-    TableNUM = 30   # 表示一个int32的table最多存30个标签
+    TableNUM = 30   # Indicates that an int32 table stores a maximum of 30 labels
     labelTableLen = int((originPartNUM-1)/TableNUM + 1)
     
     nodeInfo = transPartId2Bit(trainIdsInPart,trainIds,nodeNUM,TableNUM,labelTableLen)
@@ -83,12 +83,12 @@ def PRgenG(RAWPATH,nodeNUM,originPartNUM,savePath=None):
         tmp_nodeValue,tmp_nodeInfo=None,None
         nodeLayerInfo.append(nodeInfo.clone())
     src_batch,dst_batch,inNodeTable = None,None,None
-    outlayer = torch.bitwise_xor(nodeLayerInfo[-1], nodeLayerInfo[-2]) # 最外层的点是不会有连接边的
+    outlayer = torch.bitwise_xor(nodeLayerInfo[-1], nodeLayerInfo[-2]) # The outermost point will not have a connecting edge
     nodeLayerInfo = None
     emptyCache()
 
-    #再把nodeInfo合成64的版本就行
-    #TODO 这里只认为最多的原始分区是60，即labelTableLen最大为2
+    # Just synthesize nodeInfo into the 64 version
+    #TODO It is only assumed that the most original partition is 60, that is, the labelTableLen maximum is 2
     if (labelTableLen > 1):
         nodeInfo1 = nodeInfo[::2].to(torch.int64)
         nodeInfo2 = nodeInfo[1::2].to(torch.int64) << TableNUM
@@ -103,14 +103,15 @@ def PRgenG(RAWPATH,nodeNUM,originPartNUM,savePath=None):
     averDegree = edgeNUM / nodeNUM
     
     print("cluster start....")
-    # mergeBound表示最后的分区最多能由多少个初始分区合并而来。如：32 -> 8就是4个初始分区合并成一个新分区，就是4
-    #startCluster应当返回：1.nodeInfo，2.新的子图的分区map，3.初始子图合并路线(用来生成trainBatch)
+    # mergeBound indicates the maximum number of initial partitions that can be combined for the final partition. 
+    # For example, 32 -> 8 indicates that the four original partitions are merged into a new partition, which is 4
+    # startCluster should return: 1.nodeInfo, 2. Partition map of the new subgraph, 3. Initial subgraph merge route (used to generate trainBatch)
     originNodeInfo = nodeInfo.clone().cuda()
     nodeInfo,subMap,subTrack = startCluster(nodeInfo, originPartNUM, 12000, (originPartNUM,averDegree,100))
 
-    #修改三跳节点到合并的分区
-    #假定分区B 合并到 分区A。即B + A -> A
-    #需要注意节点满足以下任一情况时，作为新的分区A的三跳节点
+    # Modify the three-hop node to the merged partition
+    # Suppose partition B is merged into partition A. So B + A -> A
+    # Note that when the node meets any of the following conditions, it serves as the three-hop node of the new partition A
     for index,bit_position in enumerate(subMap):
         track = torch.tensor(subTrack[bit_position],dtype = torch.int32, device = 'cuda')
         originPart = track[0]
@@ -125,8 +126,8 @@ def PRgenG(RAWPATH,nodeNUM,originPartNUM,savePath=None):
             mergeNode3 = ((originNodeInfo & (curPart)) == 0) & (((outlayer >> mergePart) & 1) != 0)
             # All bound node after merge
             mergeNodes = mergeNode1 | mergeNode2 | mergeNode3
-            #这些节点作为分区A的最终三跳节点
-            #此外，A分区中所有其他节点都不是三跳节点了
+            # These nodes serve as the final three-hop nodes of partition A
+            # In addition, all other nodes in partition A are no longer three-hop nodes
             outlayer = outlayer & ~(1 << originPart)
             outlayer[mergeNodes] = outlayer[mergeNodes] | (1 << originPart)
             curPart = curPart | (1 << mergePart)
@@ -137,7 +138,7 @@ def PRgenG(RAWPATH,nodeNUM,originPartNUM,savePath=None):
     for index,bit_position in enumerate(subMap):
         # GPU : nodeIndex,outIndex
         nodeIndex = (nodeInfo & (1 << bit_position)) != 0
-        outIndex  =  (outlayer & (1 << bit_position)) != 0  # 表示是否为三跳点
+        outIndex  =  (outlayer & (1 << bit_position)) != 0  # Indicates whether it is a three-hop point
         nid = torch.nonzero(nodeIndex).reshape(-1).to(torch.int32).cpu()
         PATH = savePath + f"/part{index}"
         checkFilePath(PATH)
@@ -162,14 +163,14 @@ def PRgenG(RAWPATH,nodeNUM,originPartNUM,savePath=None):
         start = time.time()
         for i in range(sliceNUM):
             sliceLen = min((i+1)*offsetSize,edgeNUM)
-            g_gpu = graph[offset:sliceLen]                  # 部分graph
+            g_gpu = graph[offset:sliceLen]                  # part of graph
             g_gpu = g_gpu.cuda()
             gsrc,gdst = g_gpu[:,0],g_gpu[:,1]
             gsrcMask = nodeIndex[gsrc.to(torch.int64)]
             gdstMask = nodeIndex[gdst.to(torch.int64)]
-            idx_gpu = torch.bitwise_and(gsrcMask, gdstMask) # 此时还包括三跳连边
+            idx_gpu = torch.bitwise_and(gsrcMask, gdstMask) # This time also includes a triple jump side
             IsoutNode = outIndex[gdst.to(torch.int64)]
-            idx_gpu = torch.bitwise_and(idx_gpu, ~IsoutNode) # 此时已经删除三跳连边
+            idx_gpu = torch.bitwise_and(idx_gpu, ~IsoutNode) # The three-hop edge has been deleted
             subEdge = g_gpu[idx_gpu].cpu()
             saveBin(subEdge,DataPath,addSave=True)
             offset = sliceLen                       
@@ -191,7 +192,7 @@ def nodeShuffle(raw_node,raw_graph):
     src_batches = list(torch.chunk(srcs_tensor, batch_size, dim=0))
     dst_batches = list(torch.chunk(dsts_tensor, batch_size, dim=0))
     batch = [src_batches, dst_batches]
-    src_emp,dst_emp = raw_node[:1].clone(), raw_node[:1].clone()    # 占位，无意义
+    src_emp,dst_emp = raw_node[:1].clone(), raw_node[:1].clone()    # padding , no use
     srcShuffled,dstShuffled,uniTable = dgl.mapByNodeSet(raw_node,uniTable,src_emp,dst_emp,rhsNeed=False,include_rhs_in_lhs=False)
     raw_node = raw_node.cpu()
     remap = None
@@ -269,8 +270,8 @@ def featSlice(FEATPATH,beginIndex,endIndex,featLen):
     return subFeat.reshape(-1,featLen)
 
 def sliceIds(Ids,sliceTable):
-    # 对Ids切割成sliceTable指定的范围
-    # Ids只能是排序后的结果
+    # Cut Ids into the range specified by sliceTable
+    # Ids can only be the sorted result
     beginIndex = 0
     ans = []
     for tar in sliceTable[1:]:
@@ -281,7 +282,7 @@ def sliceIds(Ids,sliceTable):
     return ans
 
 def genSubGFeat(SAVEPATH,FEATPATH,partNUM,nodeNUM,sliceNUM,featLen):
-    # 获得切片
+    # get slices
     emptyCache()
     slice = nodeNUM // sliceNUM + 1
     boundList = [0]
@@ -310,7 +311,7 @@ def genSubGFeat(SAVEPATH,FEATPATH,partNUM,nodeNUM,sliceNUM,featLen):
             saveBin(subFeat,fileName,addSave=sliceIndex)
 
 def genAddFeat(beginId,addIdx,SAVEPATH,FEATPATH,partNUM,nodeNUM,sliceNUM,featLen):
-    # addIdx 此时处于cuda中
+    # addIdx now in CUDA
     emptyCache()
     slice = nodeNUM // sliceNUM + 1
     boundList = [0]
@@ -322,7 +323,7 @@ def genAddFeat(beginId,addIdx,SAVEPATH,FEATPATH,partNUM,nodeNUM,sliceNUM,featLen
 
     file = SAVEPATH + f"/part{beginId}/raw_nodes.bin"
     ids = torch.as_tensor(np.fromfile(file,dtype=np.int32),device="cuda")
-    addIdx.append(ids)  # 增加最初的加载子图的所有索引
+    addIdx.append(ids)  # Increases all indexes of the original loaded subgraph
 
     for i in range(partNUM+1):
         addIdx[i] = sliceIds(addIdx[i],boundList)
@@ -338,7 +339,7 @@ def genAddFeat(beginId,addIdx,SAVEPATH,FEATPATH,partNUM,nodeNUM,sliceNUM,featLen
                 fileName = SAVEPATH + f"/part{index}/addfeat.bin"
             SubIdsList = addIdx[index][sliceIndex]
             t_SubIdsList = SubIdsList - beginIdx
-            addFeat = sliceFeat[t_SubIdsList.to(torch.int64)]   # t_SubIdsList存在于GPU中
+            addFeat = sliceFeat[t_SubIdsList.to(torch.int64)]   # t_SubIdsList is in CUDA
             addFeat = addFeat.cpu()
             saveBin(addFeat,fileName,addSave=sliceIndex)
 
@@ -379,7 +380,7 @@ def cal_min_path(diffMatrix, nodesList, part_num, base_path):
     
     res1 = torch.zeros(maxNodeNum, dtype=torch.int32,device="cuda")
     res2 = torch.zeros(maxNodeNum, dtype=torch.int32,device="cuda")
-    print(f"加载所有节点{time.time() - start:.4f}s")
+    print(f"load all nodes {time.time() - start:.4f}s")
     for i in range(part_num):
         for j in range(i + 1,part_num):
             node1 = nodesList[i]
@@ -388,14 +389,14 @@ def cal_min_path(diffMatrix, nodesList, part_num, base_path):
             res2.fill_(0)
             dgl.findSameNode(node1, node2, res1, res2)
             sameNum = torch.sum(res1).item()
-            diffMatrix[i][j] = node2.shape[0] - sameNum # j 相对 i 需要进行的额外加载
+            diffMatrix[i][j] = node2.shape[0] - sameNum # The additional loading required for j relative to i
             diffMatrix[j][i] = node1.shape[0] - sameNum
 
-            # print("part{} shape:{},part{} shape:{}, 相同的节点数:{}".format(i,node1.shape,j,node2.shape,sameNum))
+            # print("part{} shape:{},part{} shape:{}, identical nodes :{}".format(i,node1.shape,j,node2.shape,sameNum))
 
     start = time.time()
     dfs(part_num ,diffMatrix)
-    print("dfs 用时{}".format(time.time() - start))
+    print("dfs time: {}".format(time.time() - start))
     return maxNodeNum, res
 
 def genFeatIdx(part_num, base_path, nodeList, part_seq, featLen, maxNodeNum):
@@ -416,7 +417,7 @@ def genFeatIdx(part_num, base_path, nodeList, part_seq, featLen, maxNodeNum):
         dgl.findSameNode(curNode, nextNode, res1, res2)
         same_num = torch.sum(res1).item()
         
-        # 索引位置 
+        # index
         maxlen = max(curLen,nextLen)
         res1_zero = torch.nonzero(res1[:maxlen] == 0).reshape(-1).to(torch.int32)
         res2_zero = torch.nonzero(res2[:maxlen] == 0).reshape(-1).to(torch.int32)
@@ -427,7 +428,7 @@ def genFeatIdx(part_num, base_path, nodeList, part_seq, featLen, maxNodeNum):
             if(curLen < nextLen or curLen == nextLen):
                 replaceIdx = res2_zero.cuda()
             elif(curLen > nextLen):
-                replaceIdx = res2_zero[:nextLen - same_num].cuda()  # 不进行裁剪会导致feat索引越界
+                replaceIdx = res2_zero[:nextLen - same_num].cuda()  # If the feat index is not clipped, the feat index is out of bounds
         else:
             replaceIdx = torch.Tensor([]).to(torch.int32)
             
@@ -448,7 +449,7 @@ def genFeatIdx(part_num, base_path, nodeList, part_seq, featLen, maxNodeNum):
         saveBin(diffNode.cpu(), diffNodeInfoPath)
         sameNode, diffNode = None, None
 
-        # 缓存需要重加载的索引
+        # Cache the index that needs to be reloaded
         addIndex[next_part] = nodeList[next_part][replaceIdx.to(torch.int64)]
     return addIndex
 

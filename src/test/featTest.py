@@ -1,5 +1,5 @@
 """
-测试特征转换不产生错误
+The test feature conversion produces no errors
 """
 import os
 import scipy

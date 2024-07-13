@@ -49,7 +49,7 @@ class DGL_SAGE(nn.Module):
         buffer_device = torch.device('cpu')
         pin_memory = (buffer_device != device)
 
-        feat = feat.cpu()   # 防止显存空间不够
+        feat = feat.cpu()  # Prevent insufficient video memory space
         for l, layer in enumerate(self.layers):
             y = torch.empty(
                 g.num_nodes(), self.hid_size if l != len(self.layers) - 1 else self.out_size,
