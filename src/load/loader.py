@@ -21,7 +21,7 @@ curDir = os.path.dirname(curFilePath)
 
 # Disable operation
 # logging.disable(logging.CRITICAL)
-logging.basicConfig(level=logging.INFO,filename=curDir+'/../../log/loader.log',filemode='w',
+logging.basicConfig(level=logging.INFO,filename=curDir+'/loader.log',filemode='w',
                     format='%(message)s',datefmt='%H:%M:%S')
                     #format='%(message)s')
 logger = logging.getLogger(__name__)

@@ -1,7 +1,7 @@
 #!/bin/bash
-RAW_DATA_DIR='/raid/bear/raw_dataset'
+RAW_DATA_DIR='capsule/raw_dataset'
 TW_RAW_DATA_DIR="${RAW_DATA_DIR}/twitter"
-OUTPUT_DATA_DIR='/raid/bear/dataset/twitter'
+OUTPUT_DATA_DIR='capsule/dataset/twitter'
 # download raw dataset
 
 download(){

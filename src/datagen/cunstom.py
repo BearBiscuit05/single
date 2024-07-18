@@ -2,7 +2,7 @@ import dgl
 import torch
 import numpy as np
 
-RAWPATH = "/raid/bear/data/raw/wb2001"
+RAWPATH = "capsule/data/raw/wb2001"
 featlen = 100
 Ratio = 0.01    # train id ratio
 

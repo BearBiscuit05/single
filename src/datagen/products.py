@@ -11,7 +11,7 @@ import pickle
 import dgl
 import os
 
-DATA_PATH = '/raid/bear/sgnn'
+DATA_PATH = 'capsule/sgnn'
 
 DOWNLOAD_URL = 'http://snap.stanford.edu/ogb/data/nodeproppred/products.zip'
 RAW_DATA_DIR = DATA_PATH +'/raw_dataset'

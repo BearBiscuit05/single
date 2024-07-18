@@ -88,7 +88,7 @@ def train(args, device, g, dataset, model,data=None ,basicLoop=0,loop=10):
     
 def load_reddit(self_loop=True):
     from dgl.data import RedditDataset
-    data = RedditDataset(self_loop=self_loop,raw_dir='/raid/bear/data/dataset/')
+    data = RedditDataset(self_loop=self_loop,raw_dir='capsule/data/dataset/')
     g = data[0]
     g.ndata['feat'] = g.ndata.pop('feat')
     g.ndata['label'] = g.ndata.pop('label')
@@ -144,18 +144,18 @@ if __name__ == '__main__':
         args.mode = 'cpu'
     print(f'Training in {args.mode} mode.')
     
-    default_datasetpath = "/raid/bear/data/raw"
+    default_datasetpath = "capsule/data/raw"
     print('Loading data')
     out_size = 0
     if args.dataset == 'ogb-products':
-        dataset = AsNodePredDataset(DglNodePropPredDataset('ogbn-products',root="/raid/bear/data/dataset"))
+        dataset = AsNodePredDataset(DglNodePropPredDataset('ogbn-products',root="capsule/data/dataset"))
         g = dataset[0]
         data = None
     elif args.dataset == 'Reddit':
         g, dataset,train_idx,val_idx,test_idx= load_reddit()
         data = (train_idx,val_idx,test_idx)
     elif args.dataset == 'ogb-papers100M':
-        dataset = AsNodePredDataset(DglNodePropPredDataset('ogbn-papers100M',root="/raid/bear/data/dataset"))
+        dataset = AsNodePredDataset(DglNodePropPredDataset('ogbn-papers100M',root="capsule/data/dataset"))
         g = dataset[0]
         data = None
     elif args.dataset == 'com_fr':

@@ -218,19 +218,19 @@ if __name__ == '__main__':
     print('Layers:', args.layers)
     print('Dataset:', args.dataset)
 
-    datasetpath = "/raid/bear/data/raw"
+    datasetpath = "capsule/data/raw"
 
     if args.dataset == 'Reddit':
         dataset = Reddit(curDir+'/../../../data/reddit/pyg_reddit')
         run(args, dataset,split_idx=None)
     elif args.dataset == 'ogb-products':
-        root = '/raid/bear/data/dataset'
+        root = 'capsule/data/dataset'
         dataset = PygNodePropPredDataset('ogbn-products', root)
         split_idx = dataset.get_idx_split()
         evaluator = Evaluator(name='ogbn-products')
         run(args, dataset,split_idx)
     elif args.dataset == 'ogb-papers100M':
-        root = "/raid/bear/data/dataset"
+        root = "capsule/data/dataset"
         dataset = PygNodePropPredDataset('ogbn-papers100M', root)
         split_idx = dataset.get_idx_split()
         print("loading complete")

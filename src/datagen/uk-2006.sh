@@ -1,7 +1,7 @@
 #!/bin/bash
-RAW_DATA_DIR='/raid/bear/raw_dataset'
+RAW_DATA_DIR='capsule/raw_dataset'
 TW_RAW_DATA_DIR="${RAW_DATA_DIR}/uk-2006-05"
-OUTPUT_DATA_DIR='/raid/bear/dataset/uk-2006-05'
+OUTPUT_DATA_DIR='capsule/dataset/uk-2006-05'
 
 download(){
   mkdir -p ${UK_RAW_DATA_DIR}

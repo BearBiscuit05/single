@@ -1,0 +1,68 @@
+{
+    "PA": {
+        "edges": 1615685872,
+        "nodes": 111059956,
+        "rawFilePath": "capsule/data/raw/papers100M",
+        "processedPath": "capsule/data/partition/PA",
+        "featLen": 128,
+        "classes": 172,
+        "trainNUM": 1207179,
+        "valNUM": 125265,
+        "testNUM": 214338
+    },
+    "PD": {
+        "edges": 123718280,
+        "nodes": 2449029,
+        "rawFilePath": "capsule/data/raw/ogbn_products",
+        "processedPath": "capsule/data/partition/PD",
+        "featLen": 100,
+        "classes": 47,
+        "trainNUM": 196615,
+        "valNUM": 39323,
+        "testNUM": 2213091
+    },
+    "RD": {
+        "edges": 114848857,
+        "nodes": 232965,
+        "rawFilePath": "capsule/data/raw/reddit",
+        "processedPath": "capsule/data/partition/RD",
+        "featLen": 602,
+        "classes": 41,
+        "trainNUM": 153431,
+        "valNUM": 23831,
+        "testNUM": 55703
+    },
+    "FR": {
+        "edges": 1806067135,
+        "nodes": 65608366,
+        "rawFilePath": "capsule/data/raw/com_fr",
+        "processedPath": "capsule/data/partition/FR",
+        "featLen": 100,
+        "classes": 150,
+        "trainNUM": 656083,
+        "valNUM": 0,
+        "testNUM": 0
+    },
+    "UK": {
+        "edges": 2965197340,
+        "nodes": 77741046,
+        "rawFilePath": "capsule/data/raw/uk-2006-05",
+        "processedPath": "capsule/data/partition/UK",
+        "featLen": 100,
+        "classes": 150,
+        "trainNUM": 777410,
+        "valNUM": 0,
+        "testNUM": 0
+    },
+    "WB": {
+        "edges": 1019903190,
+        "nodes": 118142143,
+        "rawFilePath": "capsule/data/raw/wb2001",
+        "processedPath": "capsule/data/partition/WB",
+        "featLen": 100,
+        "classes": 150,
+        "trainNUM": 1181421,
+        "valNUM": 0,
+        "testNUM": 0
+    }
+}

@@ -97,7 +97,6 @@ def streamLossGraph(raw_ptr,raw_indice,lossNode,sliceNUM=1,randomLoss=0.5,degree
     mask[lossNode.to(torch.int64)] = False
     ptr_diff[lossNode.to(torch.int64)] = 0
 
-    print(f"loss... nodeNUM {nodeNUM}, numbers of False mask: {torch.nonzero(~mask).reshape(-1).shape} trim nodes {lossNode.shape[0]}")
 
     # trim edges
     if degreeCut != None:

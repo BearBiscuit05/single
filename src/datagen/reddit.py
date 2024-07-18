@@ -6,7 +6,7 @@ import pickle
 from dgl.data import RedditDataset
 
 
-DATA_PATH = '/raid/bear/sgnn'
+DATA_PATH = 'capsule/sgnn'
 
 DOWNLOAD_URL = 'http://snap.stanford.edu/ogb/data/nodeproppred/papers100M-bin.zip'
 RAW_DATA_DIR = DATA_PATH +'/raw_dataset'
@@ -48,15 +48,15 @@ def write_meta():
 
 src = g.edges()[0].numpy()
 dst = g.edges()[1].numpy()
-src.tofile("/raid/bear/reddit_bin/srcList.bin")
-dst.tofile("/raid/bear/reddit_bin/dstList.bin")
+src.tofile("capsule/reddit_bin/srcList.bin")
+dst.tofile("capsule/reddit_bin/dstList.bin")
 
-feat = g.ndata['feat'].numpy().tofile("/raid/bear/reddit_bin/feat.bin")
-label = g.ndata['label'].numpy().tofile("/raid/bear/reddit_bin/label.bin")
+feat = g.ndata['feat'].numpy().tofile("capsule/reddit_bin/feat.bin")
+label = g.ndata['label'].numpy().tofile("capsule/reddit_bin/label.bin")
 
-torch.Tensor(train_idx).to(torch.int64).numpy().tofile("/raid/bear/reddit_bin/trainIDs.bin")
-torch.Tensor(val_idx).to(torch.int64).numpy().tofile("/raid/bear/reddit_bin/valIDs.bin")
-torch.Tensor(test_idx).to(torch.int64).numpy().tofile("/raid/bear/reddit_bin/testIDs.bin")
+torch.Tensor(train_idx).to(torch.int64).numpy().tofile("capsule/reddit_bin/trainIDs.bin")
+torch.Tensor(val_idx).to(torch.int64).numpy().tofile("capsule/reddit_bin/valIDs.bin")
+torch.Tensor(test_idx).to(torch.int64).numpy().tofile("capsule/reddit_bin/testIDs.bin")
 
 def gen_lp():
     g = dataset[0]
